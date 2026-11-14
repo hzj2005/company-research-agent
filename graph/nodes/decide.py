@@ -69,7 +69,8 @@ def make_rewrite_query_node(settings: Settings) -> Node:
                 {
                     "node": "rewrite_query",
                     "sections": eligible,
-                    "round": max(updates.values()) if updates else 0,
+                    # 每个栏目自己的回退轮次；不用单一 max，避免掩盖栏目间的差异
+                    "retry_rounds": updates,
                     "queries": queries,
                 }
             ],

@@ -18,29 +18,52 @@ An agentic research tool that turns a company name into a structured, source-bac
 - Runs on any model available through [OpenRouter](https://openrouter.ai) — pick it from the in-app Settings — or on direct OpenAI/Gemini keys.
 - Streams research progress to the browser and supports PDF export.
 - Optionally persists jobs and reports in MongoDB.
+- **This fork also adds** a separate LangGraph workflow (`graph/`) with evidence-sufficiency checks, a bounded self-correction loop, per-section abstention instead of fabrication, and SQLite checkpointing. It runs today from the CLI in `fixture` mode with no API key.
 
 ## Architecture
 
+Two graphs live in this repository. **The FastAPI `/research` endpoint and LangGraph Studio still use the upstream graph** (see "Current status" above); the reworked graph is exercised through the CLI until real LLM/retrieval is wired in S5.
+
+### Upstream — unchanged
+
 ```text
-React + Vite UI
-      │  POST /research
-      ▼
-FastAPI application
-      │
-      ▼
-Research graph
+React + Vite UI → POST /research → FastAPI application → Research graph
   analyzers → collector → curator → briefing → editor
-      │
-      ├── Tavily: research and relevance scoring
-      └── LLM: query generation, briefings, final editing
-            (OpenRouter model chosen in Settings, or OpenAI/Gemini directly)
+  Tavily search + relevance scoring · OpenRouter / OpenAI / Gemini · PDF export · SSE progress
 ```
 
 The UI connects to the API with `VITE_API_URL` and receives incremental updates from `GET /research/{job_id}/stream`.
 
+### This fork — `graph/` (7-node main graph + parallel research subgraph)
+
+```text
+START → grounding → [research subgraph] → curate → evidence_check
+                          ↑                    ├─ pass    → briefing → END
+                          │                    ├─ retry   → rewrite_query ─┘
+                          │                    └─ degrade → degrade ──────→ briefing → END
+
+research subgraph:  START → dispatch ──Send──→ analyst(company)
+                                    ──Send──→ analyst(industry)
+                                    ──Send──→ analyst(financial)
+                                    ──Send──→ analyst(news)    → END
+                    retry rounds dispatch only sections in `sections_to_research`
+```
+
+- `Send` fans out four analysts in parallel; reducer-backed state merges their writes without overwrites (measured: 4 branches 0.181s vs 0.600s sequential).
+- `evidence_check` is a real node with three conditional edges. Retry is bounded by `max_retry` (2) and ends in an explicit "no public evidence found" abstention, never invented facts.
+- Every step is persisted by an `AsyncSqliteSaver` checkpointer (`persistence/checkpointer.py`) and survives a restart.
+- The data source is currently an `@tool`-wrapped local fixture (`capabilities/retrieval.py`); real Tavily + structured LLM output is S5.
+
+```bash
+uv run python -m graph.run --case sparse --show-report --trace
+```
+
 ## Prerequisites
 
-- Python 3.11 or later
+The keys below are for the **upstream FastAPI/React app**. The reworked `graph/` CLI
+needs none of them in `fixture` mode.
+
+- Python 3.11 (`.python-version`; the reworked graph and its tests are pinned to 3.11)
 - Node.js 18 or later
 - An [OpenRouter API key](https://openrouter.ai/keys) — set in the backend `.env` or pasted into the app's Settings (alternatively, an OpenAI key, plus an optional Gemini key)
 - A Tavily API key entered in the app for each research session (or a backend fallback key)
@@ -49,14 +72,17 @@ The UI connects to the API with `VITE_API_URL` and receives incremental updates 
 
 ## Run locally
 
-1. Create a virtual environment and install the backend dependencies:
+1. Create the environment from the lockfile (uv / Python 3.11 — see `.python-version`):
 
    ```bash
-   uv venv .venv
-   uv pip install -r requirements.txt
+   uv sync --frozen
+   uv run python -m pytest -q
    ```
 
-   If you do not use `uv`, create the environment with `python -m venv .venv` and install with `pip install -r requirements.txt`.
+   `pyproject.toml` + `uv.lock` are the source of truth for the reworked graph and its tests.
+   The upstream `requirements.txt` is kept only for the original FastAPI/React app; do not
+   `pip install -r requirements.txt` into this environment — it bypasses the lockfile and
+   makes the result non-reproducible.
 
 2. Create `.env` from the example and set the required backend keys:
 

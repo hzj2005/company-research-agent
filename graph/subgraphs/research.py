@@ -70,7 +70,10 @@ def make_analyst_node(settings: Settings, document_tool: StructuredTool) -> Any:
         if field is None:
             logger.warning("未知栏目 %s，跳过", section)
             return {}
-        round_no = max(state.get("retry_count", {}).values(), default=0)
+        # 栏目级重试：只能用本栏目自己的轮次。S3 全体一起回退时取全局 max 没错，
+        # S4 改成 per-section 重试后各栏目 retry_count 可能不等，全局 max 会让
+        # 「刚开始回退的栏目」错拿别的栏目轮次的数据（S4 复查实测抓到）。
+        round_no = int(state.get("retry_count", {}).get(section, 0))
         raw = await document_tool.ainvoke(
             {"company": state["company"], "sections": [section], "round_no": round_no}
         )

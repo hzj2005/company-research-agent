@@ -198,9 +198,20 @@
 | 首轮并行 | Notion 4 条 analyst 留痕（4 个栏目），四类 `*_data` 全有文档且互不覆盖 |
 | 精确回退 | Linear 首轮 4 个 Send、回退轮 **1 个 Send**（仅 company）；empty 两轮回退均只 company |
 | 有上限循环 | empty 3 次 research，`degraded=true`，其余栏目正常输出 |
-| 三偏差 | `any→all`（部分栏目达上限仍继续重试）；删除名不副实的 `degrade.enabled`；`curated_data`/`references` 改 `replace_mapping`，旧引用可被移除 |
+| 三偏差 | `any→all`（部分栏目达上限仍继续重试）；删除名不副实的 `degrade.enabled`；`curated_data`/`references` 改 `replace_mapping`，**仅当同一 URL 的新版本被判低分/无 URL 时**旧引用才被移除 |
 | 回归 | `uv run python -m pytest -q` → **43 passed**；三档 `report_chars` 822/829/561、research 1/2/3、引用数 8/9/6，与第 9 节完全一致 |
 
 **实测踩到并修掉的坑**：编译子图直接当主图节点时，若把主图已有的 `review_notes` 传进子图、又由子图输出带回，`append_notes` reducer 会把旧记录重复累加（sparse 首轮 4 条变 8 条）。修法：`StateGraph(..., input_schema=..., output_schema=...)` 隔离子图输入/输出，且 `Send` 只带编排参数、不带累积字段。两个 API 事实已写进 `AGENT.md`：`Send` 从 `langgraph.types` 导入；`StateGraph` 用 `input_schema`/`output_schema`（`input`/`output` 已弃用）。
+
+### 11.1 S4 复查补测（2026-11-14 15:40）
+
+| 复查点 | 真实结果 |
+|---|---|
+| 编译后图结构 | 主图 `__start__/__end__` + 7 业务节点；子图 `dispatch` + `analyst`，`dispatch` 挂真实条件边 |
+| 并行耗时硬证据 | 带 0.15s 延迟的工具：4 路 Send **0.181s**，串行理论 **0.600s**；4 分支全执行、四类 `*_data` 互不覆盖。已固化为 `test_send_branches_overlap_in_time`（时间窗重叠断言，不依赖绝对耗时，避免 CI 抖动） |
+| 子图嵌套 checkpoint | 重开 `CheckpointSession` 后 report / references / evidence_verdict / retry_count / review_notes / degraded 六项全部恢复 |
+| 栏目级轮次 | 原实现 `max(retry_count.values())` 在 `company=2, industry=1` 时让 analyst 错取 `round_no=2`；已改 `retry_count.get(section, 0)`。**反向验证**：换回旧写法时新增用例报 `captured=[('industry', 2)] != [('industry', 1)]` 失败 |
+| 旧引用边界 | `*_data` 按 URL 累积，「URL 不再返回」的旧引用**移除不掉**：实测第 1 轮 old URL、第 2 轮仅新增 new URL，最终 references 仍含 old。已写 `test_url_that_stops_being_returned_is_retained_as_known_limitation` 如实记录；需按栏目维护「本轮有效 URL 集合」才能解决（S5/S7）。`replace_mapping` 只在「同 URL 新版本被判低分」时移除旧引用，已由真实链路用例覆盖 |
+| 复查后回归 | `46 passed`；三档 `report_chars` 822/829/561、research 1/2/3、引用 8/9/6 零变化 |
 
 **S4 如实边界**：仍是 fixture 模板简报，不接真实 LLM/Tavily；对外入口仍指原版图（S5 再切）；内容级 `citation_traceability` 仍归 S7。主图本来就是 7 节点，不谎称「从 11 节点收敛到 6～7」。

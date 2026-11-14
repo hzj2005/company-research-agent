@@ -58,6 +58,8 @@
 9. 条件函数保持无副作用、可单测：给定 State → 返回分支名字符串。
 10. 每个节点、每条条件边必须有对应 pytest 用例；新增边不改测试视为未完成。
 11. 主图节点名 `research` 保持不变（内部是子图），CLI 轨迹统计与回归用例依赖该名字；子图的派发字段（`active_section` 等）不得污染 `ResearchState`，子图输出字段必须是主图字段的子集且同名 reducer。
+12. 栏目级重试下，检索轮次**只能**取 `retry_count[active_section]`，禁止 `max(retry_count.values())`（S4 复查实测：各栏目不同步回退时会错拿别的栏目轮次的数据）。回退留痕用每栏目字典，不写单一 `round`。
+13. `*_data` 按 URL 累积是「保留旧证据」的设计取舍；`replace_mapping` 只在「同 URL 新版本被判低分/无 URL」时移除旧引用。文档与测试**不得**写成「旧引用自动移除」，也不得用手工构造空 State 绕开真实 reducer 链来自我证明。
 
 ## 7. LangChain 硬性约定
 
@@ -153,3 +155,4 @@ FEATURES_SELF_CORRECTION=false uv run python -m graph.run --case sparse --trace
 - ❌ 直接 `pip install` 改环境、手写依赖版本却不同步 `uv.lock`
 - ❌ 给会被回退/并行重复写入的 dict/list 字段不配 reducer
 - ❌ `from langgraph.constants import Send` / 子图把累积字段带回主图 / 随意改主图节点名破坏轨迹统计
+- ❌ 栏目级回退用全局 `max(retry_count.values())` 当检索轮次 / 把「旧引用可移除」写成无条件的结论

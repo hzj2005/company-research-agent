@@ -77,7 +77,7 @@
 
 复查后 `uv run python -m pytest -q` → **16 passed**（原 10 + fixture 契约 5 + reducer 回归 1）。
 
-仍未做、且不属于本阶段欠账的：S4 重建完整业务图后补端到端用例（`docs/BASELINE.md` 第 7 节已挂）；#13 真实 `/research` baseline 等 key。
+当时仍未做、且不属于本阶段欠账的：S4 重建完整业务图后补端到端用例（`docs/BASELINE.md` 第 7 节已挂）——**该欠账已在 S3 复查时补齐**（`tests/test_checkpointer.py:84` 用真实 7 节点图做重启恢复，S4 换成子图后仍通过）；#13 真实 `/research` baseline 仍等 key。
 
 ---
 
@@ -177,7 +177,7 @@
 5. **三个偏差一起收**：
    - `any` → `all`，白名单排除已达上限栏目 → 各栏目用尽自己的重试额度才整体拒答，不再连累；
    - 删除 `degrade.enabled`（防幻觉是红线，不可关闭），`DegradeConfig` 只留 `message`；
-   - `curated_data` / `references` 改用 `replace_mapping` reducer，curate 每轮全量重算，旧失效引用自动移除。
+   - `curated_data` / `references` 改用 `replace_mapping` reducer，curate 每轮全量重算。**如实范围**：只有「同一 URL 的新版本被判低分/无 URL」时旧引用才会消失；`*_data` 仍按 URL 累积，「URL 不再返回」的旧引用目前移除不掉（S4 复查实测，见第 7.8 节）。
 
 ### 7.4 任务与验收
 
@@ -219,10 +219,24 @@ START → grounding → [research 子图] → curate → evidence_check
 | 首轮并行 | Notion 4 条 analyst 留痕（company/industry/financial/news），四类 `*_data` 全有文档且互不覆盖 |
 | 精确回退 | Linear 首轮 4 个 Send、回退轮 **1 个 Send**（只 company）；`sections_to_research=["company"]` |
 | 有上限循环 | empty 3 次 research（首轮 + 2 次回退），`degraded=true` |
-| 三偏差 | `any→all`（部分栏目达上限仍 retry、白名单只剩有额度栏目）；`degrade.enabled` 已删；`curated_data`/`references` 改 `replace_mapping`，旧引用可移除 |
+| 三偏差 | `any→all`（部分栏目达上限仍 retry、白名单只剩有额度栏目）；`degrade.enabled` 已删；`curated_data`/`references` 改 `replace_mapping`，**同 URL 新版本不合格时**旧引用可移除（范围已按第 7.8 节复查收窄） |
 | 回归 | `uv run python -m pytest -q` → **43 passed**；三档 `report_chars` 822/829/561、research 1/2/3、引用数 8/9/6，与 S3 完全一致 |
 | A/B | `FEATURES_SELF_CORRECTION=false` → research 1 次、`degraded=true` |
 
 **实测踩到并修掉的坑**：编译子图直接当主图节点时，若把主图已有的 `review_notes` 传进子图、又由子图输出带回，`append_notes` reducer 会把旧记录重复累加（sparse 首轮 4 条变 8 条）。修法：`StateGraph(..., input_schema=..., output_schema=...)` 隔离子图输入/输出，且 `Send` 只带编排参数、不带累积字段。另实测两个 API 事实：`Send` 必须从 `langgraph.types` 导入（`langgraph.constants` 在 1.2.22 已弃用）；`StateGraph` 的 `input`/`output` 参数也已弃用，应用 `input_schema`/`output_schema`。
 
 **S4 如实边界**：仍是 fixture 模板简报；对外入口仍指原版图（S5 再切）；内容级 `citation_traceability` 仍归 S7。
+
+### 7.8 S4 复查修正（2026-11-14 15:40，用户要求逐条对账后补）
+
+复查方式：`uv run python -m pytest -q`、三档 CLI 重跑、编译后 `get_graph()` 结构、临时探针（栏目级轮次 / 旧引用 / 并发耗时 / 子图嵌套 checkpointer 重启）。**验收表标 ✅ 标早了**，查出并修掉 2 个实质问题 + 3 处完成度不足：
+
+| # | 问题 | 代码位置 / 证据 | 处理 |
+|---|---|---|---|
+| 1 | **栏目级重试下取错检索轮次（S4 新引入）** | `graph/subgraphs/research.py:73` 原为 `max(retry_count.values())`。构造 `company=2, industry=1` 实测 analyst 请求 `round_no=2`，应为 1；S3 全体一起回退时全局 max 没错，S4 改 per-section 后失效。三档 fixture 都只有 company 单栏目回退，所以没暴露 | 改为 `retry_count.get(section, 0)`；`decide.py` 留痕把单一 `round` 换成 `retry_rounds` 字典；新增端到端用例 `test_analyst_uses_its_own_retry_round_when_sections_are_out_of_sync`，并**反向验证**换回旧写法时该用例报 `captured=[('industry', 2)]` 失败 |
+| 2 | **「旧引用可移除」措辞夸大 + 测试自我证明** | `*_data` 仍是 `merge_docs` 累积；实测第 1 轮 old URL、第 2 轮只新增 new URL，最终 references 仍含 old。原 `test_curate_recomputes_references_so_stale_urls_disappear` 手工传空 `company_data` 再手工调 reducer，绕开真实链路 | 拆成两条：一条走真实 `merge_docs → curate → replace_mapping` 链验证「同 URL 新版本被判低分」确能移除；一条如实断言「URL 不再返回时旧 URL 保留」并记录为已知边界（需按栏目维护有效 URL 集合，挂 S5/S7）。第 7.3/7.7、BASELINE 11 三处措辞同步收窄 |
+| 3 | 并发性只有口头证据 | 临时探针：4 路 Send 耗时 **0.181s**（带 0.15s 延迟的工具，串行理论 0.600s），4 分支全执行、`*_data` 互不覆盖 | 新增 `test_send_branches_overlap_in_time`（时间窗重叠断言，不依赖绝对耗时），实测数字写入 BASELINE 11 |
+| 4 | README 主体仍是原版 | Architecture 图还是 `analyzers → collector → curator → briefing → editor`；`Run locally` 教 `uv pip install -r requirements.txt`，与 `AGENT.md` 禁止直接 pip install 冲突 | 补「Upstream / This fork」双架构图 + 7 节点主图 + Send 子图白板图；运行指令改 `uv sync --frozen`；Prerequisites 注明 key 只属上游 app |
+| 5 | 文档过期 | 第 2 节结尾仍写「S4 后补真图端到端用例」仍未做 | 改为「已于复查前补齐（`tests/test_checkpointer.py:84`）」 |
+
+**复查补充实测**：编译后主图 `__start__/__end__` + 7 业务节点；子图 `dispatch` 挂真实条件边；子图嵌套下重开 `CheckpointSession`，report/references/evidence_verdict/retry_count/review_notes/degraded 六项全恢复。`46 passed`，三档 `report_chars` 822/829/561 零回归。
