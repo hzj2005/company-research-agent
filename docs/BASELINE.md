@@ -215,3 +215,23 @@
 | 复查后回归 | `46 passed`；三档 `report_chars` 822/829/561、research 1/2/3、引用 8/9/6 零变化 |
 
 **S4 如实边界**：仍是 fixture 模板简报，不接真实 LLM/Tavily；对外入口仍指原版图（S5 再切）；内容级 `citation_traceability` 仍归 S7。主图本来就是 7 节点，不谎称「从 11 节点收敛到 6～7」。
+
+---
+
+## 12. S5.1 验证记录（2026-11-14，结构化输出契约层）
+
+新增 `graph/contracts.py`（`Fact` / `SectionBrief` / `ResearchBrief`，`extra="forbid"`）、`capabilities/llm.py`（配置驱动模型工厂）、`capabilities/structured.py`（LCEL 抽取链 + 校验重试 + URL 级回溯）、`tests/test_s5_contracts.py`（9 个用例）；`config/loader.py` 增加凭据解析（凭据不进 `Settings`，用 `SecretStr`）。
+
+| 验证点 | 真实结果 |
+|---|---|
+| 无 key 跑 `with_structured_output` | `httpx.MockTransport` 注入 `http_async_client`，`prompt \| with_structured_output(SectionBrief, method="function_calling")` 真发 1 次请求并返回 Pydantic 实例 |
+| 校验失败不静默 | 缺 `source_url` → `ValidationError`；重试耗尽 → `degraded=True` + `facts=[]` + 逐次 `review_notes` |
+| 重试成功路径 | 第一次非法、第二次合法 → 成功，留痕 `["validation_failed", "ok"]` |
+| URL 级回溯 | 文档外 URL 的 Fact 被剔除并写 `dropped_uncited_facts`，整栏降级 |
+| 配置驱动 | 改 `models.roles.briefing` 后请求体 `model` 随之改变；温度来自 `settings.models` |
+| 完全离网保证 | mock 客户端 `base_url=http://127.0.0.1:1/v1`（不可达），注入一旦失效立即连接失败，不会静默走外网 |
+| 回归 | `55 passed`；三档 822/829/561、A/B 开关、`uv pip check` 103 包全部无变化 |
+
+**API 事实（前置探针实测）**：`convert_to_openai_tool(SectionBrief)` 可生成 tool spec；`ValidationError` 与 `OutputParserException` 都是 `ValueError` 子类；`GenericFakeChatModel.with_structured_output` 抛 `NotImplementedError`，因此无 key 测试只能走 mock HTTP；`BaseRetriever` 最小子类 `ainvoke` 可用；新图 `astream(stream_mode="updates")` 产出 `{节点名: {字段: 值}}` 共 5 个事件，可直接喂 `application.py` 的 `current_step`；顶层无 checkpointer 的 `build_graph(...).compile()` 有 9 节点可用；`AsyncSqliteSaver.from_conn_string` 返回 async context manager，不能在模块顶层直接当 saver 用。
+
+**S5.1 如实边界**：以上只验证 LangChain 调用链与数据契约，**未调用任何真实模型 / Tavily**，不产出准确率、延迟、成本数字；live 实测仍阻塞在 key（S8）。`Fact.source_url` 只做到 URL 级回溯，内容级 `citation_traceability` 仍归 S7。

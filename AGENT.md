@@ -66,6 +66,9 @@
 1. 用 LCEL 组装链路：`ChatPromptTemplate | model | parser`。
 2. 结构化数据一律 `with_structured_output(PydanticModel)`，**禁止裸 `json.loads`**。
 3. 外部数据源必须封装成 `BaseRetriever` 或 `@tool`；禁止在节点里 `new AsyncTavilyClient`（原版 `base.py` L24 的做法）。
+4. 模型名 / 温度 / 重试次数**只能**来自 `settings.models`；凭据经 `config.loader.resolve_llm_credentials()`，用 `SecretStr` 且**不进 `Settings`**（避免 `model_dump` / 日志泄密）。禁止复用上游 `backend/llm.py`（硬编码模型名 + 直接 `os.getenv`）。缺 key 必须明确抛错，禁止悄悄回退 fixture。
+5. 无 key 测试 `with_structured_output` **只能**用 `httpx.MockTransport` 注入 `http_async_client`（实测 `GenericFakeChatModel` 抛 `NotImplementedError`）；mock 的 `base_url` 必须指向不可达本地端口，保证完全离网。mock 结果不得写成真实模型能力或指标。
+6. `Fact.source_url` 必须属于本次传入文档集合，否则剔除并写 `review_notes`；校验失败重试 `models.max_retries` 次后整栏降级留痕，**禁止静默丢字段**。URL 级回溯不等于内容级 `citation_traceability`（S7）。
 4. 模型统一经 `create_llm(role, config)` 获取，角色分为 `research / briefing / editor / judge`。
 5. 抽取校验失败 → 重试一次 → 仍失败则该栏目降级并记入 `review_notes`，**禁止静默丢字段**。
 6. 禁止在 prompt 中写 `Never mention "no information found"` 这类迫使模型编造的指令。原版 `backend/prompts.py` 仍保留该指令（上游原文件，未删），但 **S3 新图完全不加载它**；S5 接真实模型时也不得复用。
@@ -156,3 +159,5 @@ FEATURES_SELF_CORRECTION=false uv run python -m graph.run --case sparse --trace
 - ❌ 给会被回退/并行重复写入的 dict/list 字段不配 reducer
 - ❌ `from langgraph.constants import Send` / 子图把累积字段带回主图 / 随意改主图节点名破坏轨迹统计
 - ❌ 栏目级回退用全局 `max(retry_count.values())` 当检索轮次 / 把「旧引用可移除」写成无条件的结论
+- ❌ 硬编码模型名 / 业务代码直接 `os.getenv` 读 key / 把凭据放进 `Settings` / 缺 key 悄悄回退 fixture
+- ❌ 用 `GenericFakeChatModel` 测 `with_structured_output` / mock HTTP 指向可达外网 / 把 mock 结果写成真实模型指标

@@ -21,7 +21,7 @@ from typing import Any, Literal, Mapping
 
 import yaml
 from dotenv import load_dotenv
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SETTINGS_PATH = ROOT / "config" / "settings.yaml"
@@ -125,6 +125,53 @@ class Settings(_Strict):
     models: ModelsConfig
     features: FeaturesConfig
     report: ReportConfig
+
+
+class LLMCredentials(_Strict):
+    """模型凭据。刻意**不进 Settings**：避免 `model_dump()` / 日志把密钥带出去。"""
+
+    provider: Literal["openrouter", "openai", "gemini"]
+    api_key: SecretStr
+    base_url: str | None = None
+
+    def resolved_key(self) -> str:
+        return self.api_key.get_secret_value()
+
+
+class MissingLLMCredentials(RuntimeError):
+    """live 模式缺 key。不允许悄悄降级回 fixture。"""
+
+
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+
+
+def resolve_llm_credentials(
+    environ: Mapping[str, str] | None = None,
+) -> LLMCredentials:
+    """按 OpenRouter → OpenAI → Gemini 顺序解析凭据；业务代码禁止直接 `os.getenv`。
+
+    `environ` 显式传入时只读该映射（测试用，避免本机 `.env` 污染）；否则加载 `.env`
+    后读进程环境。缺 key 直接抛 `MissingLLMCredentials`，不静默回退到 fixture。
+    """
+    if environ is None:
+        load_dotenv(DEFAULT_ENV_PATH, override=False)
+    env = environ if environ is not None else os.environ
+    for provider, var in (
+        ("openrouter", "OPENROUTER_API_KEY"),
+        ("openai", "OPENAI_API_KEY"),
+        ("gemini", "GEMINI_API_KEY"),
+    ):
+        raw = (env.get(var) or "").strip()
+        if raw:
+            return LLMCredentials(
+                provider=provider,
+                api_key=SecretStr(raw),
+                base_url=OPENROUTER_BASE_URL if provider == "openrouter" else None,
+            )
+    raise MissingLLMCredentials(
+        "live 模式需要 OPENROUTER_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY 之一；"
+        "无 key 请设 APP_MODE=fixture，不会自动回退"
+    )
 
 
 def load_settings(

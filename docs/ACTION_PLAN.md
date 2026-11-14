@@ -29,7 +29,7 @@
 | **S2** | #2 状态契约 | `StateGraph(ResearchState)` + `add_messages` / `merge_docs` reducer；`compile(checkpointer=...)` 接真实 SQLite Saver；`thread_id` 按模板 | `persistence/`、`graph/state.py`、单元测试 | 进程重启后同一 thread 可恢复；并行写回不覆盖；恢复前后 State 一致 | ✅ 已完成（10 个 pytest 全通过） |
 | **S3** | #3 自纠正回路 | `evidence_check` 判定 + `add_conditional_edges` + `retry_count<=2` + `degrade` 降级拒答 | `graph/conditions.py`、`graph/nodes/`、`graph/builder.py`、`graph/run.py`、3 类 fixture 用例 | sparse 样本触发回退并在 2 轮内收敛；empty 样本输出「无公开依据」且不编造 | ✅ 已完成（23 passed） |
 | **S4** | #4 并行与子图 | `research` 换成编译子图，`dispatch` 用 `Send` 按白名单精确派发 4 analyst | `graph/subgraphs/`、白板图（第 7.5 节） | 主图 7 节点可完整画出；reducer 合并可验证 | ✅ 已完成（43 passed，见第 7.7 节） |
-| **S5** | #5 LangChain 深化 | Tavily 封 `BaseRetriever`；`with_structured_output` + 字段置信度 + 校验重试；行内引用 | `capabilities/`、Pydantic schema | 每条 Fact 能对回 source_url；抽取失败自动重试不静默丢字段 | ⏳ |
+| **S5** | #5 LangChain 深化 | Tavily 封 `BaseRetriever`；`with_structured_output` + 字段置信度 + 校验重试；行内引用 | `capabilities/`、Pydantic schema | 每条 Fact 能对回 source_url；抽取失败自动重试不静默丢字段 | 🔄 进行中（8.1 已完成，见第 8.7 节；计划见第 8 节） |
 | **S6** | #6 HITL | 成稿前 `interrupt()` 复核 + `Command(resume=...)`；复核留痕导出标注 | `graph/nodes/human_review.py` | 中断→恢复后 State 一致；依赖真实 checkpointer | ⏳ |
 | **S7** | #7 评测台 | golden set（30–50 公司 × 5 事实）、8 项指标、4 组 A/B、scorecard、CI | `evals/`、`.github/workflows/eval.yml` | 一条命令出分，能定位退化用例 | ⏳ |
 | **S8** | #8 真实实测 | **需 key**。切 `APP_MODE=live`，真实模型 + 真实 Tavily + 真实 DB 跑全量 | 对比表、失败案例、成本/延迟取舍 | 每个数字能由脚本与日志当场复现 | ⏳ 阻塞：等 key |
@@ -240,3 +240,99 @@ START → grounding → [research 子图] → curate → evidence_check
 | 5 | 文档过期 | 第 2 节结尾仍写「S4 后补真图端到端用例」仍未做 | 改为「已于复查前补齐（`tests/test_checkpointer.py:84`）」 |
 
 **复查补充实测**：编译后主图 `__start__/__end__` + 7 业务节点；子图 `dispatch` 挂真实条件边；子图嵌套下重开 `CheckpointSession`，report/references/evidence_verdict/retry_count/review_notes/degraded 六项全恢复。`46 passed`，三档 `report_chars` 822/829/561 零回归。
+
+---
+
+## 8. S5 执行计划：LangChain 深化（结构化输出 / 真实检索 / 入口切换）
+
+> 制定：2026-11-14 16:00 | 依据：`PROJECT_PLAN.md` 5.1/5.2、`ACTION_PLAN` 主表 S5 行、下列前置实测
+> 前置复查：S4 的 5 个补账项重新逐条核过，`46 passed`、三档零回归、工作区干净（`addea68`），无遗留问题。
+
+### 8.1 代码级现状（S4 结束时，逐行核过）
+
+- `graph/nodes/report.py:72-74`：简报正文是 `doc["content"]` 直接拼字符串，没有 LLM；`features.structured_output` 在 `graph/` / `capabilities/` 里**零引用**（只存在于 yaml 和 eval 的 A/B 配置）。
+- `capabilities/retrieval.py:76-80`：`live` 模式显式抛 `NotImplementedError`；只有 `@tool` 封装的 fixture 数据源，没有 `BaseRetriever`。
+- `config/settings.yaml:41-52`：`models` 已有 `temperature / max_retries / roles(4 角色) / fixture.stub`；`.env.example` 已列 OPENROUTER / OPENAI / GEMINI / TAVILY 四组 key。依赖 `langchain-openai==1.2.1`、`langchain-google-genai==3.0.3`、`tavily-python==0.7.24`、`httpx==0.28.1` 均已锁进 `uv.lock`。
+- `backend/llm.py:21-27,47-85`：上游 `create_llm()` 直接 `os.getenv` 且硬编码模型名（`_OPENAI_MODELS` / `_GEMINI_BRIEFING_MODEL` / `DEFAULT_OPENROUTER_MODEL`），违反 `AGENT.md` 第 5、8 条 → **不复用**，保留为上游原样。
+- `langgraph_entry.py:4` = `Graph().compile()`（原版线性 DAG）；`application.py:115-142` = 原版 `Graph(...)` + `graph.run(thread={})`，把每个 state dict 的第一个 key 当 `current_step` 写进 `job_status`，最终从 `final_state['report']` 取报告。
+- `PROJECT_PLAN.md:170-190` 已给出 `Fact` / `SectionBrief` 契约草稿（本阶段落地为 `graph/contracts.py`）。
+
+### 8.2 前置技术探针（uv 环境真跑，无 key、无网络，不是查文档猜的）
+
+| 验证点 | 实测结果 |
+|---|---|
+| `convert_to_openai_tool(SectionBrief)` | ✅ 生成 tool spec，字段 `degraded / facts / section` |
+| `ChatOpenAI.with_structured_output(SectionBrief, method="function_calling")` | ✅ 返回 `RunnableSequence`，绑定阶段不发请求 |
+| **`httpx.MockTransport` 注入 `http_async_client` 后 `ainvoke`** | ✅ **无 key 真跑出 `SectionBrief` 实例**；请求体字段 `messages/model/tools/tool_choice/parallel_tool_calls/temperature/stream` |
+| 模型返回缺 `source_url` 的非法对象 | ✅ 被 `ValidationError: facts.0.source_url Field required` 拦下，不是静默丢字段 |
+| `GenericFakeChatModel.with_structured_output` | ❌ `NotImplementedError: with_structured_output is not implemented for this model` → **无 key 测试必须走 mock HTTP，不能用 LangChain 自带 fake model** |
+| `BaseRetriever` 最小子类 `ainvoke` | ✅ 返回 `Document(page_content, metadata={url,...})` |
+| 新图 `astream(stream_mode="updates")` | ✅ 5 个事件，格式 `{节点名: {字段: 值}}`，`list(ev.keys())[0]` 可直接喂 `application.py` 的 `current_step`；`aget_state` 取到 `report` 长 822 |
+| 顶层 `build_graph(...).compile()` 不带 checkpointer | ✅ 9 节点（`__start__/__end__` + 7 业务）可编译，`astream` 可用；Studio 需由 Server 注入 saver |
+| `AsyncSqliteSaver.from_conn_string` | ✅ 返回 `_AsyncGeneratorContextManager`（有 `__aenter__/__aexit__`），**不能**在模块顶层直接当 saver 对象使用 |
+| 环境噪音 | `langchain-openai` 注入 transport 会打印代理告警，设 `LANGCHAIN_OPENAI_TCP_KEEPALIVE=0` 消除 |
+
+### 8.3 设计决策
+
+1. **key 分叉，不阻塞**：S5 拆「无 key 可实测」与「需 key」两轨。无 key 轨靠 `httpx.MockTransport` 注入真跑 `with_structured_output`、校验重试、URL 级回溯；**任何真实模型/Tavily 的准确率、延迟、成本数字一律不写**，live 实测仍归 S8。用户暂未提供 key，按无 key 轨推进，不空等。
+2. **模型工厂配置驱动**：新建 `capabilities/llm.py` + `config/loader.resolve_llm_credentials()`。模型名只从 `settings.models.roles[role]` 读，温度/重试从 `settings.models`；provider 由凭据解析决定，禁止硬编码模型名、禁止业务代码直接 `os.getenv`。凭据**不进 `Settings`**（避免 `model_dump` 泄密钥），单独返回轻量对象。
+3. **契约层与图解耦**：`graph/contracts.py` 定义 `Fact / SectionBrief / ResearchBrief`（`extra="forbid"`）；`capabilities/structured.py` 提供 LCEL 抽取链 `prompt | model.with_structured_output(...)`，校验失败最多重试 `models.max_retries` 次，仍失败 → 该栏目 `degraded=True` + `review_notes` 留痕，**禁止静默丢字段**。8.1 先在独立能力层测通，8.3 才接进 `briefing` 节点，避免一次改太多把三档跑坏。
+4. **URL 级回溯，不冒充内容级**：`Fact.source_url` 必须出现在本次传入的文档 URL 集合里，否则剔除并写 `review_notes`。这只保证「引用指向真实检索到的来源」，**不等于** `citation_traceability`（来源确实支持 claim），后者仍需 judge/golden set，归 S7。
+5. **Tavily 封 `BaseRetriever`**：`capabilities/tavily_retriever.py` 实现 `_aget_relevant_documents` 返回带 `url/title/score/section` 元数据的 `Document`；工具工厂按 `app.mode` 选 retriever 或 fixture tool。无 key 时用同接口 `FakeRetriever` 测编排，**不写「Tavily 实测」**。
+6. **`features.structured_output` 真消费**：`briefing` 按开关选「结构化抽取 → 渲染」或「S4 模板」。开关关闭时行为与 S4 完全一致（`report_chars` 822/829/561 保持），作为 A/B 基线。
+7. **入口切换放 8.4**：`langgraph_entry.py` 导出 `build_graph(...).compile()`（无 checkpointer，由 LangGraph Server 注入；需在 `AGENT.md` 第 6.7 条补这条例外并说明理由）；`application.py` 改用 `CheckpointSession` 编译新图 + `astream(updates)`，从 `aget_state` 取 report。切换后 `/research` 在 fixture 模式只返回合成报告，这是用户拍板「S5 再切」的既定代价，README 顶部已如实写明。
+8. **不谎称**：live 代码路径在无 key 下只能静态检查 + mock，文档必须写「未做 live 实测」；不把 `httpx.MockTransport` 的结果说成真实模型结果。
+
+### 8.4 任务与验收
+
+| # | 动作 | 产出 | 验收标准 |
+|---|---|---|---|
+| 8.1 | Pydantic 契约 + 配置驱动模型工厂 + 结构化抽取器 + mock HTTP 测试 | `graph/contracts.py`、`capabilities/{llm,structured}.py`、`config/loader.py` 增凭据解析、`tests/test_s5_contracts.py` | 无 key 真跑 `with_structured_output`；缺 `source_url` 被拦；重试 1 次成功；重试耗尽降级留痕；URL 不在文档集合被剔除且留痕；角色模型名来自配置。**三档 CLI 零回归** |
+| 8.2 | Tavily `BaseRetriever` + 工具工厂双模式 | `capabilities/{tavily_retriever,retrieval}.py`、`tests/test_s5_retriever.py` | fake retriever 走通编排；live 缺 key 明确报错不悄悄回退 fixture；fixture 三档不回归 |
+| 8.3 | `briefing` 接入结构化输出 + 消费开关 | `graph/nodes/report.py`、`tests/test_s5_briefing.py` | 开关 on/off 都能跑；off 时报告与 S4 逐字一致；每条 Fact 对回 `references` 的 URL；降级栏目不编造 |
+| 8.4 | 两个对外入口切到新图 | `langgraph_entry.py`、`application.py`、`AGENT.md` | Studio 图可编译；`/research` 的 `astream` 事件写 `job_status` 且能取到 report（fixture） |
+| 8.5 | 全量实测、文档同步、提交 | `ACTION_PLAN` 8.6、`BASELINE` 12、`README`、commit | pytest 全过、三档 + A/B 回归、`uv pip check`、无 key 边界写清、工作区干净 |
+
+### 8.5 S5 目标形态（白板图）
+
+```text
+能力层   capabilities/
+           llm.py            配置驱动 ChatOpenAI / Gemini，模型名来自 settings.models.roles
+           structured.py     ChatPromptTemplate | model.with_structured_output(SectionBrief)
+           tavily_retriever.py  BaseRetriever → Document(url,title,score,section)
+           retrieval.py      @tool 工厂：fixture / live 按 app.mode 选数据源
+契约层   graph/contracts.py  Fact(claim, source_url, confidence) / SectionBrief / ResearchBrief
+主图     ... → curate → evidence_check → briefing ── features.structured_output
+                                          ├─ on  : 结构化抽取 + URL 回溯 + 渲染
+                                          └─ off : S4 模板（A/B 基线，逐字不变）
+入口     langgraph_entry.py / application.py  →  新图（S5 起）
+```
+
+### 8.6 边界（不谎称）
+
+- 本阶段在**无 key** 环境下完成；`httpx.MockTransport` 只验证 LangChain 链路与契约，不代表任何真实模型能力。
+- 真实 LLM / Tavily 调用、准确率、p95 延迟、单次成本、S8 真实实测**仍阻塞在 key**，不写任何数字。
+- `citation_traceability`（来源内容确实支持结论）仍归 S7；S5 只做到 URL 级回溯。
+- HITL（S6）、评测台（S7）、简历（S9）不因 S5 提前开工而顺延或假装完成。
+
+### 8.7 S5.1 实测结果（2026-11-14 16:20，无 key / 完全离网）
+
+**新增**：`graph/contracts.py`、`capabilities/llm.py`、`capabilities/structured.py`、`tests/test_s5_contracts.py`；`config/loader.py` 增 `LLMCredentials` / `MissingLLMCredentials` / `resolve_llm_credentials()`。
+
+| 验收项 | 实测结果 |
+|---|---|
+| 结构化输出真跑 | `httpx.MockTransport` 注入 `ChatOpenAI(http_async_client=...)`，`prompt \| with_structured_output(SectionBrief)` 真发出 1 次调用，返回 `SectionBrief` 实例 |
+| 缺 `source_url` | 被 `ValidationError` 拦下；重试 2 次仍失败 → 整栏 `degraded=True`、`facts=[]`、`review_notes` 两条 `validation_failed` + 一条 `degraded`，**没有静默丢字段** |
+| 校验重试 | 第一次非法、第二次合法 → 成功，留痕 `["validation_failed", "ok"]` |
+| URL 级回溯 | 模型编造文档外的 URL → Fact 被剔除、写 `dropped_uncited_facts` 留痕、整栏降级 |
+| 空文档短路 | 不调用模型（`seen == []`），直接降级 |
+| 配置驱动 | 把 `models.roles.briefing` 改成 `my/custom-model`，请求体 `model` 字段随之改变；温度同样来自配置 |
+| 凭据安全 | OpenRouter 优先；`SecretStr` 使明文不出现在 `repr`；无 key 抛 `MissingLLMCredentials` 并提示 `APP_MODE=fixture`，**不自动回退** |
+| 契约严格性 | `extra="forbid"` 拦下额外字段，`confidence>1` 被 `ValidationError` 拦下 |
+| 全量回归 | `55 passed`（S4 的 46 + 新增 9）；三档 `report_chars` 822/829/561、research 1/2/3、引用 8/9/6 零变化；`FEATURES_SELF_CORRECTION=false` 仍生效；`uv pip check` 103 包兼容 |
+
+**「完全离网」的硬保证**：测试里的 `CREDS.base_url` 指向不可达的 `http://127.0.0.1:1/v1`。MockTransport 拦截所有请求；一旦注入失效，请求会立刻 connection refused 而不是静默走外网。另实测 LangChain 自带 `GenericFakeChatModel` 抛 `NotImplementedError`，**不能**用来测 `with_structured_output`，这是选 mock HTTP 的原因。
+
+**两个诚实边界**：① 首次构造 `ChatOpenAI` 约 6s 是 SDK 一次性初始化（后续调用 0.02s），不是网络等待；② 这些结果只证明 LangChain 链路与契约正确，**不代表任何真实模型能力**，准确率/延迟/成本一个数字都不写。live 实测仍阻塞在 key（S8）。
+
+**S5 剩余**：8.2 Tavily `BaseRetriever` 与双模式工具工厂、8.3 `briefing` 接结构化输出并消费开关、8.4 两个入口切到新图、8.5 全量验证与文档收尾。
