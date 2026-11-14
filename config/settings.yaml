@@ -1,0 +1,71 @@
+# ============================================================
+# 主配置：图编排 / 检索 / 模型 / 功能开关
+# 所有数值都允许被同名环境变量覆盖，占位语法 ${VAR:-default}
+# 由 config/loader.py 统一解析，禁止在业务代码里直接读本文件
+# ============================================================
+
+app:
+  mode: ${APP_MODE:-fixture}
+  log_level: ${LOG_LEVEL:-INFO}
+
+graph:
+  # 循环终止：唯一依据是 retry_count，禁止让模型自行判断"够了"
+  max_retry: 2
+  sections:
+    - company
+    - industry
+    - financial
+    - news
+  evidence:
+    min_relevance_score: 0.4      # 沿用原版 curator 阈值，改为可配置
+    min_docs_per_section: 2       # 低于此数判定 insufficient
+    require_source_url: true      # 无 URL 的文档直接丢弃
+  degrade:
+    enabled: true
+    message: "该类信息未找到公开依据"
+  checkpointer: ${CHECKPOINTER:-sqlite}
+  dsn: ${DATABASE_URL:-sqlite:///./data/checkpoints.db}
+  postgres_dsn: ${POSTGRES_DSN:-}
+  thread_id_template: "{company}:{date}"
+
+retrieval:
+  queries_per_analyst: 2          # 原版 QUERY_FORMAT_GUIDELINES 硬编码 2，改为配置
+  max_results_per_query: 3
+  search_depth: advanced
+  topics:
+    financial_analyzer: finance
+    news_analyzer: news
+  rerank:
+    enabled: true
+    # 预留：后续 A/B 用，先不引入额外依赖
+    strategy: score_desc
+
+models:
+  temperature: 0
+  max_retries: 1                  # 结构化输出校验失败后的重试次数
+  roles:
+    research: ${OPENROUTER_MODEL:-google/gemini-3.8-flash}
+    briefing: ${OPENROUTER_MODEL:-google/gemini-3.8-flash}
+    editor: ${OPENROUTER_MODEL:-google/gemini-3.8-flash}
+    judge: ${OPENROUTER_MODEL:-google/gemini-3.8-flash}
+  fixture:
+    # fixture 模式下不调用任何外部模型，返回确定性结构化输出
+    stub: true
+    responses_path: ${FIXTURE_PATH:-./evals/fixtures/tavily_responses.json}
+
+features:
+  self_correction: true           # 条件边回退总开关（A/B 用）
+  structured_output: true         # with_structured_output 开关（A/B 用）
+  inline_citations: true          # 行内引用渲染开关
+  human_review: true              # interrupt 复核开关
+  auto_approve_review: ${AUTO_APPROVE_REVIEW:-true}
+
+report:
+  # 报告结构保持与原版一致，便于做前后对比
+  headings:
+    - Company Overview
+    - Industry Overview
+    - Financial Overview
+    - News
+    - References
+  max_references: 10

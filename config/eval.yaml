@@ -1,0 +1,67 @@
+# ============================================================
+# 评测配置：golden set / 指标 / A-B / CI 容差
+# 运行：python -m evals.run_eval --config config/eval.yaml
+# 铁律：所有简历数字只能由本配置驱动的脚本产出
+# ============================================================
+
+dataset:
+  path: ${EVAL_DATASET_PATH:-./evals/golden.jsonl}
+  # 30~50 家公司，每家 5 条可核验事实；故意混入若干"查不到公开依据"的样本
+  min_companies: 30
+  facts_per_company: 5
+  fields:
+    - founded_year
+    - ceo
+    - funding_round
+    - competitor
+    - recent_launch
+
+fixture:
+  # 无 key 阶段用这三组样本验证循环、降级与拒答逻辑
+  cases:
+    - sufficient        # 资料充足，一轮通过
+    - sparse            # 资料稀疏，触发改写 query 回退
+    - empty             # 完全查无，重试超限后降级拒答
+
+metrics:
+  - fact_accuracy             # 命中 expected 的字段占比
+  - citation_traceability     # 带 source_url 且来源确实支持 claim 的结论占比（核心）
+  - abstain_rate              # 应拒答样本中正确输出"无公开依据"的比例
+  - hallucination_rate        # 无来源或与来源矛盾的结论占比
+  - self_correction_success   # 首轮 insufficient、回退后转 sufficient 的比例
+  - avg_retry_rounds
+  - p95_latency_ms
+  - cost_per_report
+
+thresholds:
+  citation_traceability_min: 0.90
+  hallucination_rate_max: 0.10
+  abstain_rate_min: 0.90
+  max_avg_retry_rounds: 2.0
+
+ab_tests:
+  - name: baseline
+    overrides: {}
+  - name: self_correction_off
+    overrides:
+      features.self_correction: false
+  - name: fewer_results
+    overrides:
+      retrieval.max_results_per_query: 1
+  - name: free_text_output
+    overrides:
+      features.structured_output: false
+  - name: no_human_review
+    overrides:
+      features.human_review: false
+
+ci:
+  scorecard_path: ${EVAL_SCORECARD_PATH:-./evals/scorecard.json}
+  fail_on_regression: true
+  # 核心指标相对上一版回退超过该容差即失败，并打印退化用例 id
+  regression_tolerance: 0.02
+  protected_metrics:
+    - fact_accuracy
+    - citation_traceability
+    - abstain_rate
+    - hallucination_rate

@@ -1,0 +1,144 @@
+{
+  "captured_at": "2026-11-14T13:10:00",
+  "python": "3.11.9",
+  "upstream_commit": "23fe92d48ea05750e6fd7cffdb78799cea5278d8",
+  "network_calls": "none (placeholder keys only)",
+  "dependencies": {
+    "langchain": "1.3.9",
+    "langchain-core": "1.8.0",
+    "langchain-openai": "1.2.1",
+    "langchain-community": "0.4.1",
+    "langgraph": "1.2.22",
+    "langgraph-checkpoint": "4.3.2",
+    "pydantic": "2.14.3",
+    "tavily-python": "0.7.24",
+    "fastapi": "0.121.2",
+    "pytest": "9.2.0",
+    "PyYAML": "6.0.3"
+  },
+  "graph": {
+    "compiled_type": "CompiledStateGraph",
+    "nodes": [
+      "__end__",
+      "__start__",
+      "briefing",
+      "collector",
+      "company_analyst",
+      "curator",
+      "editor",
+      "enricher",
+      "financial_analyst",
+      "grounding",
+      "industry_analyst",
+      "news_scanner"
+    ],
+    "node_count": 12,
+    "edges": [
+      {
+        "source": "__start__",
+        "target": "grounding",
+        "conditional": false
+      },
+      {
+        "source": "briefing",
+        "target": "editor",
+        "conditional": false
+      },
+      {
+        "source": "collector",
+        "target": "curator",
+        "conditional": false
+      },
+      {
+        "source": "company_analyst",
+        "target": "collector",
+        "conditional": false
+      },
+      {
+        "source": "curator",
+        "target": "enricher",
+        "conditional": false
+      },
+      {
+        "source": "editor",
+        "target": "__end__",
+        "conditional": false
+      },
+      {
+        "source": "enricher",
+        "target": "briefing",
+        "conditional": false
+      },
+      {
+        "source": "financial_analyst",
+        "target": "collector",
+        "conditional": false
+      },
+      {
+        "source": "grounding",
+        "target": "company_analyst",
+        "conditional": false
+      },
+      {
+        "source": "grounding",
+        "target": "financial_analyst",
+        "conditional": false
+      },
+      {
+        "source": "grounding",
+        "target": "industry_analyst",
+        "conditional": false
+      },
+      {
+        "source": "grounding",
+        "target": "news_scanner",
+        "conditional": false
+      },
+      {
+        "source": "industry_analyst",
+        "target": "collector",
+        "conditional": false
+      },
+      {
+        "source": "news_scanner",
+        "target": "collector",
+        "conditional": false
+      }
+    ],
+    "edge_count": 14,
+    "conditional_edge_count": 0,
+    "input_schema_fields": [
+      "(schema introspection failed: PydanticUserError: Please use `typing_extensions.TypedDict` instead of `typing.TypedDict` on Python < 3.12.\n\nFor further information visit https://errors.pydantic.dev/2.14/u/typed-dict-version)"
+    ],
+    "entry_point": [
+      "grounding"
+    ],
+    "state_schema_class": "StateGraph",
+    "compile_with_checkpointer": false
+  },
+  "pure_nodes": {
+    "grounding_output_keys": [
+      "company",
+      "company_url",
+      "hq_location",
+      "industry",
+      "job_id",
+      "messages",
+      "site_scrape"
+    ],
+    "grounding_company": "Notion",
+    "collector_added_keys": [],
+    "curator_added_keys": [
+      "curated_financial_data",
+      "curated_news_data",
+      "reference_info",
+      "reference_titles",
+      "references"
+    ],
+    "curator_kept_financial": 1,
+    "curator_kept_news": 1,
+    "curator_kept_company": 0,
+    "references_count": 2,
+    "nodes_mutate_state_in_place": true
+  }
+}

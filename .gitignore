@@ -27,3 +27,16 @@ node_modules/
 Procfile
 .vercel
 .ebextensions
+
+# ---- 二次开发新增（2026-11-14）----
+# 本地数据库与 checkpoint
+data/
+*.db
+*.sqlite
+*.sqlite3
+# 测试与评测运行产物
+.pytest_cache/
+.coverage
+htmlcov/
+# 运行日志
+*.log
