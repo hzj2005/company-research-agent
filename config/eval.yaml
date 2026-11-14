@@ -77,6 +77,11 @@ ab_tests:
   - name: free_text_output
     overrides:
       features.structured_output: false
+  - name: no_inline_citations
+    # 负向对照：故意关掉行内引用，验证 citation_traceability 会掉到 0，
+    # 而不是靠 golden 反推 URL 拿满分（S7 复查 P1 的常设防线）
+    overrides:
+      features.inline_citations: false
   - name: no_human_review
     overrides:
       features.human_review: false

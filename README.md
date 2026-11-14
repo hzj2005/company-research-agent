@@ -73,7 +73,7 @@ uv run python -m graph.run --resume --case sparse --db ./data/review.db \
 One command runs the whole eval suite in `fixture` mode and writes `evals/scorecard.json`:
 
 ```bash
-uv run python -m evals.run_eval                 # 5 A/B groups x 3 cases, 15 real graph runs
+uv run python -m evals.run_eval                 # 6 A/B groups x 3 cases, 18 real graph runs
 uv run python -m evals.build_golden --check    # CI: golden set in sync with fixture/settings
 uv run python -m evals.run_eval --compare evals/scorecard.json --output evals/scorecard.next.json
 ```
@@ -81,6 +81,8 @@ uv run python -m evals.run_eval --compare evals/scorecard.json --output evals/sc
 `.github/workflows/eval.yml` runs `pytest` + the scorecard + a regression gate against the committed baseline; regressions beyond `0.02` fail the build and print the degraded golden item ids (e.g. `sparse:company:2`).
 
 > **Read this before quoting any number.** The golden set is **derived from the synthetic fixture corpus** (`provenance: synthetic-fixture-derived`), not from real company facts. A baseline score of `1.000` means "the system reproduces the given documents with correct citations under the configured rules" — a **contract-regression test**, not model accuracy. `citation_traceability` here is a lexical-containment proxy, not semantic entailment; `cost_per_report` is `0.0` because there are zero external calls. The planned 30–50 human-verified companies require real retrieval + keys and belong to a later live-measurement stage. None of these numbers should be presented as real-world accuracy in a résumé.
+
+`no_inline_citations` is a deliberately broken **negative control** (inline citations switched off): it scores `citation_traceability=0.0` / `hallucination_rate=1.0` on purpose, so a future change that removes citations shows up in the scorecard immediately. That `1.0` is not a measured hallucination rate of the default configuration.
 
 The evaluator refuses to start unless `APP_MODE=fixture` and installs a non-loopback `socket.connect` guard while running, so it cannot consume Tavily or LLM quota even if configuration is changed by mistake. Measured: `tavily=0, llm=0, blocked_connection_attempts=0`.
 

@@ -27,7 +27,7 @@ import tempfile
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Iterable, Iterator
 
 from capabilities.retrieval import resolve_fixture_path
 from config.loader import (
@@ -78,21 +78,61 @@ def eval_offline_guard() -> Iterator[list[Any]]:
         socket.socket.connect = original  # type: ignore[method-assign]
 
 
-def inputs_sha256(cfg: EvalConfig, settings: Settings) -> str:
-    """把影响分数的全部输入算指纹，分数变动时能定位是输入变了还是代码变了。"""
-    paths = sorted(
+def _hash_files(paths: Iterable[Path]) -> str:
+    """按「相对仓库根的 posix 路径」排序后逐文件 hash，保证 Windows/Linux 一致。"""
+    entries: list[tuple[str, Path]] = []
+    for p in set(paths):
+        rp = p.resolve()
+        try:
+            label = rp.relative_to(ROOT).as_posix()
+        except ValueError:
+            label = rp.name
+        entries.append((label, rp))
+    h = hashlib.sha256()
+    for label, rp in sorted(entries):
+        h.update(label.encode("utf-8"))
+        h.update(rp.read_bytes())
+    return h.hexdigest()[:16]
+
+
+# 影响一次评测结果的代码面：图、能力层、持久化、配置解析、评测内核本身。
+# 不含 tests/ 与 docs/（改测试/文档不改变分数），也不含上游 backend/（评测不经过它）。
+_CODE_DIRS = ("graph", "capabilities", "persistence")
+_CODE_FILES = (
+    "config/loader.py",
+    "evals/build_golden.py",
+    "evals/config.py",
+    "evals/metrics.py",
+    "evals/run_eval.py",
+)
+
+
+def code_sha256() -> str:
+    paths: list[Path] = [
+        p
+        for d in _CODE_DIRS
+        for p in (ROOT / d).rglob("*.py")
+        if "__pycache__" not in p.parts
+    ]
+    paths += [ROOT / f for f in _CODE_FILES]
+    return _hash_files(paths)
+
+
+def inputs_sha256(
+    cfg: EvalConfig,
+    settings: Settings,
+    eval_config_path: str | Path | None = None,
+) -> str:
+    """锁定四份数据输入；代码变化由 `code_sha256()` 单独锁定（S7 复查 P2/P6）。"""
+    eval_path = Path(eval_config_path) if eval_config_path else DEFAULT_EVAL_PATH
+    return _hash_files(
         {
-            str(DEFAULT_SETTINGS_PATH),
-            str(DEFAULT_EVAL_PATH),
-            str(dataset_path(cfg)),
-            str(resolve_fixture_path(settings)),
+            DEFAULT_SETTINGS_PATH,
+            eval_path,
+            dataset_path(cfg),
+            resolve_fixture_path(settings),
         }
     )
-    h = hashlib.sha256()
-    for p in paths:
-        h.update(p.encode("utf-8"))
-        h.update(Path(p).read_bytes())
-    return h.hexdigest()[:16]
 
 
 async def _run_group(
@@ -145,6 +185,7 @@ def build_scorecard(
     base: Settings,
     golden: GoldenSet,
     ab_names: list[str] | None = None,
+    eval_config_path: str | Path | None = None,
 ) -> tuple[dict[str, Any], list[Any]]:
     """跑全部 A/B 组并组装 scorecard；返回 (scorecard, 外部连接尝试列表)。"""
     if base.app.mode != "fixture":
@@ -152,6 +193,14 @@ def build_scorecard(
             "S7 评测台只在 APP_MODE=fixture 下运行（0 次真实调用）。"
             "live 实测属于 S8，需模型 key + 用户明确放行 Tavily 额度。"
         )
+    # 健全性：空 golden / 样本不足时拒绝出分，避免"没东西可测"也拿到满分（S7 复查 P5）
+    if len(golden.cases) < cfg.dataset.min_companies:
+        raise ValueError(
+            f"golden 只有 {len(golden.cases)} 个 case，"
+            f"少于 config/eval.yaml 的 min_companies={cfg.dataset.min_companies}"
+        )
+    if not golden.claims or not golden.abstains:
+        raise ValueError("golden 必须同时包含 claim 与 abstain 样本，拒绝产出可能假满分的 scorecard")
 
     case_by_key = {c["case"]: c for c in golden.cases}
     missing = [k for k in cfg.fixture.cases if k not in case_by_key]
@@ -211,7 +260,8 @@ def build_scorecard(
         "provenance": cfg.dataset.provenance,
         "mode": base.app.mode,
         "disclaimer": DISCLAIMER,
-        "inputs_sha256": inputs_sha256(cfg, base),
+        "inputs_sha256": inputs_sha256(cfg, base, eval_config_path),
+        "code_sha256": code_sha256(),
         "external_calls": {
             "tavily": 0,
             "llm": 0,
@@ -287,6 +337,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--ab", action="append", default=None, help="只跑指定 A/B 组（baseline 始终跑）")
     parser.add_argument("--baseline-only", action="store_true", help="只跑 baseline，用于快速自检")
     args = parser.parse_args(argv)
+    if args.baseline_only and args.ab:
+        parser.error("--baseline-only 与 --ab 不能同时使用")
 
     cfg = load_eval_config(args.config)
     golden = load_golden(args.golden or dataset_path(cfg))
@@ -300,7 +352,11 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(f"[WARN] 上一版 scorecard 不存在：{prev_path}，跳过回归比对（首次运行属正常）")
 
-    card, _ = build_scorecard(cfg, base, golden, ab_names=[] if args.baseline_only else args.ab)
+    card, _ = build_scorecard(
+        cfg, base, golden,
+        ab_names=[] if args.baseline_only else args.ab,
+        eval_config_path=args.config,
+    )
     regression = (
         compare_scorecards(prev, card, cfg) if prev is not None else None
     )

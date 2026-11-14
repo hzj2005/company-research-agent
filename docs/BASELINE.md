@@ -295,15 +295,18 @@
 
 | 验证点 | 真实结果 |
 |---|---|
-| 一条命令出分 | `uv run python -m evals.run_eval` → `evals/scorecard.json`（5 组 A/B × 3 case = 15 次完整图运行），退出码 0 |
+| 一条命令出分 | `uv run python -m evals.run_eval` → `evals/scorecard.json`（6 组 A/B × 3 case = 18 次完整图运行），退出码 0 |
 | golden 同步 | `build_golden --check` 通过；`evals/golden.jsonl` 28 行 = 1 meta + 3 case + 23 claim + 1 abstain，全部由 fixture + settings 规则派生 |
 | baseline | `fact_accuracy=1.000`、`citation_traceability=1.000`、`abstain_rate=1.000`、`hallucination_rate=0.000`、`self_correction_success=1.0`、`avg_retry_rounds=1.000`；gate PASS |
 | 可定位退化用例 | `self_correction_off` → `fact_accuracy=0.870`、`self_correction_success=0`，退化 id 精确为 `sparse:company:0/1/2` |
 | A/B 如实判定 | `fewer_results` / `free_text_output` / `no_human_review` 三组标 `no_effect`（原因见 ACTION_PLAN 11.5），不伪造对照收益 |
-| CI 回归门禁 | 本地模拟 CI：`--compare evals/scorecard.json` → `PASS`、`degraded_case_ids=[]`；容差 0.02、方向 higher/lower、排除 `p95_latency_ms` |
-| 反向证伪 | 注入「Notion 已完成 IPO」→ `content_mismatch` 被抓、三项指标下降；伪造拒答 → `empty:company:abstain` 失败（指标不是恒满分） |
-| 可复现 | 两次独立评测的 `inputs_sha256` 与剔除 `elapsed_ms`/`p95` 后的全部字段逐字一致；scorecard 无时间戳 |
-| 额度护栏 | `APP_MODE=live` 启动即拒；`socket.connect` 非回环连接立即抛错；实测 `tavily=0 / llm=0 / blocked_connection_attempts=0` |
-| 全量回归 | `114 passed`（S6 的 97 + S7 的 17）；`uv pip check` 103 包兼容 |
+| 负向对照 | `no_inline_citations` 故意关掉行内引用 → `fact_accuracy=1.000` 但 `citation_traceability=0.000`、`hallucination_rate=1.000`，23 条结论无可核验来源；常设防线防「引用被改坏却拿满分」 |
+| CI 回归门禁 | 本地模拟 CI：`--compare evals/scorecard.json` → `PASS`、`degraded_case_ids=[]`；容差 0.02、方向 higher/lower、排除 `p95_latency_ms`；用例级比对覆盖所有共同 A/B 组 |
+| 反向证伪 | 注入「Notion 已完成 IPO」→ `content_mismatch` 被抓；关掉引用 → 8 条 `no_explicit_citation`；伪造拒答 → `empty:company:abstain` 失败；A/B 组新增失败 → 回归门禁点名该组 |
+| 可复现 | 两次独立评测的 `inputs_sha256` / `code_sha256` 与剔除 `elapsed_ms`/`p95` 后的全部字段逐字一致；scorecard 无时间戳 |
+| 额度护栏 | `APP_MODE=live` 启动即拒；`socket.connect` 非回环连接立即抛错且作废结果；实测 `tavily=0 / llm=0 / blocked_connection_attempts=0` |
+| 全量回归 | `121 passed`（S6 的 97 + S7 的 24）；`uv sync --frozen` 与 `uv pip check` 103 包兼容 |
 
-**S7 如实边界（最重要）**：这是**合成语料上的契约回归测试**，不是模型能力评测。golden 与被测系统读同一份 fixture，baseline 满分是「按规范把给定文档搬进报告并加对引用」的必然结果，**不得写成「准确率 100%」进简历**。`citation_traceability` 是词法包含代理而非语义蕴含；`hallucination_rate` 是它的互补值而非独立证据；`cost_per_report=0`、`p95_latency_ms` 为本机耗时，都不是真实成本/延迟。原计划「30–50 家真实公司 × 5 事实」的 golden 未做（无 key / 无真实语料，硬编即造假），归 S8；换 `EVAL_DATASET_PATH` 即可复用脚本。内容级语义 judge、真实指标、S9 简历仍未开工。
+**S7 复查补账（同日 18:56，详见 ACTION_PLAN 11.10）**：用户要求复查后，用真实探针坐实并修掉 8 项。最严重的是 **P1**——初版 `parse_report` 在没有 `[n]` 时从 golden 按文本反推 URL，导致关闭行内引用后 8 条无引用结论仍拿 `traceability=1.0`，等于用标准答案给报告补引用。现改为反推 URL 只作诊断并判 `no_explicit_citation`，`fact_accuracy` 与引用指标解耦，且新增 `no_inline_citations` 负向 A/B 组做常设防线。其余：P2 拆出 `code_sha256`、P3 修 golden 模拟轮数（1→3 与图一致）、P4 回归比对扩展到所有组、P5 样本不足拒绝出分、P6 指纹纳入自定义配置、P7 互斥参数报错、P8 修测试硬编码与恒真断言。同批探针复验：P1 `traceability=0.0 / fact_accuracy=1.0`、P3 `expected_research_runs=3`、P4 `passed=False + fewer_results:...`、P2 两个独立指纹。
+
+**S7 如实边界（最重要）**：这是**合成语料上的契约回归测试**，不是模型能力评测。golden 与被测系统读同一份 fixture，baseline 满分是「按规范把给定文档搬进报告并加对引用」的必然结果，**不得写成「准确率 100%」进简历**。`citation_traceability` 是词法包含代理而非语义蕴含；`hallucination_rate` 是它的互补值而非独立证据；`cost_per_report=0`、`p95_latency_ms` 为本机耗时，都不是真实成本/延迟。原计划「30–50 家真实公司 × 5 事实」的 golden 未做（无 key / 无真实语料，硬编即造假），归 S8；换 `EVAL_DATASET_PATH` 即可复用脚本。`no_inline_citations` 组的 `hallucination_rate=1.0` 属「故意关掉引用」的负向对照，不是默认配置的幻觉率。内容级语义 judge、真实指标、S9 简历仍未开工。

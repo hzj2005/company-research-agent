@@ -522,19 +522,19 @@ uv run python -m graph.run --resume --case sparse --db ./data/review.db \
 | `evals/golden.jsonl` | 28 行 = 1 meta + 3 case + 23 claim + 1 abstain；每条 claim 自带 `source_content`，评测器自包含 |
 | `evals/config.py` | `config/eval.yaml` 的 Pydantic 强类型校验（`extra="forbid"`），A/B 字段写错当场失败而不是静默出分 |
 | `evals/metrics.py` | 报告解析、8 项指标、阈值门禁、A/B 有效性判定、回归比对（纯函数，可单测） |
-| `evals/run_eval.py` | 编排 5 组 A/B × 3 case 真跑 LangGraph、写 `evals/scorecard.json`、CLI 与退出码 |
+| `evals/run_eval.py` | 编排 6 组 A/B × 3 case（18 次完整图运行）、写 `evals/scorecard.json`、CLI 与退出码 |
 | `evals/scorecard.json` | 提交的基线分数，含用例级 `claim_records` / `failures`，可定位到具体结论 |
 | `.github/workflows/eval.yml` | golden 同步 → 全量 pytest → 评测 + 回归门禁 → 上传 scorecard |
-| `tests/test_s7_eval.py` | 17 例，含反向证伪与额度护栏 |
+| `tests/test_s7_eval.py` | 24 例，含反向证伪、复查补账回归与额度护栏 |
 
-**额度护栏**（对用户「不要把免费额度用没了」的硬落实）：`run_eval.py` 只在 `APP_MODE=fixture` 下启动，`live` 直接抛 `RuntimeError`；运行期间给 `socket.connect` 装守卫，非回环连接立即抛错。所以即使配置被误改，本脚本也**不可能**消耗 Tavily / 模型额度。实测 `blocked_connection_attempts=0`、`tavily=0`、`llm=0`。
+**额度护栏**（对用户「不要把免费额度用没了」的硬落实）：`run_eval.py` 只在 `APP_MODE=fixture` 下启动，`live` 直接抛 `RuntimeError`；运行期间给 `socket.connect` 装守卫，非回环连接立即抛错，且一旦拦到连接就**作废本次结果**。所以即使配置被误改，本脚本也**不可能**消耗 Tavily / 模型额度。实测 `blocked_connection_attempts=0`、`tavily=0`、`llm=0`。
 
 ### 11.3 指标口径（fixture 下的准确定义）
 
 | 指标 | 定义 | 边界 |
 |---|---|---|
-| `fact_accuracy` | 报告命中 golden `expected_text` + 同一 `source_url` 的条数 / 23 | 相对给定语料的召回，不是真实事实正确率 |
-| `citation_traceability` | 非拒答结论中「[n] 能映射回本次 References 的 URL，且 claim 文本归一化后出现在该 URL 的来源正文里」的占比 | **词法包含代理**，能抓拼错 URL / 张冠李戴 / 凭空造句，**不等价语义蕴含**；真实 judge 归 S8 |
+| `fact_accuracy` | 报告中同栏目出现 golden `expected_text` 的条数 / 23（**只管内容召回**） | 相对给定语料的召回，不是真实事实正确率；引用对错由 traceability 独立判定 |
+| `citation_traceability` | 非拒答结论中「报告自带 `[n]` 且能映射回本次 References 的 URL，且 claim 文本归一化后出现在该 URL 的来源正文里」的占比 | **词法包含代理**，能抓拼错 URL / 张冠李戴 / 凭空造句 / 引用整段缺失，**不等价语义蕴含**；真实 judge 归 S8 |
 | `abstain_rate` | 应拒答栏目真正输出拒答话术、无结论、且 `degraded_sections` 含该栏目的比例 | 1 条样本 |
 | `hallucination_rate` | `1 - citation_traceability` | **互补指标，不是独立证据**，避免把同一数字当成两次验证 |
 | `self_correction_success` | 首轮 insufficient、回退后转 sufficient 的比例 | 分母 1（sparse），其余 case 不计入 |
@@ -542,7 +542,9 @@ uv run python -m graph.run --resume --case sparse --db ./data/review.db \
 | `p95_latency_ms` | 本机墙钟 | 列为 `non_deterministic_metrics`，**不参与** CI 比对与 A/B 判定 |
 | `cost_per_report` | fixture 下恒为 `0.0` | 0 次真实调用，**不是真实单次成本** |
 
-scorecard 不写时间戳；`inputs_sha256` 覆盖 settings / eval / golden / fixture 四份输入，分数变动能区分「输入变了」还是「代码变了」。
+> **复查 P1 修正**：初版 `fact_accuracy` 也要求 `source_url` 匹配，而 `parse_report` 在没有 `[n]` 时会从 golden 按文本**反推** URL——等于用标准答案给报告补引用，导致关掉行内引用后 8 条无引用结论仍拿 `traceability=1.0`。现在反推的 URL 只作诊断（`url_inferred=True`），一律判 `no_explicit_citation`；两个指标拆开：内容归 `fact_accuracy`，引用归 `citation_traceability`。
+
+scorecard 不写时间戳；`inputs_sha256` 锁定 settings / eval / **实际使用的** eval 配置 / golden / fixture 四份数据，`code_sha256` 单独锁定 `graph/`、`capabilities/`、`persistence/`、`config/loader.py` 与 `evals/*.py`。两者分开后，分数变动才能区分「输入变了」还是「代码变了」（复查 P2/P6）。
 
 ### 11.4 实测结果
 
@@ -552,9 +554,10 @@ scorecard 不写时间戳；`inputs_sha256` 覆盖 settings / eval / golden / fi
 | `self_correction_off` | 0.870 | 1.000 | 1.000 | 0.000 | 0.0 | 0.000 | **changed** |
 | `fewer_results` | 1.000 | 1.000 | 1.000 | 0.000 | 1.0 | 1.000 | no_effect |
 | `free_text_output` | 1.000 | 1.000 | 1.000 | 0.000 | 1.0 | 1.000 | no_effect |
+| `no_inline_citations` | 1.000 | **0.000** | 1.000 | **1.000** | 1.0 | 1.000 | **changed（负向对照）** |
 | `no_human_review` | 1.000 | 1.000 | 1.000 | 0.000 | 1.0 | 1.000 | no_effect |
 
-关掉自纠正后 `fact_accuracy` 掉 `0.130435`（23 条里丢 3 条），`self_correction_success` 1→0，退化用例被精确定位为 `sparse:company:0/1/2`（Linear 公司栏首轮只有 1 篇，不再回退就直接拒答）。这是**唯一一组真实有效的对照收益**，可解释、可复现。
+关掉自纠正后 `fact_accuracy` 掉 `0.130435`（23 条里丢 3 条），`self_correction_success` 1→0，退化用例被精确定位为 `sparse:company:0/1/2`（Linear 公司栏首轮只有 1 篇，不再回退就直接拒答）。`no_inline_citations` 是**故意关掉行内引用**的负向对照：内容仍全对，但 23 条结论全部没有可核验来源，`traceability` 1→0、`hallucination_rate` 0→1，8 条（sufficient 档）记为 `no_explicit_citation`。这两组是仅有的真实 `changed`，都可解释、可复现。
 
 ### 11.5 为什么如实标出 3 组 no_effect
 
@@ -562,7 +565,7 @@ scorecard 不写时间戳；`inputs_sha256` 覆盖 settings / eval / golden / fi
 - `free_text_output`：S5 已实测结构化输出 on/off 报告**逐字一致**，所以内容指标必然相同。它证明的是「接入 LCEL 没改变可见报告」，不是「结构化输出没价值」。
 - `no_human_review`：`features.human_review` 默认就是 `false`，override 与默认值同值；这组要在 `AUTO_APPROVE_REVIEW=false` 的复核场景才有对照意义。
 
-评测台用 `compute_ab_effect()` 只比确定性指标向量：完全一致就标 `no_effect` 并写明原因，**不编造 delta**。这比「4 组开关全部有提升」更经得起追问。
+评测台用 `compute_ab_effect()` 只比确定性指标向量：完全一致就标 `no_effect` 并写明原因，**不编造 delta**。这比「每组开关都有提升」更经得起追问。`no_inline_citations` 是复查 P1 后新增的常设防线：以后谁把行内引用改坏了，scorecard 里会立刻出现 `changed`，而不是悄悄拿满分。
 
 ### 11.6 CI 门禁与可复现
 
@@ -573,15 +576,17 @@ uv run python -m evals.run_eval                      # 一条命令出分并更�
 uv run python -m evals.run_eval --compare evals/scorecard.json --output evals/scorecard.next.json
 ```
 
-CI 对 `protected_metrics`（fact_accuracy / citation_traceability / abstain_rate / hallucination_rate）按 `regression_tolerance=0.02` 与方向（higher/lower）比对上一版；超容差或出现「上一版通过、本版失败」的 golden item 即失败，并打印 `degraded_case_ids`。阈值只对 baseline 生效（A/B 组本就是"关掉能力"的对照）。
+CI 对 `protected_metrics`（fact_accuracy / citation_traceability / abstain_rate / hallucination_rate）按 `regression_tolerance=0.02` 与方向（higher/lower）比对上一版的 **baseline**；用例级比对则覆盖**两版共同存在的所有 A/B 组**（复查 P4，否则 A/B 组退化会静默漏检），id 形如 `fewer_results:sufficient:company:2`。超容差或出现「上一版通过、本版失败」的 golden item 即失败并打印 `degraded_case_ids`。阈值只对 baseline 生效（A/B 组本就是"关掉能力"的对照）。
 
 ### 11.7 反向验证：指标不是恒满分
 
 `tests/test_s7_eval.py` 里专门做了证伪，否则 1.0 毫无说服力：
 
 - 把一条有据结论改成「Notion 已于 2026 年完成 IPO，市值 1 万亿」但保留 `[n]` → `content_mismatch` 被抓，`fact_accuracy` / `traceability` 下降、`hallucination_rate` 上升；
+- 关掉行内引用 → 8 条无 `[n]` 结论全部判 `no_explicit_citation`，`traceability=0.0` 而 `fact_accuracy` 仍 1.0（P1 常设回归）；
 - 本应拒答的 company 栏硬塞一条无来源结论 → `empty:company:abstain` 判失败；
-- `APP_MODE=live` 启动被拒、未知 A/B 组名报错、非回环连接被守卫拦截、两条独立评测的确定性部分逐字一致。
+- 构造 fixture 轮数不足的 case，断言 golden 模拟跑到 `max_retry+1` 轮；构造 A/B 组新增失败，断言回归门禁点名该组；
+- `APP_MODE=live` 启动被拒、golden 样本不足拒绝出分、未知 A/B 组名报错、`--baseline-only/--ab` 互斥、非回环连接被守卫拦截并正确还原、两条独立评测的确定性部分逐字一致。
 
 ### 11.8 S7 如实边界（不谎称）
 
@@ -589,15 +594,33 @@ CI 对 `protected_metrics`（fact_accuracy / citation_traceability / abstain_rat
 2. `citation_traceability` 是词法包含代理，不是语义蕴含 judge；真实判定需 S8 的模型/人工核验。
 3. 只有 3 个场景原型、23 条 claim、1 条拒答；真实 30–50 家 × 5 事实的 golden 仍未做。
 4. `cost_per_report=0`、`p95_latency_ms` 是本机耗时，均非真实成本/延迟；真实数字归 S8。
-5. S6 的复核留痕尚未导出为评测标注；没有 API/SSE 复核端点。
-6. S8（真实实测，需模型 key + 用户明确放行 Tavily 额度）、S9（简历）仍未开工。
+5. `no_inline_citations` 组的 `hallucination_rate=1.0` 是**故意关掉引用**的负向对照，不代表默认配置有问题，也不该被当成系统幻觉率。
+6. S6 的复核留痕尚未导出为评测标注；没有 API/SSE 复核端点。
+7. S8（真实实测，需模型 key + 用户明确放行 Tavily 额度）、S9（简历）仍未开工。
 
 ### 11.9 用法速查
 
 ```bash
-uv run python -m evals.run_eval                       # 全量 5 组，写 evals/scorecard.json
+uv run python -m evals.run_eval                       # 全量 6 组，写 evals/scorecard.json
 uv run python -m evals.run_eval --baseline-only       # 快速自检
 uv run python -m evals.run_eval --ab self_correction_off
 uv run python -m evals.build_golden --check           # CI 同步校验
 ```
+
+### 11.10 S7 复查补账（2026-11-14 18:56，用户要求「先检查上一步」）
+
+按既有流程用**真实探针**复查，不是静态看代码。坐实并修掉 8 项：
+
+| # | 问题（探针证据） | 修复 |
+|---|---|---|
+| **P1** | `FEATURES_INLINE_CITATIONS=false` 时报告 8 条结论全无 `[n]`，初版仍给 `traceability=1.0 / hallucination=0`——`parse_report` 从 golden 反推 URL，等于用标准答案补引用 | 反推 URL 标 `url_inferred` 并判 `no_explicit_citation`；`fact_accuracy` 改为只管内容召回，与引用指标解耦；新增 `no_inline_citations` 负向 A/B 组 + 单测 |
+| P2 | `inputs_sha256` 只覆盖 4 份数据文件，文档却称能区分「代码变了」 | 新增 `code_sha256`（graph/capabilities/persistence/config.loader/evals 全部 `.py`，按 posix 相对路径排序保证跨平台一致） |
+| P3 | fixture 轮数 < `max_retry+1` 时 golden 模拟提前降级（探针：算出 1 轮，真实图会跑 3 轮） | `_simulate_case` 只看重试额度，轮数用尽按空结果继续空转；补单测 |
+| P4 | 回归比对只看 baseline，A/B 组新增失败用例 `passed=True` | 用例级比对扩展到两版共同的所有组，id 带组名；补单测 |
+| P5 | `dataset.min_companies` 未校验，golden 空集 / 无拒答样本也会出满分门禁 | `build_scorecard` 前置校验，样本不足直接抛错拒绝出分 |
+| P6 | `--config` 指向自定义配置时，指纹仍读默认 `eval.yaml` | `inputs_sha256` 纳入实际使用的配置路径 |
+| P7 | `--baseline-only` 与 `--ab` 同时给被静默忽略 | `parser.error` 互斥 |
+| P8 | 测试硬编码 golden 路径、守卫还原断言写成 `is not None`（恒真） | 改用 `dataset_path(cfg)`；断言还原为原函数对象 |
+
+**复验**：`121 passed`（S6 的 97 + S7 的 24）、CI 门禁模拟 `PASS / degraded_case_ids=[]`、golden `--check` 同步、`uv sync --frozen` 与 `uv pip check` 103 包兼容、工作区干净。P1–P4 用同一批探针重跑：分别得到 `traceability=0.0 / fact_accuracy=1.0`、`expected_research_runs=3`、`passed=False + fewer_results:...`、两个独立指纹。**全程 0 次真实外部调用，未读取或使用 `TAVILY_API_KEY`。**
 

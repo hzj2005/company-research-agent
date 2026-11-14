@@ -32,6 +32,7 @@ _HEADING = re.compile(r"^##\s+(.+?)\s*$")
 
 SUPPORTED = "ok"
 NO_URL = "no_marker_or_url"
+NO_EXPLICIT_CITATION = "no_explicit_citation"
 UNKNOWN_URL = "url_not_in_golden_corpus"
 MISMATCH = "content_mismatch"
 
@@ -53,6 +54,9 @@ class ParsedClaim:
     marker: int | None
     url: str | None
     is_abstain: bool
+    # True = 报告里没有 [n]，这个 url 是从 golden 按文本"推断"出来的。
+    # 推断出来的来源**不能**算作报告自带的可核验引用（S7 复查 P1）。
+    url_inferred: bool = False
 
 
 @dataclass
@@ -114,8 +118,9 @@ def parse_report(
     """把最终报告还原成 (section, claim, url) 三元组。
 
     行内引用 [n] 与末尾 References 同源（report.py 的硬约定），所以 [n] 可以
-    直接映射回 URL。`inline_citations=false` 时没有 [n]，按「文本唯一确定来源」
-    从 golden 回推并标注 `url_from_text_index`，不做隐式猜测。
+    直接映射回 URL。`inline_citations=false` 时报告里没有 [n]：此时只把 golden
+    的文本索引当作**诊断提示**记在 `url_inferred=True`，评测层一律判为
+    `no_explicit_citation`，绝不用标准答案给报告"补"一份引用（S7 复查 P1）。
     """
     heading_map = dict(zip(settings.report.headings, settings.graph.sections))
     sections = list(settings.graph.sections)
@@ -145,8 +150,10 @@ def parse_report(
         text = claim.group(1).strip()
         marker = int(claim.group(2)) if claim.group(2) else None
         url = parsed.references.get(marker) if marker is not None else None
+        inferred = False
         if url is None and marker is None and text_index is not None:
             url = text_index.get((case, current, norm_text(text)))
+            inferred = url is not None
         parsed.section_lines.setdefault(current, []).append(text)
         parsed.claims.append(
             ParsedClaim(
@@ -155,20 +162,25 @@ def parse_report(
                 marker=marker,
                 url=norm_url(url) if url else None,
                 is_abstain=norm_text(text) == norm_text(degrade),
+                url_inferred=inferred,
             )
         )
     # References 段在正文之后，第一轮解析时 [n]->url 还没建好，这里回填
     if parsed.references:
-        parsed.claims = [
-            ParsedClaim(
-                section=c.section,
-                text=c.text,
-                marker=c.marker,
-                url=norm_url(parsed.references.get(c.marker)) if c.marker is not None and c.url is None else c.url,
-                is_abstain=c.is_abstain,
-            )
-            for c in parsed.claims
-        ]
+        rebuilt: list[ParsedClaim] = []
+        for c in parsed.claims:
+            if c.marker is not None and c.url is None:
+                resolved = parsed.references.get(c.marker)
+                c = ParsedClaim(
+                    section=c.section,
+                    text=c.text,
+                    marker=c.marker,
+                    url=norm_url(resolved) if resolved else None,
+                    is_abstain=c.is_abstain,
+                    url_inferred=False,
+                )
+            rebuilt.append(c)
+        parsed.claims = rebuilt
     return parsed
 
 
@@ -211,11 +223,13 @@ def evaluate_case(
     failures: list[str] = []
     claim_items = [i for i in golden.claims if i["case"] == case]
     matched = 0
+    # fact_accuracy 只管「结论内容有没有命中」，引用是否有、是否对得上，
+    # 交给 citation_traceability 独立判定（PROJECT_PLAN 7.2 的原始定义）。
+    # 两个指标不再共用同一个 url 条件，避免互相掩盖（S7 复查 P1）。
     for item in claim_items:
         section, expected = item["section"], norm_text(item["expected_text"])
-        wanted_url = norm_url(item["source_url"])
         hit = any(
-            norm_text(c.text) == expected and c.url == wanted_url and not c.is_abstain
+            norm_text(c.text) == expected and not c.is_abstain
             for c in by_section.get(section, [])
         )
         if hit:
@@ -243,13 +257,18 @@ def evaluate_case(
     for claim in parsed.claims:
         if claim.is_abstain:
             continue
-        ok, reason = is_supported(claim.text, claim.url, golden.corpus)
+        if claim.url_inferred:
+            # 报告没有 [n]，URL 是从 golden 推断的 -> 不能算可核验引用
+            ok, reason = False, NO_EXPLICIT_CITATION
+        else:
+            ok, reason = is_supported(claim.text, claim.url, golden.corpus)
         claim_records.append(
             {
                 "section": claim.section,
                 "text": claim.text,
                 "url": claim.url,
                 "marker": claim.marker,
+                "url_inferred": claim.url_inferred,
                 "supported": ok,
                 "reason": reason,
             }
@@ -333,8 +352,11 @@ def aggregate_metrics(case_results: list[dict[str, Any]], cfg: EvalConfig) -> tu
         "supported_claims": supported,
         "unsupported_reasons": {
             reason: sum(1 for r in records if r["reason"] == reason)
-            for reason in (NO_URL, UNKNOWN_URL, MISMATCH)
+            for reason in (NO_URL, NO_EXPLICIT_CITATION, UNKNOWN_URL, MISMATCH)
         },
+        "claims_without_explicit_citation": sum(
+            1 for r in records if r["reason"] == NO_EXPLICIT_CITATION
+        ),
         "abstain_items": abstain_total,
         "abstain_passed": abstain_ok,
         "self_correction_denominator": denom,
@@ -426,13 +448,21 @@ def compare_scorecards(
                 f"{metric}: {before} -> {after}（回退 {abs(after - before):.4f} > 容差 {tol}）"
             )
 
-    prev_fail, cur_fail = _failure_ids(prev), _failure_ids(cur)
+    # 用例级比对覆盖**所有共同存在的组**，不只是 baseline：
+    # 否则某个 A/B 组新出现的退化会静默漏检（S7 复查 P4）。
+    common_groups = sorted(set(prev.get("runs", {})) & set(cur.get("runs", {})))
+    prev_fail: set[str] = set()
+    cur_fail: set[str] = set()
+    for group in common_groups:
+        prev_fail |= {f"{group}:{i}" for i in _failure_ids(prev, group)}
+        cur_fail |= {f"{group}:{i}" for i in _failure_ids(cur, group)}
     degraded_case_ids = sorted(cur_fail - prev_fail)
     if degraded_case_ids:
         violations.append(f"新增失败用例 {len(degraded_case_ids)} 个（见 degraded_case_ids）")
 
     return {
         "compared_metrics": details,
+        "compared_groups": common_groups,
         "tolerance": tol,
         "protected_metrics": list(cfg.ci.protected_metrics),
         "degraded_case_ids": degraded_case_ids,

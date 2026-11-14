@@ -93,7 +93,10 @@ def _simulate_case(case: dict[str, Any], settings: Settings) -> dict[str, Any]:
             first_round_insufficient = bool(pending)
         if not pending:
             break
-        if round_no >= max_retry or round_no + 1 >= len(rounds):
+        # 只看「重试额度」，不看 fixture 还剩几轮：图在 store.fetch() 轮数用尽后
+        # 会拿到空结果并继续空转，直到 retry_count >= max_retry 才 degrade。
+        # 早期版本在这里提前 break，导致 expected_research_runs 少算（S7 复查 P3）。
+        if round_no >= max_retry:
             degraded = list(pending)
             break
         round_no += 1
