@@ -112,3 +112,26 @@
 - **耗时 / token / 单次成本基线**：同上，没有真实调用就没有任何可信数字。
 - 这两项按 `docs/ACTION_PLAN.md` 挂到 **S8（真实实测）**；S2–S7 先在 `fixture` 模式下把图、循环、reducer、interrupt、评测台跑通，等 key 到位只改 `.env` 的 `APP_MODE=live` 即可补齐。
 - 在此之前，简历与文档里**不出现任何准确率、耗时、成本数字**。
+
+---
+
+## 7. S2 验证记录（2026-11-14，状态契约与真实持久化）
+
+新增模块：`config/loader.py`、`graph/state.py`、`persistence/checkpointer.py`、`tests/`（3 个测试文件 + conftest）、`pytest.ini`。
+运行：`.venv/Scripts/python.exe -m pytest -q` → **10 passed**。
+
+| 验收点 | 真实测试结果 |
+|---|---|
+| 配置 `${VAR:-default}` 展开 + Pydantic 严格校验 | `load_settings()` 解析出 max_retry=2、4 个 section、阈值 0.4；环境变量覆盖生效 |
+| `typing.TypedDict` 缺陷已修 | `StateGraph(ResearchState).compile().get_input_schema()` 不再抛 `PydanticUserError`；`get_output_schema()` 返回 19 个字段 |
+| 并行 reducer 不覆盖 | 两节点并行写 `company_data`，最终同时保留 `u1/u2`；`add_messages` 累加两条消息 |
+| checkpoint 真落盘 | db 文件存在且非空（非 InMemorySaver） |
+| **重启恢复** | 关闭 session 后重新打开同一 db，`aget_state()` 读回 report / company_data / messages，与重启前一致 |
+| **thread_id 隔离** | 另一 thread 的 `aget_state()` 读不到 Notion 的状态 |
+| 同 thread 续跑 | 两次 `ainvoke` 后 messages 累加为 `["wrote","wrote"]`，未覆盖 |
+
+**实测踩到并修掉的两个 API 事实**（已写进 `AGENT.md`）：
+1. 同步 `SqliteSaver.aget_tuple()` 抛 `NotImplementedError`，async 图必须改用 `AsyncSqliteSaver` + `ainvoke` / `aget_state`；
+2. LangGraph 1.2 的 `get_input_schema()` 只列外部输入 channel（空），完整字段要用 `get_output_schema()`。
+
+**S2 仍未做的**：尚未把原版 11 节点图切到新 `ResearchState`（S3–S4 会重建图），因此本阶段的验证用的是最小验证图，不是完整业务图。这一点在 S4 完成后必须补一条端到端用例。
