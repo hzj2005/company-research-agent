@@ -21,7 +21,7 @@ graph:
     min_docs_per_section: 2       # 低于此数判定 insufficient
     require_source_url: true      # 无 URL 的文档直接丢弃
   degrade:
-    enabled: true
+    # 防幻觉是红线，降级不可关闭；这里只配置拒答话术
     message: "该类信息未找到公开依据"
   checkpointer: ${CHECKPOINTER:-sqlite}
   dsn: ${DATABASE_URL:-sqlite:///./data/checkpoints.db}

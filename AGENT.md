@@ -52,11 +52,12 @@
 3. 并行节点写同一字段**必须**用 `Annotated[..., reducer]`；`messages` 用 `add_messages`，文档字典用按 URL 去重的 `merge_docs`，禁止直接 `operator.add` 到 dict。
 4. **禁止在节点内部用 `asyncio.gather` 做本该由图编排的并行**（原版 `briefing.py` 的做法）；并行一律用并行边或 `Send`。
 5. 任何循环**必须**有 `retry_count` 上限（默认 2）与明确降级出口；禁止用「模型自己说够了」当终止条件。
-6. 回退必须精确控制重搜范围，禁止唤醒全部 analyst。S3 单节点形态用「条件边 + `sections_to_research` 不足栏目白名单」实现（见 `graph/conditions.py`）；S4 拆成 4 analyst 子图后若存在多分支唤醒风险，改用 `Command(goto=...)`。
-7. `compile()` **必须**传 `checkpointer`；`interrupt()` 必须与 checkpointer 同时存在；统一走 `persistence.CheckpointSession.compile()`。
+6. 回退必须精确控制重搜范围，禁止唤醒全部 analyst。S4 用 `Send` 按 `sections_to_research` 白名单动态派发（见 `graph/subgraphs/research.py`）：**`Send` 从 `langgraph.types` 导入**，`langgraph.constants` 在 1.2.22 已弃用。
+7. `compile()` **必须**传 `checkpointer`；`interrupt()` 必须与 checkpointer 同时存在；统一走 `persistence.CheckpointSession.compile()`。**例外**：子图 `compile()` 不另传，运行时继承父图 saver；且子图必须用 `StateGraph(..., input_schema=..., output_schema=...)` 隔离累积字段，否则 `review_notes` 会被主图 reducer 重复累加（S4 实测踩到）。`input`/`output` 旧参数名已弃用。
 8. `thread_id` 由 `config.loader.build_thread_id()` 按配置模板生成，禁止硬编码或留空。
 9. 条件函数保持无副作用、可单测：给定 State → 返回分支名字符串。
 10. 每个节点、每条条件边必须有对应 pytest 用例；新增边不改测试视为未完成。
+11. 主图节点名 `research` 保持不变（内部是子图），CLI 轨迹统计与回归用例依赖该名字；子图的派发字段（`active_section` 等）不得污染 `ResearchState`，子图输出字段必须是主图字段的子集且同名 reducer。
 
 ## 7. LangChain 硬性约定
 
@@ -151,3 +152,4 @@ FEATURES_SELF_CORRECTION=false uv run python -m graph.run --case sparse --trace
 - ❌ 把二次开发写成独立开发
 - ❌ 直接 `pip install` 改环境、手写依赖版本却不同步 `uv.lock`
 - ❌ 给会被回退/并行重复写入的 dict/list 字段不配 reducer
+- ❌ `from langgraph.constants import Send` / 子图把累积字段带回主图 / 随意改主图节点名破坏轨迹统计

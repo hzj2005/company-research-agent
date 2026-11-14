@@ -185,3 +185,22 @@
 三档 CLI 回归：`report_chars` 822 / 829 / 561，与第 9 节完全一致，无行为回归；`uv sync --frozen` 幂等、`uv pip check` 103 包兼容。
 
 **仍如实存在的边界**：`evidence_check` 只做覆盖度判定（数篇数），不做「来源是否支持结论」的内容级判断。empty 报告里其余三栏会输出「该领域缺少公开规模数据」这类无实质信息的合成句并带 `[n]`。形式上的「正文引用与 References 同源」已达成，但 `config/eval.yaml` 定义的 `citation_traceability`（来源确实支持 claim）需要 S7 的 judge / golden set 才能真正度量，**本阶段不假称已实现**。另外 `langgraph_entry.py` 与 `application.py` 仍指向原版图，按用户拍板等 S5 接真实模型后一次切换。
+
+---
+
+## 11. S4 验证记录（2026-11-14，并行子图与精确派发）
+
+新增 `graph/subgraphs/state.py`、`graph/subgraphs/research.py`、`tests/test_s4_subgraph.py`。主图节点名 `research` 保持不变，值换成编译后的子图；子图 `dispatch` 挂真实条件边，用 `Send` 按 `sections_to_research` 白名单派发到 `analyst`。
+
+| 验收点 | 真实结果 |
+|---|---|
+| 前置 API 探针（uv + AsyncSqliteSaver 临时库） | 编译子图可作主图节点；Send 并行写回经 reducer 合并不覆盖；主图 `astream` 节点名仍是 `research` |
+| 首轮并行 | Notion 4 条 analyst 留痕（4 个栏目），四类 `*_data` 全有文档且互不覆盖 |
+| 精确回退 | Linear 首轮 4 个 Send、回退轮 **1 个 Send**（仅 company）；empty 两轮回退均只 company |
+| 有上限循环 | empty 3 次 research，`degraded=true`，其余栏目正常输出 |
+| 三偏差 | `any→all`（部分栏目达上限仍继续重试）；删除名不副实的 `degrade.enabled`；`curated_data`/`references` 改 `replace_mapping`，旧引用可被移除 |
+| 回归 | `uv run python -m pytest -q` → **43 passed**；三档 `report_chars` 822/829/561、research 1/2/3、引用数 8/9/6，与第 9 节完全一致 |
+
+**实测踩到并修掉的坑**：编译子图直接当主图节点时，若把主图已有的 `review_notes` 传进子图、又由子图输出带回，`append_notes` reducer 会把旧记录重复累加（sparse 首轮 4 条变 8 条）。修法：`StateGraph(..., input_schema=..., output_schema=...)` 隔离子图输入/输出，且 `Send` 只带编排参数、不带累积字段。两个 API 事实已写进 `AGENT.md`：`Send` 从 `langgraph.types` 导入；`StateGraph` 用 `input_schema`/`output_schema`（`input`/`output` 已弃用）。
+
+**S4 如实边界**：仍是 fixture 模板简报，不接真实 LLM/Tavily；对外入口仍指原版图（S5 再切）；内容级 `citation_traceability` 仍归 S7。主图本来就是 7 节点，不谎称「从 11 节点收敛到 6～7」。

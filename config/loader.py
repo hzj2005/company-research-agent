@@ -65,7 +65,7 @@ class EvidenceConfig(_Strict):
 
 
 class DegradeConfig(_Strict):
-    enabled: bool = True
+    # S4：删掉名不副实的 enabled —— 降级拒答是防幻觉红线，不允许关闭
     message: str
 
 

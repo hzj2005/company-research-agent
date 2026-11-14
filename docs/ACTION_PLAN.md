@@ -28,7 +28,7 @@
 | **S1** | **#1 基座落地与原版 baseline** | ① 原仓库落到工作区，保留 LICENSE + 上游 commit + attribution<br>② 建独立 venv，从官方 PyPI 装齐依赖<br>③ 补做阶段 0 欠账：`yaml.safe_load` 全量解析校验<br>④ 真正 import 并编译原版 `StateGraph`，导出节点/边清单<br>⑤ 记录 baseline 报告结构与耗时口径 | `backend/`、`LICENSE`、`docs/UPSTREAM.md`、`docs/BASELINE.md`、`.venv/`、`requirements.lock.txt` | 原版图对象能编译；两份 YAML 全量解析通过；baseline 文档有代码位置依据 | ✅ 已完成（可达部分；live 调研剥离为 #13） |
 | **S2** | #2 状态契约 | `StateGraph(ResearchState)` + `add_messages` / `merge_docs` reducer；`compile(checkpointer=...)` 接真实 SQLite Saver；`thread_id` 按模板 | `persistence/`、`graph/state.py`、单元测试 | 进程重启后同一 thread 可恢复；并行写回不覆盖；恢复前后 State 一致 | ✅ 已完成（10 个 pytest 全通过） |
 | **S3** | #3 自纠正回路 | `evidence_check` 判定 + `add_conditional_edges` + `retry_count<=2` + `degrade` 降级拒答 | `graph/conditions.py`、`graph/nodes/`、`graph/builder.py`、`graph/run.py`、3 类 fixture 用例 | sparse 样本触发回退并在 2 轮内收敛；empty 样本输出「无公开依据」且不编造 | ✅ 已完成（23 passed） |
-| **S4** | #4 并行与子图 | 去掉节点内 `asyncio.gather`，改 LangGraph 并行边 / `Send`，4 analyst 收成 `research_subgraph` | `graph/subgraphs/`、白板图 | 主图 6–7 节点，可完整画出；reducer 合并可验证 | ⏳ |
+| **S4** | #4 并行与子图 | `research` 换成编译子图，`dispatch` 用 `Send` 按白名单精确派发 4 analyst | `graph/subgraphs/`、白板图（第 7.5 节） | 主图 7 节点可完整画出；reducer 合并可验证 | ✅ 已完成（43 passed，见第 7.7 节） |
 | **S5** | #5 LangChain 深化 | Tavily 封 `BaseRetriever`；`with_structured_output` + 字段置信度 + 校验重试；行内引用 | `capabilities/`、Pydantic schema | 每条 Fact 能对回 source_url；抽取失败自动重试不静默丢字段 | ⏳ |
 | **S6** | #6 HITL | 成稿前 `interrupt()` 复核 + `Command(resume=...)`；复核留痕导出标注 | `graph/nodes/human_review.py` | 中断→恢复后 State 一致；依赖真实 checkpointer | ⏳ |
 | **S7** | #7 评测台 | golden set（30–50 公司 × 5 事实）、8 项指标、4 组 A/B、scorecard、CI | `evals/`、`.github/workflows/eval.yml` | 一条命令出分，能定位退化用例 | ⏳ |
@@ -144,3 +144,85 @@
 | `degrade.enabled=false` 仍置 `degraded=True` | `graph/nodes/decide.py:78–97`，只影响措辞 | S4 明确该配置语义或删除 |
 | `curated_data` 按 URL 累积 | `merge_docs` 无法移除上一轮已失效引用 | S4 配合子图重算 |
 | `features.structured_output` / `human_review` | 已可环境变量覆盖，但代码尚未消费 | S5 / S6 生效 |
+
+---
+
+## 7. S4 执行计划：并行子图 + 精确派发 + 还清 3 个行为偏差
+
+> 制定：2026-11-14 15:00 | 依据：`docs/PROJECT_PLAN.md` 3.3/3.4、`AGENT.md` 第 6 条、下列前置实测
+
+### 7.1 代码级现状（S3 结束时，逐行核过）
+
+- `graph/builder.py:29-59`：主图 7 节点，`research` 是**单个节点**；`graph/nodes/collect.py:37-62` 一次性取回 4 个栏目结果，没有图级并行。
+- `graph/conditions.py:26-29`：「精确回退」靠单节点内部 Python 过滤 `sections_to_research` 白名单实现，不是 LangGraph 编排。
+- `graph/state.py:83,90`：`curated_data` / `references` 用 `merge_docs` 累积，第二轮无法移除已失效引用。
+- `graph/conditions.py:45`：`any(...)` 让一个栏目达上限就连累其他栏目提前终止。
+- `graph/nodes/decide.py:78-97`：`degrade.enabled` 只换措辞、仍置 `degraded=True`，配置名不副实。
+
+### 7.2 前置技术探针（uv 环境 + AsyncSqliteSaver 临时库真跑，不是查文档猜的）
+
+| 验证点 | 实测结果 |
+|---|---|
+| 编译后的子图能直接当主图节点 `add_node("research", compiled_sub)` | ✅ |
+| 子图内 `Send` 按白名单派发到并行 worker，各写同一字段经 reducer 合并 | ✅ 输出 `['company','news']`，未互相覆盖 |
+| 主图 `astream(stream_mode="updates")` 节点名仍是 `research` | ✅ 三档 CLI 的 `trace.count("research")` 不会破 |
+| 附带发现 | `from langgraph.constants import Send` 已弃用告警，**必须**用 `from langgraph.types import Send`（LangGraph 1.2.22） |
+
+### 7.3 设计决策
+
+1. **主图节点名保持 `research`**，值由函数换成编译子图。S3 的三条轨迹、CLI `research_runs` 统计与 `tests/test_s3_loop.py` 断言都依赖该名字，改名收益不抵回归风险；白板上把 `research` 展开讲即可。
+2. **子图用独立 `ResearchSubgraphState`**：只含 `company / sections_to_research / retry_count / active_section + 4 个 *_data + review_notes`。输出字段是 `ResearchState` 子集且同名 reducer（探针已验证可合并回主图），避免把内部派发字段污染主 State。
+3. **精确派发用 `Send`**：`dispatch` 的条件边返回 `Send("analyst", {**state, "active_section": s})` 列表；首轮白名单为空 → 4 个 Send 全派发，回退轮只派发不足栏目。彻底替代 S3 的「单节点内 Python 过滤」。
+4. **回退白名单写进 State**：新增 `ResearchState.sections_to_research`（`latest_list` reducer，last-write-wins），由 `rewrite_query` 写入，子图只读。
+5. **三个偏差一起收**：
+   - `any` → `all`，白名单排除已达上限栏目 → 各栏目用尽自己的重试额度才整体拒答，不再连累；
+   - 删除 `degrade.enabled`（防幻觉是红线，不可关闭），`DegradeConfig` 只留 `message`；
+   - `curated_data` / `references` 改用 `replace_mapping` reducer，curate 每轮全量重算，旧失效引用自动移除。
+
+### 7.4 任务与验收
+
+| # | 动作 | 产出 | 验收标准 |
+|---|---|---|---|
+| 7.1 | 子图 State + dispatch/analyst + builder | `graph/subgraphs/` | 4 路 Send 并行、reducer 合并不覆盖、单测通过 |
+| 7.2 | 主 State / 配置 / 主图接线 | `graph/state.py`、`builder.py`、`collect.py`、`decide.py`、`report.py`、`config/*` | 编译后主图仍 7 节点，`research` 是子图 |
+| 7.3 | 三偏差修复 + 回归用例 | `conditions.py`、`tests/test_s4_subgraph.py` | 覆盖「部分栏目达上限」「引用全量重算」「配置无 enabled」 |
+| 7.4 | 全量实测 | CLI 三档 + pytest | research 次数仍 1/2/3、report_chars 822/829/561 不回归、测试全过 |
+| 7.5 | 文档与提交 | ACTION_PLAN / BASELINE / AGENT.md、commit | 白板图可画、Send 导入规范、commit 可 diff |
+
+### 7.5 白板图（目标形态）
+
+```text
+主图（7 节点，可完整画出）
+START → grounding → [research 子图] → curate → evidence_check
+                          ↑               ├─ pass    → briefing → END
+                          │               ├─ retry   → rewrite_query ─┘
+                          │               └─ degrade → degrade → briefing → END
+
+子图内部：START → dispatch ──Send──→ analyst(company)
+                          ──Send──→ analyst(industry)
+                          ──Send──→ analyst(financial)
+                          ──Send──→ analyst(news)   → END
+         回退轮按 sections_to_research 白名单，只派发不足栏目
+```
+
+### 7.6 边界（不谎称）
+
+- 仍是 fixture 模板简报，不接真实 LLM / Tavily（S5）；对外入口仍指原版图（用户拍板 S5 再切）；内容级 `citation_traceability` 仍归 S7。
+- **不写「主图从 11 节点收敛到 6～7」**：原版 11 节点图本项目并未重建，S3 起主图本来就是 7 节点。S4 的真实变化是「把 research 单节点换成 4 路 Send 并行子图，并让精确回退由图编排而非 Python 过滤实现」。
+
+### 7.7 S4 实测结果（2026-11-14 15:10）
+
+| 验收项 | 实测结果 |
+|---|---|
+| 主图 | 7 节点 `grounding / research / curate / evidence_check / rewrite_query / degrade / briefing`；`research` 是编译后的子图 |
+| 子图 | START/END + `dispatch` + `analyst`，`dispatch` 挂真实条件边，用 `Send` 派发 |
+| 首轮并行 | Notion 4 条 analyst 留痕（company/industry/financial/news），四类 `*_data` 全有文档且互不覆盖 |
+| 精确回退 | Linear 首轮 4 个 Send、回退轮 **1 个 Send**（只 company）；`sections_to_research=["company"]` |
+| 有上限循环 | empty 3 次 research（首轮 + 2 次回退），`degraded=true` |
+| 三偏差 | `any→all`（部分栏目达上限仍 retry、白名单只剩有额度栏目）；`degrade.enabled` 已删；`curated_data`/`references` 改 `replace_mapping`，旧引用可移除 |
+| 回归 | `uv run python -m pytest -q` → **43 passed**；三档 `report_chars` 822/829/561、research 1/2/3、引用数 8/9/6，与 S3 完全一致 |
+| A/B | `FEATURES_SELF_CORRECTION=false` → research 1 次、`degraded=true` |
+
+**实测踩到并修掉的坑**：编译子图直接当主图节点时，若把主图已有的 `review_notes` 传进子图、又由子图输出带回，`append_notes` reducer 会把旧记录重复累加（sparse 首轮 4 条变 8 条）。修法：`StateGraph(..., input_schema=..., output_schema=...)` 隔离子图输入/输出，且 `Send` 只带编排参数、不带累积字段。另实测两个 API 事实：`Send` 必须从 `langgraph.types` 导入（`langgraph.constants` 在 1.2.22 已弃用）；`StateGraph` 的 `input`/`output` 参数也已弃用，应用 `input_schema`/`output_schema`。
+
+**S4 如实边界**：仍是 fixture 模板简报；对外入口仍指原版图（S5 再切）；内容级 `citation_traceability` 仍归 S7。

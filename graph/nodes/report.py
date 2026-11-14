@@ -61,11 +61,8 @@ def make_briefing_node(settings: Settings) -> Node:
         for heading, section in zip(settings.report.headings, settings.graph.sections):
             lines.extend([f"## {heading}", ""])
             if section in degraded:
-                text = (
-                    settings.graph.degrade.message
-                    if settings.graph.degrade.enabled
-                    else "（无可用公开资料）"
-                )
+                # S4：降级不可关闭，话术只由配置提供
+                text = settings.graph.degrade.message
                 lines.append(f"- {text}")
                 briefings[section] = {"status": "degraded", "text": text}
             elif not selected[section]:
