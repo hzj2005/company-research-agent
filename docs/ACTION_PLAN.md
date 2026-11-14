@@ -112,3 +112,35 @@
 `uv run python -m pytest -q` → **23 passed**（S2 及补账 16 + S3 7）。
 
 **S3 如实边界**：仍为 fixture 模板简报，未接真实 LLM（S5）、未拆并行子图（S4）、未接 HITL（S6）；原版 `backend/prompts.py` 未改动但新图不加载它。`live` 检索在 `capabilities/retrieval.py` 中显式抛 `NotImplementedError`，留到 S5。
+
+---
+
+## 6. S3 后第二次复查与补账（2026-11-14 14:35）
+
+对账范围经用户确认为 **S0–S3 全部已做阶段**。检查方式全部是真实执行：重跑 `pytest`、三档 CLI、`uv sync --frozen` / `uv pip check` / `baseline/inspect_upstream.py`，再逐条比文档承诺与代码实况。
+
+### 6.1 复核通过
+
+`23 passed → 33 passed`；`uv sync --frozen` 幂等、103 包兼容；基线复现仍是 12 节点 / 14 边 / 0 条件边；三档轨迹与第 5 节记录一致；工作区无 `.env` / `.db` / egg-info 被提交。复现基线脚本会刷新 `captured_at` 时间戳，已还原，工作区干净。
+
+### 6.2 本轮补掉的 4 个真缺口
+
+| # | 问题 | 代码位置 | 处理 |
+|---|---|---|---|
+| 1 | README 完全没有二次开发归因，违反 `AGENT.md` 第 2 条红线 | `README.md` | 顶部加归因声明、改动范围与当前真实状态（fixture 可跑 / 入口仍指原版 / 无任何指标数字） |
+| 2 | A/B 开关命令行关不掉；`eval.yaml` 的 `ab_tests.overrides` 无解析器 | `config/settings.yaml` L56–62、`config/loader.py` | features 改 `${FEATURES_*:default}`；`.env.example` 补变量；新增纯函数 `apply_overrides()` 解析点号路径、非法路径抛错；测试断言 4 组 A/B 全部可应用 |
+| 3 | 文档数 > `max_references` 时正文出现「有结论、无引用」 | `graph/nodes/report.py` | 正文与 References 共用同一份选中文档并统一编号；来源字典查不到的文档不进正文；超量截断写进 `review_notes`。实测 12 篇 → 10 条事实全带 `[n]`、0 条孤儿 |
+| 4 | checkpoint 端到端用例仍用 1 节点最小验证图（`BASELINE.md` 第 7 节自挂欠账） | `tests/test_checkpointer.py` | 新增 `test_s3_business_graph_state_survives_restart`，用真实 7 节点图验证重启后 report / references / evidence_verdict / briefings / retry_count 全量恢复 |
+
+实测：`FEATURES_SELF_CORRECTION=false uv run python -m graph.run --case sparse --trace` → `research_runs=1`、`degraded=true`（开关真生效）；三档 CLI 的 `report_chars` 仍是 822 / 829 / 561，无行为回归。
+
+### 6.3 登记但不在本阶段动的边界（不假装已修）
+
+| 项 | 现状 | 归属 |
+|---|---|---|
+| **对外入口仍跑原版图** | `langgraph_entry.py:4`、`application.py:115` 仍指向 `backend.graph.Graph`；新图只能靠 CLI 跑。规划里原本就没排「接线」这一步 | **用户拍板：等 S5 接真实 LLM/Tavily 后一次切换**，避免 API 现在返回合成报告显得一眼假 |
+| `evidence_check` 只数篇数、不验内容 | `graph/nodes/decide.py:31–37` 判定是「每栏目合格文档 ≥ 2」；empty 报告里「该领域缺少公开规模数据」也带 `[n]` | S7 的 `citation_traceability`（来源确实支持 claim）需要 judge / golden set，S3 无实现手段 |
+| `any(retry_count >= max_retry)` 整体降级 | `graph/conditions.py:45`：一个栏目达上限会连累其他栏目 | S4 拆子图时一并改成栏目级降级 |
+| `degrade.enabled=false` 仍置 `degraded=True` | `graph/nodes/decide.py:78–97`，只影响措辞 | S4 明确该配置语义或删除 |
+| `curated_data` 按 URL 累积 | `merge_docs` 无法移除上一轮已失效引用 | S4 配合子图重算 |
+| `features.structured_output` / `human_review` | 已可环境变量覆盖，但代码尚未消费 | S5 / S6 生效 |

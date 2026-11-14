@@ -1,5 +1,12 @@
 # Company Research Agent
 
+> **二次开发声明 / Attribution**
+> 本仓库**基于** [guy-hartstein/company-research-agent](https://github.com/guy-hartstein/company-research-agent)（Apache-2.0）**二次开发**，落地 commit `23fe92d`。原版的四路并行检索、Tavily 相关性筛选、PDF 导出、SSE 进度与多语言 README **均不是本项目的独立设计**；`LICENSE` 与上游 commit 历史完整保留。详见 [`docs/UPSTREAM.md`](docs/UPSTREAM.md)。
+>
+> **What this fork adds**: a LangGraph state workflow with evidence-sufficiency checks, a bounded self-correction loop, per-section abstention instead of fabrication, reducer-based parallel writes and real SQLite checkpointing (`graph/`, `capabilities/`, `persistence/`, `config/`, `tests/`). Design and measured baseline: [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md), [`docs/BASELINE.md`](docs/BASELINE.md).
+>
+> **Current status — read before running**: the new graph runs in `fixture` mode on synthetic data and needs no API key (`uv run python -m graph.run --case sparse --show-report`). The FastAPI `/research` endpoint and the LangGraph Studio entry **still point to the upstream linear DAG**; they will be switched to the new graph when real LLM/retrieval is wired (S5). No accuracy, latency or cost figures are claimed until live evaluation (S8) actually runs.
+
 An agentic research tool that turns a company name into a structured, source-backed briefing. The FastAPI backend coordinates specialized research and synthesis steps; the React interface tracks the job and lets you export the finished report as a PDF.
 
 ![Company Research Agent landing page](static/app-screenshot.png)

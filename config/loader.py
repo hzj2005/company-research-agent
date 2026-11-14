@@ -157,6 +157,29 @@ def load_eval_config(path: str | Path | None = None) -> dict[str, Any]:
     return expand_env(raw)
 
 
+def apply_overrides(settings: Settings, overrides: Mapping[str, Any]) -> Settings:
+    """把 `config/eval.yaml` 里 `ab_tests[].overrides` 的点号路径应用到 Settings 副本。
+
+    例：`{"features.self_correction": False, "retrieval.max_results_per_query": 1}`。
+    未知字段或中间路径不是对象时直接抛错，避免 A/B 开关静默失效却仍出分。
+    返回新对象，不修改传入的 settings（纯函数，便于多组实验复用同一基线）。
+    """
+    data = settings.model_dump(mode="python")
+    for dotted, value in overrides.items():
+        parts = dotted.split(".")
+        cursor: dict[str, Any] = data
+        for part in parts[:-1]:
+            nxt = cursor.get(part)
+            if not isinstance(nxt, dict):
+                raise ValueError(f"无效的 overrides 路径 {dotted!r}：{part!r} 不是对象")
+            cursor = nxt
+        leaf = parts[-1]
+        if leaf not in cursor:
+            raise ValueError(f"无效的 overrides 路径 {dotted!r}：未知字段 {leaf!r}")
+        cursor[leaf] = value
+    return Settings.model_validate(data)
+
+
 def resolve_checkpoint_path(settings: Settings | None = None) -> Path:
     """把 `sqlite:///./data/checkpoints.db` 解析成真实文件路径，并确保父目录存在。"""
     s = settings or get_settings()

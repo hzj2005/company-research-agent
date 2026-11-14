@@ -1,4 +1,4 @@
-"""S2：Checkpointer 必须是真持久化，且 thread_id 隔离。
+"""S2 + 补账：Checkpointer 必须是真持久化，且 thread_id 隔离。
 
 验收口径（docs/ACTION_PLAN.md S2）：进程重启后能恢复同一 thread 的 State；
 并行写回不互相覆盖；恢复前后 State 一致。
@@ -12,7 +12,9 @@ import pytest
 from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
 
+from capabilities.retrieval import load_fixture_store, make_document_tool
 from config.loader import build_thread_id, load_settings
+from graph.builder import build_graph
 from graph.state import ResearchState, initial_state
 from persistence.checkpointer import CheckpointSession
 
@@ -76,3 +78,27 @@ async def test_same_thread_continues_and_accumulates_messages(tmp_path) -> None:
         await g.ainvoke(initial_state("Notion"), config=cfg)
         snap = await g.aget_state(cfg)
         assert [m.content for m in snap.values["messages"]] == ["wrote", "wrote"]
+
+
+@pytest.mark.asyncio
+async def test_s3_business_graph_state_survives_restart(tmp_path) -> None:
+    """补上 docs/BASELINE.md 第 7 节挂的欠账。
+
+    上面两个用例用的是 1 节点最小验证图，只能证明 saver 本身能用；
+    这里换成 S3 的真实 7 节点业务图，验证完整 State 能跨「进程」恢复。
+    """
+    db = tmp_path / "s3-checkpoints.db"
+    settings = load_settings(environ={"APP_MODE": "fixture"})
+    company = load_fixture_store(settings).case_by_key("sufficient")["company"]
+    tid = build_thread_id(company, settings=settings)
+
+    async with CheckpointSession(settings=settings, path=db) as s1:
+        g1 = s1.compile(build_graph(settings, make_document_tool(settings)))
+        out = await g1.ainvoke(initial_state(company), config=s1.config_for(tid))
+    assert db.stat().st_size > 0
+
+    async with CheckpointSession(settings=settings, path=db) as s2:
+        g2 = s2.compile(build_graph(settings, make_document_tool(settings)))
+        snap = await g2.aget_state(s2.config_for(tid))
+        for field in ("report", "references", "evidence_verdict", "briefings", "retry_count"):
+            assert snap.values[field] == out[field], f"{field} 未在重启后恢复"

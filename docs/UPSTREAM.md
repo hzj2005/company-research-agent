@@ -18,6 +18,7 @@
 - 原仓库的 `.env.example` 与本项目阶段 0 的双模式配置模板同名，已另存为 `docs/upstream.env.example`；项目实际使用的是根目录 `.env.example`（fixture/live 双模式）。
 - 原版已有功能（四路并行检索、Tavily 相关性筛选、PDF 导出、SSE 进度、多语言 README）**不属于本项目独立设计**。
 - 本项目新增层：`graph/`、`capabilities/`、`persistence/`、`evals/`、`tests/`、`config/loader.py`、`docs/`。
+- `README.md` 顶部已于 2026-11-14 补上二次开发归因声明与当前真实状态（此前漏了，违反 `AGENT.md` 第 2 条，复查时补掉）；多语言 README（`README.*.md`）仍是上游原文，未改，对外展示以主 README 为准。
 
 ## 二次开发范围
 

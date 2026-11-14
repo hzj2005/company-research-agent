@@ -34,6 +34,8 @@
 - `APP_MODE=live`：真实 OpenRouter/OpenAI + Tavily + DB。
 - **切换只允许改 `.env`，禁止改代码分支判断散落在业务节点里**；模式差异统一由 `config/loader.py` 与能力层适配。
 - 配置统一经 `config.loader.get_settings()` 获取，业务代码禁止直接读 yaml / `os.environ`。
+- `features.*` 四项开关必须可由 `FEATURES_*` 环境变量覆盖；`config/eval.yaml` 的 `ab_tests[].overrides` 一律经 `config.loader.apply_overrides()` 应用（点号路径，非法路径直接抛错），禁止评测脚本自己改 yaml 或对象字典。
+- `features.structured_output` / `human_review` 当前只做配置占位，代码消费分别在 S5 / S6，不得写成已实现。
 
 ## 5. Python 代码风格
 
@@ -70,6 +72,8 @@
 - 每条 `Fact` 必须带非空 `source_url` 与 `confidence`。
 - 报告正文必须生成行内引用；末尾 References 与正文引用来自**同一份** `references` 字典。
 - 证据不足或重试超限：输出「该类信息未找到公开依据」并置 `degraded=True`，不得编造。
+- 正文事实性结论与末尾 References **共用同一份选中文档并统一编号**；`report.max_references` 是每栏目结论上限，超量截断必须写进 `review_notes`。禁止出现没有 `[n]` 的事实性结论（拒答句除外）。
+- 「引用同源」只保证编号能对回来源，**不等于「来源支持该结论」**；内容级 `citation_traceability` 由 S7 的 judge / golden set 度量，S3 不得宣称已实现。
 
 ## 9. 评测与数字（红线）
 
@@ -77,6 +81,7 @@
 - 新增节点 / 边 / 配置开关，必须同步新增用例与 A/B 项。
 - `evals/scorecard.json` 每次评测后提交；CI 核心指标回退超过 `config/eval.yaml` 容差即失败。
 - 简历与文档中的数字一律先写 `X`，跑完实测再替换，且必须能指到对应 scorecard 与 commit。
+- 每组 A/B 必须先经 `apply_overrides()` 从基线 Settings 派生；路径写错要立刻失败，不得静默忽略后照常出分。
 
 ## 10. 目录约定
 
@@ -120,6 +125,9 @@ uv pip check
 uv run python -m graph.run --case sufficient --show-report --trace
 uv run python -m graph.run --case sparse --show-report --trace
 uv run python -m graph.run --case empty --show-report --trace
+
+# A/B：命令行直接关掉自纠正回路（应看到 research_runs=1、degraded=true）
+FEATURES_SELF_CORRECTION=false uv run python -m graph.run --case sparse --trace
 
 # 后续实现后启用：
 # uv run python -m graph.run --company Notion

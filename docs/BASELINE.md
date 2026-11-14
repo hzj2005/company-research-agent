@@ -135,6 +135,7 @@
 2. LangGraph 1.2 的 `get_input_schema()` 只列外部输入 channel（空），完整字段要用 `get_output_schema()`。
 
 **S2 仍未做的**：尚未把原版 11 节点图切到新 `ResearchState`（S3–S4 会重建图），因此本阶段的验证用的是最小验证图，不是完整业务图。这一点在 S4 完成后必须补一条端到端用例。
+→ **已于同日第二次复查中提前补上，不必等 S4**：见第 10 节，用例改用 S3 真实 7 节点业务图。
 
 ---
 
@@ -166,3 +167,21 @@
 | 开关 A/B | `self_correction=false` → 不回退，直接 degrade |
 
 复现命令：`uv run python -m graph.run --case empty --show-report --trace`；测试 `uv run python -m pytest -q` → 23 passed。
+
+---
+
+## 10. 第二次复查补账（2026-11-14 14:35，S0–S3 全量对账）
+
+用户要求「先检查前两阶段完成情况、有漏的补上」。范围确认为 S0–S3 全部；检查全部真实执行（pytest、三档 CLI、`uv sync --frozen`、`uv pip check`、基线脚本复现），不是静态看代码。
+
+| 项 | 补账前 | 补账后 |
+|---|---|---|
+| 测试 | 23 passed | **33 passed** |
+| A/B 开关 | 只能在测试里 `model_copy` 改对象，命令行关不掉 | `FEATURES_SELF_CORRECTION=false` → research 1 次、degraded=true |
+| 引用完整性（造 12 篇合格文档） | 15 条正文里 4 条事实无 `[n]` | 10 条事实全部带 `[n]`，2 条被显式截断并记入 `review_notes` |
+| 真图 checkpoint | 只有 1 节点最小验证图 | 7 节点业务图重启恢复 5 个 State 字段 |
+| README 归因 | 无，仍是上游原文 | 顶部加二次开发声明与当前真实状态 |
+
+三档 CLI 回归：`report_chars` 822 / 829 / 561，与第 9 节完全一致，无行为回归；`uv sync --frozen` 幂等、`uv pip check` 103 包兼容。
+
+**仍如实存在的边界**：`evidence_check` 只做覆盖度判定（数篇数），不做「来源是否支持结论」的内容级判断。empty 报告里其余三栏会输出「该领域缺少公开规模数据」这类无实质信息的合成句并带 `[n]`。形式上的「正文引用与 References 同源」已达成，但 `config/eval.yaml` 定义的 `citation_traceability`（来源确实支持 claim）需要 S7 的 judge / golden set 才能真正度量，**本阶段不假称已实现**。另外 `langgraph_entry.py` 与 `application.py` 仍指向原版图，按用户拍板等 S5 接真实模型后一次切换。

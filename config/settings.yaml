@@ -54,10 +54,11 @@ models:
     responses_path: ${FIXTURE_PATH:-./evals/fixtures/tavily_responses.json}
 
 features:
-  self_correction: true           # 条件边回退总开关（A/B 用）
-  structured_output: true         # with_structured_output 开关（A/B 用）
-  inline_citations: true          # 行内引用渲染开关
-  human_review: true              # interrupt 复核开关
+  # 四项 A/B 开关均可用同名环境变量覆盖，供 evals/run_eval.py 与命令行做对照实验
+  self_correction: ${FEATURES_SELF_CORRECTION:-true}       # 条件边回退总开关（S3 已生效）
+  structured_output: ${FEATURES_STRUCTURED_OUTPUT:-true}   # with_structured_output（S5 生效）
+  inline_citations: ${FEATURES_INLINE_CITATIONS:-true}     # 行内引用渲染（S3 已生效）
+  human_review: ${FEATURES_HUMAN_REVIEW:-true}             # interrupt 复核（S6 生效）
   auto_approve_review: ${AUTO_APPROVE_REVIEW:-true}
 
 report:
@@ -68,4 +69,4 @@ report:
     - Financial Overview
     - News
     - References
-  max_references: 10
+  max_references: 10             # 每栏目最多输出的结论条数；每条结论必须带行内引用

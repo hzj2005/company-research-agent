@@ -16,16 +16,43 @@ Node = Callable[[ResearchState], Any]
 
 
 def make_briefing_node(settings: Settings) -> Node:
+    """生成简报；正文结论与末尾 References 共用同一份「选中文档」。
+
+    旧实现只按 max_references 截断引用表，正文却遍历全部文档，文档数一多就会出现
+    「有结论、没有 [n]」的孤儿事实。现在先按栏目选出正文要用的文档，再统一编号，
+    保证每条事实性结论都能对回 References 中的一条来源（AGENT.md 第 8 条）。
+    """
     async def briefing(state: ResearchState) -> dict[str, Any]:
         curated = state.get("curated_data", {})
         references = state.get("references", {})
         degraded = set(state.get("degraded_sections", []))
+        limit = settings.report.max_references
 
-        ordered = sorted(
-            references.items(),
-            key=lambda kv: (-float(kv[1].get("score", 0)), kv[0]),
-        )[: settings.report.max_references]
-        index = {url: i + 1 for i, (url, _) in enumerate(ordered)}
+        # 先选文档：来源字典里查不到的文档不进正文，避免无引用结论
+        selected: dict[str, list[dict[str, Any]]] = {}
+        truncated: dict[str, int] = {}
+        for section in settings.graph.sections:
+            if section in degraded:
+                selected[section] = []
+                truncated[section] = 0
+                continue
+            docs = sorted(
+                (
+                    d
+                    for d in curated.values()
+                    if d.get("section") == section and d.get("url") in references
+                ),
+                key=lambda d: (-float(d.get("score", 0)), str(d.get("url", ""))),
+            )
+            selected[section] = docs[:limit]
+            truncated[section] = len(docs) - len(docs[:limit])
+
+        # 编号池 = 所有被选中的 URL；按相关度统一排序后分配 [1], [2], ...
+        ordered_urls = sorted(
+            {doc["url"] for docs in selected.values() for doc in docs},
+            key=lambda u: (-float(references[u].get("score", 0)), u),
+        )
+        index = {url: i + 1 for i, url in enumerate(ordered_urls)}
 
         lines: list[str] = [f"# {state['company']} Research Report", ""]
         briefings: dict[str, dict[str, Any]] = {}
@@ -41,34 +68,35 @@ def make_briefing_node(settings: Settings) -> Node:
                 )
                 lines.append(f"- {text}")
                 briefings[section] = {"status": "degraded", "text": text}
+            elif not selected[section]:
+                lines.append(f"- {settings.graph.degrade.message}")
+                briefings[section] = {"status": "no_evidence", "docs": []}
             else:
-                docs = sorted(
-                    (d for d in curated.values() if d.get("section") == section),
-                    key=lambda d: -float(d.get("score", 0)),
-                )
-                if not docs:
-                    lines.append(f"- {settings.graph.degrade.message}")
-                    briefings[section] = {"status": "no_evidence", "docs": []}
-                else:
-                    for doc in docs:
-                        url = doc["url"]
-                        marker = (
-                            f" [{index[url]}]"
-                            if settings.features.inline_citations and url in index
-                            else ""
-                        )
-                        lines.append(f"- {doc.get('content', '')}{marker}")
-                    briefings[section] = {
-                        "status": "ok",
-                        "docs": [d["url"] for d in docs],
-                    }
+                for doc in selected[section]:
+                    marker = f" [{index[doc['url']]}]" if settings.features.inline_citations else ""
+                    lines.append(f"- {doc.get('content', '')}{marker}")
+                briefings[section] = {
+                    "status": "ok",
+                    "docs": [d["url"] for d in selected[section]],
+                }
             lines.append("")
 
         lines.extend(["## References", ""])
-        for url, meta in ordered:
+        for url in ordered_urls:
+            meta = references[url]
             lines.append(f"[{index[url]}] {meta.get('title', '')} — {url}")
 
         report = "\n".join(lines).rstrip() + "\n"
-        return {"report": report, "briefings": briefings}
+        return {
+            "report": report,
+            "briefings": briefings,
+            "review_notes": [
+                {
+                    "node": "briefing",
+                    "referenced": len(ordered_urls),
+                    "truncated_per_section": truncated,
+                }
+            ],
+        }
 
     return briefing
