@@ -68,10 +68,17 @@ The reworked graph and all entry points need **no API key** in `fixture` mode.
 The React UI / OpenRouter / Google Maps / MongoDB items below are **upstream leftovers**;
 `/research` now runs the new graph and does not consume a request-body API key.
 
+**Upstream endpoints are left untouched** (plan §9.4): `GET /models` still fetches OpenRouter's
+public model list over the network when the UI opens the model picker, and `GET /config` reads
+process environment variables. Neither is part of this fork's graph or quota guard. The claim
+"zero external calls" applies to the reworked graph, `/research` and the Studio entry only —
+verified by socket-level guards in `tests/test_s5_offline.py`.
+
 - Python 3.11 (`.python-version`; the reworked graph and its tests are pinned to 3.11)
 - Node.js 18 or later — only for the upstream React UI
 - `TAVILY_API_KEY` — **optional, and deliberately hard to spend**: set it at OS user level, not in `.env`. Real calls additionally require `APP_MODE=live`, `TAVILY_LIVE_ENABLED=true` and `TAVILY_MAX_CALLS>0`; see `docs/ACTION_PLAN.md` §9.2. This project has made **0 live calls** so far.
-- A model key (OpenRouter / OpenAI / Gemini) — only for `live`; none is configured in this workspace.
+- A model key (OpenRouter / OpenAI / Gemini) — only for `live`; none is configured in this workspace. With `APP_MODE=live` and no model key, `build_graph()` fails **at construction time** with `MissingLLMCredentials`; to exercise live retrieval alone, also set `FEATURES_STRUCTURED_OUTPUT=false`.
+- `TAVILY_MAX_CALLS` is a **per-run** budget: each `/research` request builds its own graph and `CallBudget`, while the Studio entry holds one process-wide instance. Real-call accounting must be read from `CallBudget.calls_made`, not inferred from the config value.
 - Google Maps / MongoDB — upstream UI features only; not used by the new graph.
 
 ## Run locally

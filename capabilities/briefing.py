@@ -3,7 +3,7 @@
 两种后端都返回**同一条 LCEL 链**：`prompt | model.with_structured_output(SectionBrief)`。
 
 - `fixture`：`httpx.MockTransport` 注入 `ChatOpenAI`，handler 把 `<documents>` 里的每篇文档
-  确定性转成 `Fact(claim=content, source_url=url, confidence=0.9)`。这是**确定性 stub，
+  确定性转成 `Fact(claim=content, source_url=url, confidence=score)`。这是**确定性 stub，
   不是模型能力**：目的是在无 key、0 次网络请求下真跑 `with_structured_output`、
   校验重试与 URL 级回溯链路。
 - `live`：`make_chat_model(settings, "briefing")` 接真实 provider；缺 key 明确抛
@@ -17,8 +17,9 @@ from __future__ import annotations
 
 import json
 import logging
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, AsyncIterator
 
 import httpx
 from langchain_core.runnables import Runnable
@@ -48,6 +49,17 @@ class BriefingBackend:
             self.client = None
 
 
+def _score_as_confidence(doc: dict[str, Any]) -> float:
+    """兑现 ACTION_PLAN 9.4：stub 的 confidence 取文档 score，不硬编码。
+
+    缺失或非数值记 0.0（不伪造高置信度），并夹到 Fact 契约的 [0, 1] 区间。
+    """
+    try:
+        return max(0.0, min(1.0, float(doc.get("score", 0.0) or 0.0)))
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _fixture_payload(human: str) -> dict[str, Any]:
     """从 prompt 的 <documents> 里确定性构造 SectionBrief，不使用任何外部知识。"""
     lines = human.splitlines()
@@ -71,7 +83,11 @@ def _fixture_payload(human: str) -> dict[str, Any]:
             except json.JSONDecodeError:
                 continue
     facts = [
-        {"claim": d["content"], "source_url": d["url"], "confidence": 0.9}
+        {
+            "claim": d["content"],
+            "source_url": d["url"],
+            "confidence": _score_as_confidence(d),
+        }
         for d in docs
         if d.get("url") and d.get("content")
     ]
@@ -153,3 +169,27 @@ def make_briefing_backend(settings: Settings) -> BriefingBackend:
     model = make_chat_model(settings, "briefing")
     logger.warning("live 简报后端已构造；是否发起真实模型调用取决于后续节点执行")
     return BriefingBackend(chain=make_extraction_chain(model), mode="live")
+
+
+@asynccontextmanager
+async def briefing_backend_scope(
+    settings: Settings,
+) -> AsyncIterator[BriefingBackend | None]:
+    """生产路径专用：把 backend 的所有权交给「一次图运行」。
+
+    `make_briefing_backend()` 会为 fixture 构造一个 `httpx.AsyncClient`，必须由调用方
+    在图跑完后 `aclose()`；否则长驻的 FastAPI `/research` 每来一个请求就泄漏一个
+    client（S5-B 复查实测：5 次运行 → 5 个未关闭）。
+
+    `structured_output=false` 时不构造 backend，直接 yield None（A/B 基线路径）。
+    Studio 入口是模块级单例、随 Server 进程存活，**不走这个 scope**，避免被提前关闭。
+    """
+    if not settings.features.structured_output:
+        yield None
+        return
+
+    backend = make_briefing_backend(settings)
+    try:
+        yield backend
+    finally:
+        await backend.aclose()

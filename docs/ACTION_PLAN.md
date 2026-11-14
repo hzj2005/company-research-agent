@@ -403,3 +403,25 @@ START → grounding → [research 子图] → curate → evidence_check
 **踩到并修掉的两个真问题**：① `httpx.MockTransport` 的 handler 里把 human 消息按 `role == "human"` 找，但 OpenAI 请求体里是 `role == "user"`，导致 payload 为空、四栏全部误判降级；改为从 `user`/`human` 取并兼容多模态 part list，补了回归用例。② `make_briefing_node` 初版用模块级全局 `_index` 传引用编号，并发下会串号；改为显式传参。另给注入 client 的 `ChatOpenAI` 加 `http_socket_options=()`，消除 SDK 的代理告警。
 
 **如实边界**：`AsyncTavilyClient.search()` 的 live 行为**未实测**（0 次真实请求）；fixture 结构化输出是确定性 stub，不代表模型能力；`citation_traceability` 内容级判定仍归 S7；真实准确率/延迟/成本仍归 S8，需用户明确放行额度。
+
+### 9.7 S5-B 复查补账（用户拍板「全部补掉再进 S6」）
+
+复查方式：重跑 `85 passed` / `uv sync --frozen` / 逐行核代码 / 4 组真跑探针，不凭上一轮印象。主体（护栏、结构化双路径、入口、README 归因）确实干得好，但验收表标 ✅ 标早了。
+
+| 查出的问题 | 性质 | 修复 |
+|---|---|---|
+| `httpx.AsyncClient` 泄漏 | **真 bug**：实测 5 次 `run_research` 创建 5 个、未关闭 5 个；`aclose()` 只在 `test_s5_briefing.py:172` 调过，CLI / `/research` / Studio 全没关。长驻服务每请求泄漏一个 | 新增 `briefing_backend_scope()`（`finally` 关闭）+ `build_graph(..., briefing_backend=...)` 注入；CLI / `/research` 走 scope，Studio 模块级单例只建一次（reload 复用，不重复创建） |
+| `confidence=score` 承诺没落地 | 9.4 白纸黑字写 score，代码硬编码 `0.9`，`_format_payload` 也没把 score 放进 prompt；实测 `score=0.41` → 返回 `0.9` | `_format_payload` 带 score，`_score_as_confidence()` 夹到 `[0,1]`，缺失/非法记 0.0 |
+| `/research` 零外部调用只靠推断 | 证据不齐：`test_s5_offline.py` 只守 CLI 路径 | 补真发 POST + socket 守卫用例，实测 `completed` / 822 字符 / 拦截 **0** 次 |
+| 三条边界没写清 | 完成度 | 见下 |
+
+**新增测试**：`tests/test_s5_lifecycle.py`（3 条：生产路径 0 泄漏、异常路径也关、confidence=score）、`test_s5_offline.py` 追加 1 条。**反向验证**：临时换回旧写法时 3 条 lifecycle 用例全失败，还原后通过，证明不是摆设。
+
+**补写的四条边界**：
+
+1. 上游 `GET /models` / `GET /config` 未改动（遵守 9.4「不碰上游端点」）；`/models` 会向 OpenRouter 发请求，**不属于**本项目的额度护栏与「0 次外部调用」结论。按用户拍板只补文档。
+2. `APP_MODE=live` 且无模型 key → `build_graph()` **构造期**抛 `MissingLLMCredentials`，连 `LiveRetrievalDisabled` 都到不了；只放行真实检索需同时 `FEATURES_STRUCTURED_OUTPUT=false`。
+3. `TAVILY_MAX_CALLS` 是 **per-run**：`/research` 每请求独立 `CallBudget`，Studio 是进程级单例；真实次数以 `calls_made` 为准。
+4. 额外排雷：静态核对 `AsyncTavilyClient.search` 真实签名，`query/max_results/search_depth/topic` 均存在，`topic` 允许 `general/news/finance`、`search_depth` 允许 `advanced`，S8 不会因参数名白花额度。**这是读本地 SDK 签名，不是 API 调用**。
+
+**验收**：`89 passed`；三档 822/829/561、两个 A/B 开关零回归；client 探针 5 次运行 0 个未关闭；`uv pip check` 103 包兼容。**真实 Tavily / 模型调用仍为 0**。

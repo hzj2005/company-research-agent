@@ -70,6 +70,8 @@ def _format_payload(company: str, section: Section, docs: Iterable[Mapping[str, 
                     "url": doc.get("url", ""),
                     "title": doc.get("title", ""),
                     "content": doc.get("content", ""),
+                    # 供 fixture stub 回显为 Fact.confidence（不伪造高置信度）
+                    "score": doc.get("score", 0.0),
                 },
                 ensure_ascii=False,
             )

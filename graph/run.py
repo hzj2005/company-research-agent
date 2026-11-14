@@ -15,6 +15,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from capabilities.briefing import briefing_backend_scope
 from capabilities.retrieval import load_fixture_store, make_document_tool
 from config.loader import Settings, build_thread_id, get_settings
 from graph.builder import build_graph
@@ -29,9 +30,17 @@ async def run_research(
     *,
     collect_trace: bool = False,
 ) -> tuple[dict[str, Any], list[str]]:
-    """跑完整图，返回 (最终 State, 节点执行轨迹)。"""
-    async with CheckpointSession(settings=settings, path=db_path) as session:
-        compiled = session.compile(build_graph(settings, make_document_tool(settings)))
+    """跑完整图，返回 (最终 State, 节点执行轨迹)。
+
+    `briefing_backend_scope` 保证本次运行注入的 httpx client 一定被关闭。
+    """
+    async with (
+        CheckpointSession(settings=settings, path=db_path) as session,
+        briefing_backend_scope(settings) as backend,
+    ):
+        compiled = session.compile(
+            build_graph(settings, make_document_tool(settings), briefing_backend=backend)
+        )
         config = session.config_for(build_thread_id(company, settings=settings))
         if not collect_trace:
             result = await compiled.ainvoke(initial_state(company), config=config)

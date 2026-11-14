@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from backend.llm import DEFAULT_OPENROUTER_MODEL, OPENROUTER_BASE_URL
 
 # S5-B 起：对外入口指向二次开发的新图（原版 backend/graph.py 保留作 upstream 对照）
+from capabilities.briefing import briefing_backend_scope
 from capabilities.retrieval import make_document_tool
 from config.loader import build_thread_id, get_settings
 from graph.builder import build_graph
@@ -129,8 +130,14 @@ async def process_research(job_id: str, data: ResearchRequest, db_path=None):
         # job_id 保证并发请求各有独立 checkpoint 线程，不互相覆盖
         thread_id = build_thread_id(f"{data.company}:{job_id}", settings=settings)
 
-        async with CheckpointSession(settings=settings, path=db_path) as session:
-            compiled = session.compile(build_graph(settings, make_document_tool(settings)))
+        # 简报后端的 httpx client 归本次请求所有：长驻服务里不关会每请求泄漏一个
+        async with (
+            briefing_backend_scope(settings) as backend,
+            CheckpointSession(settings=settings, path=db_path) as session,
+        ):
+            compiled = session.compile(
+                build_graph(settings, make_document_tool(settings), briefing_backend=backend)
+            )
             config = session.config_for(thread_id)
 
             # astream(updates) 产出 {节点名: {字段: 值}}，直接映射为 current_step

@@ -254,3 +254,17 @@
 **本阶段实测踩到并修掉的两个真问题**：① OpenAI 请求体里 human 消息的 role 是 `user` 而非 `human`，mock handler 取错消息 → payload 为空、四栏静默误判降级；改为兼容 `user`/`human` 与多模态 part list，并补回归用例。② `make_briefing_node` 初版用模块级全局 `_index` 传引用编号，并发会串号；改显式传参。另给注入 client 的 `ChatOpenAI` 加 `http_socket_options=()` 消掉 SDK 代理告警。
 
 **S5-B 如实边界**：`AsyncTavilyClient.search()` 的真实行为**未实测**（0 次真实请求）；fixture 结构化输出是确定性 stub，**不代表模型能力**；`/research` 现在只消费 `company`，`company_url/industry/hq_location/model/请求体 key` 均不消费；内容级 `citation_traceability` 仍归 S7；真实准确率/延迟/成本与 S8 实测仍阻塞在「用户明确放行额度」+ 模型 key。
+
+### 13.1 S5-B 复查补账实测（0 次真实调用）
+
+| 复查项 | 真实结果 |
+|---|---|
+| client 泄漏（修复前） | 连续 5 次 `run_research` → 创建 5 个 `httpx.AsyncClient`、**未关闭 5 个**；`aclose()` 仅测试调用过 |
+| client 泄漏（修复后） | `briefing_backend_scope()` 的 `finally` 关闭；同样 5 次运行 → **未关闭 0 个**；`tests/test_s5_lifecycle.py` 另覆盖异常路径与 FastAPI 后台任务路径 |
+| confidence 契约 | 修复前 `score=0.41` → `confidence=0.9` 且 prompt 无 score；修复后 → `[0.41, 0.93]` 精确回显，非数值/越界分别夹到 0.0 / 1.0 |
+| `/research` 离网硬证据 | 真发 POST + `socket.connect` 守卫（只放行回环）→ `completed`、822 字符、**被拦截外部连接 0 次**，已固化为 `test_s5_offline.py` 第二条用例 |
+| 反向验证 | 临时换回旧写法，3 条 lifecycle 用例全部失败；还原后全量通过 |
+| 静态排雷 | `AsyncTavilyClient.search` 真实签名含 `query/max_results/search_depth/topic`，`topic` 允许 `general/news/finance`、`search_depth` 允许 `advanced`（**未发起调用**） |
+| 回归 | `89 passed`；三档 822/829/561、两个 A/B 开关、`uv pip check` 103 包兼容 |
+
+**新增边界说明**：上游 `GET /models` 会向 OpenRouter 发请求、不受本项目护栏约束（用户拍板只补文档不动上游端点）；`APP_MODE=live` 无模型 key 会在 `build_graph()` 构造期抛 `MissingLLMCredentials`，只跑检索需 `FEATURES_STRUCTURED_OUTPUT=false`；`TAVILY_MAX_CALLS` 是 per-run 预算。

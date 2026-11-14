@@ -14,6 +14,7 @@ from __future__ import annotations
 from langchain_core.tools import StructuredTool
 from langgraph.graph import END, START, StateGraph
 
+from capabilities.briefing import BriefingBackend
 from config.loader import Settings
 from graph.conditions import route_after_evidence
 from graph.nodes.collect import make_curate_node, make_grounding_node
@@ -27,7 +28,16 @@ from graph.state import ResearchState
 from graph.subgraphs.research import build_research_subgraph
 
 
-def build_graph(settings: Settings, document_tool: StructuredTool) -> StateGraph:
+def build_graph(
+    settings: Settings,
+    document_tool: StructuredTool,
+    *,
+    briefing_backend: BriefingBackend | None = None,
+) -> StateGraph:
+    """`briefing_backend` 由生产路径的 `briefing_backend_scope()` 注入并负责关闭。
+
+    不传时 `make_briefing_node` 会自建（仅测试/短生命周期脚本使用，兼容旧调用）。
+    """
     builder = StateGraph(ResearchState)
 
     builder.add_node("grounding", make_grounding_node(settings))
@@ -37,7 +47,7 @@ def build_graph(settings: Settings, document_tool: StructuredTool) -> StateGraph
     builder.add_node("evidence_check", make_evidence_check_node(settings))
     builder.add_node("rewrite_query", make_rewrite_query_node(settings))
     builder.add_node("degrade", make_degrade_node(settings))
-    builder.add_node("briefing", make_briefing_node(settings))
+    builder.add_node("briefing", make_briefing_node(settings, backend=briefing_backend))
 
     builder.add_edge(START, "grounding")
     builder.add_edge("grounding", "research")

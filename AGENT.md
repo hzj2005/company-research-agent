@@ -74,6 +74,8 @@
 6. 禁止在 prompt 中写 `Never mention "no information found"` 这类迫使模型编造的指令。原版 `backend/prompts.py` 仍保留该指令（上游原文件，未删），但 **S3 新图完全不加载它**；S5 接真实模型时也不得复用。
 7. **Tavily 免费额度是红线**：真实检索必须同时满足 `APP_MODE=live` + `TAVILY_LIVE_ENABLED=true` + `TAVILY_MAX_CALLS>0`；`CallBudget` 硬计数先于请求，缓存优先、dry-run 不发请求。测试 / CI / 演示**禁止构造 `AsyncTavilyClient`**，一律注入 fake。key 只经 `config.loader.resolve_tavily_credentials()` 解析，不接收请求体 key、不写日志、不写进 `.env`。任何真实调用次数必须能被测试核对。
 8. fixture 模式可用本地 `httpx.MockTransport` 真跑 LCEL，但文档与注释必须写明「确定性 stub，非模型能力」。mock handler 取消息时按 `role in ("user", "human")`（OpenAI 请求体是 `user`），否则会静默抽不出事实误判降级。`features.structured_output=false` 的报告必须与 S4 模板逐字一致，作为 A/B 基线；节点内传递引用编号用显式参数，禁止模块级全局可变变量。
+9. **简报后端的 client 所有权归「一次图运行」**：`make_briefing_backend()` 会创建 `httpx.AsyncClient`，短生命周期路径（CLI / `/research`）必须经 `briefing_backend_scope()` 注入 `build_graph(..., briefing_backend=...)` 并在 `finally` 里 `aclose()`；Studio 是模块级单例、随 Server 进程存活，不走 scope。异常路径同样要关，长驻服务不得每请求泄漏一个 client。
+10. fixture stub 的 `Fact.confidence` **必须来自文档 `score`**（缺失/越界夹到 `[0,1]`，不伪造），且 `score` 要真的进 prompt；禁止在 mock handler 里硬编码 0.9，否则 S7 拿置信度做评测会失真。
 
 ## 8. 可溯源约定
 
@@ -165,3 +167,4 @@ FEATURES_SELF_CORRECTION=false uv run python -m graph.run --case sparse --trace
 - ❌ 用 `GenericFakeChatModel` 测 `with_structured_output` / mock HTTP 指向可达外网 / 把 mock 结果写成真实模型指标
 - ❌ 用真实 Tavily / 模型额度跑测试或演示 / 绕过 `CallBudget` 发包 / 把请求体传入的 key 当凭据
 - ❌ 模块级全局可变变量传递引用编号 / 把 fixture 确定性 stub 说成模型能力 / 谎称 live 已实测
+- ❌ `build_graph()` 自建 briefing backend 却不 `aclose()` / fixture stub 硬编码 `confidence` / 把「0 次外部调用」只写在文档里而不落测试
