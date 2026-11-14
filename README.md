@@ -5,7 +5,7 @@
 >
 > **What this fork adds**: a LangGraph state workflow with evidence-sufficiency checks, a bounded self-correction loop, per-section abstention instead of fabrication, reducer-based parallel writes and real SQLite checkpointing (`graph/`, `capabilities/`, `persistence/`, `config/`, `tests/`). Design and measured baseline: [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md), [`docs/BASELINE.md`](docs/BASELINE.md).
 >
-> **Current status — read before running**: the new graph runs in `fixture` mode on synthetic data and needs no API key (`uv run python -m graph.run --case sparse --show-report`). Since S5-B both **FastAPI `/research` and the LangGraph Studio entry point to the new graph**; `/research` currently consumes only `company` (legacy fields such as `industry` or a request-body API key are ignored). `briefing` runs a real `with_structured_output` LCEL chain against a **local deterministic mock backend**, not a real model. **Zero live Tavily / model calls have been made** — real retrieval is behind a three-way opt-in (`APP_MODE=live` + `TAVILY_LIVE_ENABLED=true` + `TAVILY_MAX_CALLS>0`), a hard per-run call budget and a disk cache, to protect the free quota. No accuracy, latency or cost figures are claimed until live evaluation (S8) actually runs.
+> **Current status — read before running**: the new graph runs in `fixture` mode on synthetic data and needs no API key (`uv run python -m graph.run --case sparse --show-report`). Since S5-B both **FastAPI `/research` and the LangGraph Studio entry point to the new graph**; `/research` currently consumes only `company` (legacy fields such as `industry` or a request-body API key are ignored). `briefing` runs a real `with_structured_output` LCEL chain against a **local deterministic mock backend**, not a real model. **Zero live Tavily / model calls have been made** — real retrieval is behind a three-way opt-in (`APP_MODE=live` + `TAVILY_LIVE_ENABLED=true` + `TAVILY_MAX_CALLS>0`), a hard per-run call budget and a disk cache, to protect the free quota. S8.0 read-only audit and S8.1 zero-request dry-run are done; no accuracy, latency or cost figures are claimed until live evaluation (S8.2+) is explicitly approved and actually runs.
 
 An agentic research tool that turns a company name into a structured, source-backed briefing. The FastAPI backend coordinates specialized research and synthesis steps; the React interface tracks the job and lets you export the finished report as a PDF.
 
@@ -85,6 +85,18 @@ uv run python -m evals.run_eval --compare evals/scorecard.json --output evals/sc
 `no_inline_citations` is a deliberately broken **negative control** (inline citations switched off): it scores `citation_traceability=0.0` / `hallucination_rate=1.0` on purpose, so a future change that removes citations shows up in the scorecard immediately. That `1.0` is not a measured hallucination rate of the default configuration.
 
 The evaluator refuses to start unless `APP_MODE=fixture` and installs a non-loopback `socket.connect` guard while running, so it cannot consume Tavily or LLM quota even if configuration is changed by mistake. Measured: `tavily=0, llm=0, blocked_connection_attempts=0`.
+
+## Live readiness / dry-run (S8.0–S8.1)
+
+No live call has been made. `S8.0` is a read-only audit and `S8.1` is a **0-request dry-run** of the full graph:
+
+```bash
+uv run python -m evals.live_dryrun     # -> evals/live_dryrun.json
+```
+
+It needs **no API key and no quota**: `TAVILY_DRY_RUN=true` is an isolated path that forces a sentinel client (never constructs `AsyncTavilyClient`), records the 12 queries a full run would issue together with their sha256 cache keys, and proves `calls_made=0` with a socket guard plus credential-usage counters. See `docs/LIVE_READINESS.md` for the audit (including the `/models` egress risk and the SDK signature check).
+
+Tavily's published pricing is **1 credit per `basic` search / 2 credits per `advanced` search** (1000 free credits/month). This project defaults to `advanced`, so one full research run is at worst 12 requests ≈ **24 credits per company** without cache — an estimate, not a measured charge; the dry-run itself spent **0 credits**. Real measurement (S8.2+) is deliberately blocked until the API keys and quota are explicitly approved.
 
 ## Prerequisites
 

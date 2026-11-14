@@ -15,6 +15,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from langchain_core.tools import StructuredTool
 from langgraph.types import Command
 
 from capabilities.briefing import briefing_backend_scope
@@ -33,6 +34,7 @@ async def run_research(
     collect_trace: bool = False,
     resume: dict[str, Any] | None = None,
     thread_id: str | None = None,
+    document_tool: StructuredTool | None = None,
 ) -> tuple[dict[str, Any], list[str]]:
     """跑完整图，返回 (最终 State, 节点执行轨迹)。
 
@@ -41,6 +43,8 @@ async def run_research(
       调用方可以是一个全新的进程；这也是「checkpointer 不是摆设」的验证点。
     - 若本次运行暂停在 `interrupt()`，返回 State 会额外带 `_interrupt` 键
       （`{thread_id, payload}`，**不是图的 State 字段**，仅供 CLI/测试读取）。
+    - `document_tool` 是 S8 预演/实测的注入点：调用方可传入带自己 `CallBudget`
+      的检索工具以核对真实调用次数。默认 `None` 时行为与原来完全一致。
 
     统一走 `astream(updates)`：`ainvoke` 遇到 interrupt 的语义与 astream 不一致，
     这里保持一条路径，行为可预测。
@@ -49,8 +53,9 @@ async def run_research(
         CheckpointSession(settings=settings, path=db_path) as session,
         briefing_backend_scope(settings) as backend,
     ):
+        tool = document_tool if document_tool is not None else make_document_tool(settings)
         compiled = session.compile(
-            build_graph(settings, make_document_tool(settings), briefing_backend=backend)
+            build_graph(settings, tool, briefing_backend=backend)
         )
         config = session.config_for(
             thread_id or build_thread_id(company, settings=settings)

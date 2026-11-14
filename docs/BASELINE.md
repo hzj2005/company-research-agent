@@ -309,4 +309,23 @@
 
 **S7 复查补账（同日 18:56，详见 ACTION_PLAN 11.10）**：用户要求复查后，用真实探针坐实并修掉 8 项。最严重的是 **P1**——初版 `parse_report` 在没有 `[n]` 时从 golden 按文本反推 URL，导致关闭行内引用后 8 条无引用结论仍拿 `traceability=1.0`，等于用标准答案给报告补引用。现改为反推 URL 只作诊断并判 `no_explicit_citation`，`fact_accuracy` 与引用指标解耦，且新增 `no_inline_citations` 负向 A/B 组做常设防线。其余：P2 拆出 `code_sha256`、P3 修 golden 模拟轮数（1→3 与图一致）、P4 回归比对扩展到所有组、P5 样本不足拒绝出分、P6 指纹纳入自定义配置、P7 互斥参数报错、P8 修测试硬编码与恒真断言。同批探针复验：P1 `traceability=0.0 / fact_accuracy=1.0`、P3 `expected_research_runs=3`、P4 `passed=False + fewer_results:...`、P2 两个独立指纹。
 
+## 16. S8.0 / S8.1 准备度记录（2026-11-14，0 次真实调用、0 credits）
+
+| 项 | 实测 |
+|---|---|
+| 前置检查 | `--baseline-only` → `gate PASS`；`pytest -q` → `121 passed`（S6 97 + S7 24） |
+| 凭据体检 | 当前进程所有模型 key / `TAVILY_API_KEY` / live 开关均 absent；`.env` 不存在，`.gitignore` 已覆盖密钥/DB/缓存；只打印存在性，未打印值 |
+| 上游出网风险 | `/models`（`application.py:217-232`）确认会出网，本阶段不启动 FastAPI 因而不触发 |
+| SDK 静态核对 | `inspect.signature(AsyncTavilyClient.search)` 的 `search_depth` / `topic` 字面量；项目 `advanced` / `finance` / `news` / `general` 全部合法；真实返回结构仍**未实测** |
+| 修复的真实缺陷 | `TAVILY_DRY_RUN=true` 原仍无条件解析 `TAVILY_API_KEY` → 无 key 抛错，预演跑不通。现为独立 0 请求路径：不要 key、不要额度、强制 `DryRunSentinel`、预算须 `dry_run=True`；真实调用三重 opt-in 未放松 |
+| S8.1 dry-run | 完整图 `research_runs=3`、`degrade`；12 条 query + sha256 cache key；`calls_made=0 / dry_runs=12 / blocked=0`；凭据三入口计数探针全 0；守卫已还原 |
+| 可复现 | 两次独立运行逐字一致；`evals/live_dryrun.json` 与现场运行逐字一致；query 按稳定键排序（Send 并行派发顺序不作指标） |
+| 额度推算 | 官方 `basic=1` / `advanced=2` credits/次、免费 1000/月；默认 advanced → 最坏 12×2 = 24 credits/公司；**推算值，实际扣 0**；官方未列单价的 depth 标 `null`，拒绝猜测 |
+| 全量回归 | `135 passed`（97 + 24 + 14）；`uv pip check` 兼容；工作区干净 |
+
+**S8.0/S8.1 如实边界**：不产出任何真实准确率 / 幻觉率 / 延迟 / 成本 / 真实检索语料；
+`scorecard.json` 的 `1.000` 仍只是 fixture 契约回归分。S8.2 起需用户拍板
+（模型 key、Tavily 额度、真实 golden），未放行前不执行。详见 `docs/LIVE_READINESS.md`
+与 `docs/ACTION_PLAN.md` 12.6。
+
 **S7 如实边界（最重要）**：这是**合成语料上的契约回归测试**，不是模型能力评测。golden 与被测系统读同一份 fixture，baseline 满分是「按规范把给定文档搬进报告并加对引用」的必然结果，**不得写成「准确率 100%」进简历**。`citation_traceability` 是词法包含代理而非语义蕴含；`hallucination_rate` 是它的互补值而非独立证据；`cost_per_report=0`、`p95_latency_ms` 为本机耗时，都不是真实成本/延迟。原计划「30–50 家真实公司 × 5 事实」的 golden 未做（无 key / 无真实语料，硬编即造假），归 S8；换 `EVAL_DATASET_PATH` 即可复用脚本。`no_inline_citations` 组的 `hallucination_rate=1.0` 属「故意关掉引用」的负向对照，不是默认配置的幻觉率。内容级语义 judge、真实指标、S9 简历仍未开工。

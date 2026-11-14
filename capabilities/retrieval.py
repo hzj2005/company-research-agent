@@ -22,6 +22,7 @@ from langchain_core.tools import StructuredTool, tool
 
 from capabilities.tavily_retriever import (
     CallBudget,
+    DryRunSentinel,
     LiveRetrievalDisabled,
     build_live_retrievers,
 )
@@ -155,16 +156,29 @@ def make_document_tool(
 
         return fetch_company_documents
 
-    # ---- live：三重 opt-in，任何一项不满足都不发请求 ----------------------
+    # ---- live：真实调用需三重 opt-in；dry-run 是独立的 0 请求预演路径 ----------
     live = s.retrieval.live
-    if not live.enabled or live.max_calls_per_run <= 0:
-        raise LiveRetrievalDisabled(
-            "Tavily 真实检索默认禁用（保护免费额度）。需同时设置 "
-            "APP_MODE=live、TAVILY_LIVE_ENABLED=true、TAVILY_MAX_CALLS>0；"
-            "仅查看会发哪些 query 请用 TAVILY_DRY_RUN=true"
-        )
+    if live.dry_run:
+        # 预演：不需要 key、不需要放行额度、不构造 AsyncTavilyClient。
+        # 只设 APP_MODE=live + TAVILY_DRY_RUN=true 即可看到完整 query 清单。
+        active_budget = budget or CallBudget(0, dry_run=True)
+        if not active_budget.dry_run:
+            raise LiveRetrievalDisabled(
+                "TAVILY_DRY_RUN=true 时注入的 CallBudget 必须也是 dry_run=True，"
+                "拒绝用真实预算跑预演"
+            )
+        # 双重保险：即便调用方误传了真实 AsyncTavilyClient，预演里也一律替换成
+        # 哨兵。这样「预算被改坏」和「client 被传错」单独发生都出不了网。
+        live_client = DryRunSentinel()
+    else:
+        if not live.enabled or live.max_calls_per_run <= 0:
+            raise LiveRetrievalDisabled(
+                "Tavily 真实检索默认禁用（保护免费额度）。需同时设置 "
+                "APP_MODE=live、TAVILY_LIVE_ENABLED=true、TAVILY_MAX_CALLS>0；"
+                "仅查看会发哪些 query 请用 TAVILY_DRY_RUN=true"
+            )
+        active_budget = budget or CallBudget(live.max_calls_per_run, dry_run=False)
 
-    active_budget = budget or CallBudget(live.max_calls_per_run, dry_run=live.dry_run)
     if retriever_factory is not None:
         retrievers = retriever_factory(s)
     else:

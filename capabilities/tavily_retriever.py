@@ -38,8 +38,26 @@ class TavilyBudgetExceeded(RuntimeError):
     """本次运行的真实调用额度已用尽。"""
 
 
+class DryRunSentinel:
+    """dry-run 专用 client：不解析 key、不构造 SDK，一旦被调用立即抛错。
+
+    作为第二道保险：即使 `CallBudget.dry_run` 被误改，请求也无法到达网络。
+    """
+
+    async def search(self, **kwargs: Any) -> dict[str, Any]:
+        raise AssertionError(
+            "TAVILY_DRY_RUN=true 时不应调用任何 Tavily client；"
+            "若看到此异常说明 dry-run 护栏被绕过，请立即停止并核对预算"
+        )
+
+
 class CallBudget:
-    """进程内硬预算 + 可核对的计数器（不是配置文件里的一句声明）。"""
+    """进程内硬预算 + 可核对的计数器（不是配置文件里的一句声明）。
+
+    `queries` 由 `TavilyRetriever` 在真实代码路径上追加：S8.1 dry-run 预演的
+    query 清单直接来自这里，不另写一套生成逻辑冒充预演；S8.3 真实调用后也能
+    据此核对「实际发了几条、哪些命中缓存」。记录里不含任何凭据。
+    """
 
     def __init__(self, max_calls: int, *, dry_run: bool = False):
         self.max_calls = max_calls
@@ -47,10 +65,31 @@ class CallBudget:
         self.calls_made = 0
         self.cache_hits = 0
         self.dry_runs = 0
+        self.queries: list[dict[str, Any]] = []
 
     @property
     def remaining(self) -> int:
         return max(0, self.max_calls - self.calls_made)
+
+    def record_query(
+        self,
+        *,
+        query: str,
+        section: str,
+        cache_key: str,
+        cache_hit: bool,
+        executed: bool,
+    ) -> None:
+        self.queries.append(
+            {
+                "query": query,
+                "section": section,
+                "cache_key": cache_key,
+                "cache_hit": cache_hit,
+                "executed": executed,
+                "dry_run": self.dry_run,
+            }
+        )
 
     def consume(self, query: str) -> None:
         if self.remaining <= 0:
@@ -152,7 +191,17 @@ class TavilyRetriever(BaseRetriever):
 
     async def _aget_relevant_documents(self, query: str, **kwargs: Any) -> list[Document]:
         path = self._cache_file(query)
-        if path.exists():
+        cache_hit = path.exists()
+        # 先记录真实产生的 query，再走缓存 / dry-run / 真实调用三条分支。
+        # 这样 S8.1 的预演清单与 S8.3 的实调日志来自同一处生产代码。
+        self.budget.record_query(
+            query=query,
+            section=self.section,
+            cache_key=self._params(query),
+            cache_hit=cache_hit,
+            executed=not cache_hit and not self.budget.dry_run,
+        )
+        if cache_hit:
             self.budget.cache_hits += 1
             logger.info("Tavily 缓存命中（不扣额度）query=%s", query)
             return self._load_cached(path)

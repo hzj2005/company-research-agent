@@ -1,7 +1,7 @@
-# S7 评测回归门禁
+# S7 评测回归门禁 + S8.1 dry-run 预演
 #
-# 只跑 fixture：0 次真实 Tavily / 模型调用，不需要任何 API key，也不会消耗
-# 用户级 TAVILY_API_KEY 的免费额度（run_eval.py 内另有 socket 禁网守卫）。
+# 只跑 fixture / dry-run：0 次真实 Tavily / 模型调用，不需要任何 API key，
+# 也不会消耗用户级 TAVILY_API_KEY 的免费额度（两个脚本内都有 socket 禁网守卫）。
 #
 # 基线是仓库里提交的 evals/scorecard.json；本次结果写到 scorecard.next.json，
 # 由 CI 比对，不自动覆盖。开发者本地确认退化是预期的之后再更新基线：
@@ -42,10 +42,17 @@ jobs:
           --compare evals/scorecard.json
           --output evals/scorecard.next.json
 
+      - name: S8.1 dry-run rehearsal (0 requests, 0 credits)
+        # 不用 --output 覆盖提交产物：tests/test_s8_readiness.py 已断言
+        # live_dryrun.json 与现场运行逐字一致，任何代码改动导致清单变化都会让 pytest 失败。
+        run: uv run python -m evals.live_dryrun
+
       - name: Upload scorecard
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: scorecard
-          path: evals/scorecard.next.json
+          path: |
+            evals/scorecard.next.json
+            evals/live_dryrun.json
           if-no-files-found: ignore

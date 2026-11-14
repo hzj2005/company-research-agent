@@ -59,8 +59,11 @@ DISCLAIMER = (
 
 
 @contextmanager
-def eval_offline_guard() -> Iterator[list[Any]]:
-    """禁网守卫：回环放行（Windows asyncio 需要），外部连接记录并抛错。"""
+def eval_offline_guard(label: str = "S7 评测") -> Iterator[list[Any]]:
+    """禁网守卫：回环放行（Windows asyncio 需要），外部连接记录并抛错。
+
+    `label` 只为让 S8 dry-run 复用时错误信息指向正确的调用方，避免误报 S7。
+    """
     original = socket.socket.connect
     attempts: list[Any] = []
 
@@ -69,7 +72,7 @@ def eval_offline_guard() -> Iterator[list[Any]]:
         if host.startswith("127.") or host in ("::1", "localhost"):
             return original(self, address, *args, **kwargs)
         attempts.append(address)
-        raise AssertionError(f"S7 评测禁止外部连接：{address!r}（保护 Tavily/模型额度）")
+        raise AssertionError(f"{label} 禁止外部连接：{address!r}（保护 Tavily/模型额度）")
 
     socket.socket.connect = guarded  # type: ignore[method-assign]
     try:

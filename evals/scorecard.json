@@ -66,7 +66,7 @@
       "status": "changed"
     }
   },
-  "code_sha256": "9c00fe2b38b3990f",
+  "code_sha256": "f676484429477feb",
   "config": {
     "metric_direction": {
       "abstain_rate": "higher",
@@ -196,7 +196,7 @@
           ],
           "company": "Notion",
           "degraded_sections": [],
-          "elapsed_ms": 6512.368,
+          "elapsed_ms": 6504.797,
           "expected_abstains": 0,
           "expected_claims": 8,
           "expected_research_runs": 1,
@@ -298,7 +298,7 @@
           ],
           "company": "Linear",
           "degraded_sections": [],
-          "elapsed_ms": 217.561,
+          "elapsed_ms": 240.312,
           "expected_abstains": 0,
           "expected_claims": 9,
           "expected_research_runs": 2,
@@ -375,7 +375,7 @@
           "degraded_sections": [
             "company"
           ],
-          "elapsed_ms": 209.58,
+          "elapsed_ms": 250.504,
           "expected_abstains": 1,
           "expected_claims": 6,
           "expected_research_runs": 3,
@@ -427,7 +427,7 @@
         "cost_per_report": 0.0,
         "fact_accuracy": 1.0,
         "hallucination_rate": 0.0,
-        "p95_latency_ms": 6512.368,
+        "p95_latency_ms": 6504.797,
         "self_correction_success": 1.0
       },
       "overrides": {},
@@ -513,7 +513,7 @@
           ],
           "company": "Notion",
           "degraded_sections": [],
-          "elapsed_ms": 175.839,
+          "elapsed_ms": 133.032,
           "expected_abstains": 0,
           "expected_claims": 8,
           "expected_research_runs": 1,
@@ -615,7 +615,7 @@
           ],
           "company": "Linear",
           "degraded_sections": [],
-          "elapsed_ms": 232.168,
+          "elapsed_ms": 209.824,
           "expected_abstains": 0,
           "expected_claims": 9,
           "expected_research_runs": 2,
@@ -692,7 +692,7 @@
           "degraded_sections": [
             "company"
           ],
-          "elapsed_ms": 252.892,
+          "elapsed_ms": 264.993,
           "expected_abstains": 1,
           "expected_claims": 6,
           "expected_research_runs": 3,
@@ -734,7 +734,7 @@
         "cost_per_report": 0.0,
         "fact_accuracy": 1.0,
         "hallucination_rate": 0.0,
-        "p95_latency_ms": 252.892,
+        "p95_latency_ms": 264.993,
         "self_correction_success": 1.0
       },
       "overrides": {
@@ -822,7 +822,7 @@
           ],
           "company": "Notion",
           "degraded_sections": [],
-          "elapsed_ms": 144.828,
+          "elapsed_ms": 134.451,
           "expected_abstains": 0,
           "expected_claims": 8,
           "expected_research_runs": 1,
@@ -924,7 +924,7 @@
           ],
           "company": "Linear",
           "degraded_sections": [],
-          "elapsed_ms": 210.524,
+          "elapsed_ms": 172.595,
           "expected_abstains": 0,
           "expected_claims": 9,
           "expected_research_runs": 2,
@@ -1001,7 +1001,7 @@
           "degraded_sections": [
             "company"
           ],
-          "elapsed_ms": 241.961,
+          "elapsed_ms": 238.019,
           "expected_abstains": 1,
           "expected_claims": 6,
           "expected_research_runs": 3,
@@ -1043,7 +1043,7 @@
         "cost_per_report": 0.0,
         "fact_accuracy": 1.0,
         "hallucination_rate": 0.0,
-        "p95_latency_ms": 241.961,
+        "p95_latency_ms": 238.019,
         "self_correction_success": 1.0
       },
       "overrides": {
@@ -1131,7 +1131,7 @@
           ],
           "company": "Notion",
           "degraded_sections": [],
-          "elapsed_ms": 177.038,
+          "elapsed_ms": 162.728,
           "expected_abstains": 0,
           "expected_claims": 8,
           "expected_research_runs": 1,
@@ -1233,7 +1233,7 @@
           ],
           "company": "Linear",
           "degraded_sections": [],
-          "elapsed_ms": 240.115,
+          "elapsed_ms": 180.032,
           "expected_abstains": 0,
           "expected_claims": 9,
           "expected_research_runs": 2,
@@ -1310,7 +1310,7 @@
           "degraded_sections": [
             "company"
           ],
-          "elapsed_ms": 272.091,
+          "elapsed_ms": 196.245,
           "expected_abstains": 1,
           "expected_claims": 6,
           "expected_research_runs": 3,
@@ -1352,7 +1352,7 @@
         "cost_per_report": 0.0,
         "fact_accuracy": 1.0,
         "hallucination_rate": 0.0,
-        "p95_latency_ms": 272.091,
+        "p95_latency_ms": 196.245,
         "self_correction_success": 1.0
       },
       "overrides": {
@@ -1440,7 +1440,7 @@
           ],
           "company": "Notion",
           "degraded_sections": [],
-          "elapsed_ms": 171.625,
+          "elapsed_ms": 158.945,
           "expected_abstains": 0,
           "expected_claims": 8,
           "expected_research_runs": 1,
@@ -1542,7 +1542,7 @@
           ],
           "company": "Linear",
           "degraded_sections": [],
-          "elapsed_ms": 241.613,
+          "elapsed_ms": 210.424,
           "expected_abstains": 0,
           "expected_claims": 9,
           "expected_research_runs": 2,
@@ -1619,7 +1619,7 @@
           "degraded_sections": [
             "company"
           ],
-          "elapsed_ms": 270.552,
+          "elapsed_ms": 253.313,
           "expected_abstains": 1,
           "expected_claims": 6,
           "expected_research_runs": 3,
@@ -1661,7 +1661,7 @@
         "cost_per_report": 0.0,
         "fact_accuracy": 1.0,
         "hallucination_rate": 1.0,
-        "p95_latency_ms": 270.552,
+        "p95_latency_ms": 253.313,
         "self_correction_success": 1.0
       },
       "overrides": {
@@ -1749,7 +1749,7 @@
           ],
           "company": "Notion",
           "degraded_sections": [],
-          "elapsed_ms": 172.497,
+          "elapsed_ms": 160.778,
           "expected_abstains": 0,
           "expected_claims": 8,
           "expected_research_runs": 1,
@@ -1826,7 +1826,7 @@
           "degraded_sections": [
             "company"
           ],
-          "elapsed_ms": 143.776,
+          "elapsed_ms": 158.985,
           "expected_abstains": 0,
           "expected_claims": 9,
           "expected_research_runs": 2,
@@ -1907,7 +1907,7 @@
           "degraded_sections": [
             "company"
           ],
-          "elapsed_ms": 165.16,
+          "elapsed_ms": 170.106,
           "expected_abstains": 1,
           "expected_claims": 6,
           "expected_research_runs": 3,
@@ -1949,7 +1949,7 @@
         "cost_per_report": 0.0,
         "fact_accuracy": 0.869565,
         "hallucination_rate": 0.0,
-        "p95_latency_ms": 172.497,
+        "p95_latency_ms": 170.106,
         "self_correction_success": 0.0
       },
       "overrides": {

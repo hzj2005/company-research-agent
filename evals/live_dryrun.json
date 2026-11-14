@@ -1,0 +1,202 @@
+{
+  "budget": {
+    "cache_hits": 0,
+    "calls_made": 0,
+    "dry_runs": 12,
+    "max_calls": 0,
+    "query_count": 12
+  },
+  "credentials": {
+    "api_keys_printed": 0,
+    "async_tavily_client_constructions": 0,
+    "llm_key_resolutions": 0,
+    "note": "三个入口（Tavily key / 模型 key / AsyncTavilyClient 构造）已替换为计数器探针，计数全 0 才说明 dry-run 真的没碰凭据；不是口头声明",
+    "tavily_key_resolutions": 0
+  },
+  "credit_estimate": {
+    "free_tier_credits_per_month": 1000,
+    "note": "按官方计费规则推算，不是实测扣费；本次运行实际扣 0 credits。缓存命中不扣额度，真实次数以 CallBudget.calls_made 为准。",
+    "per_search_credits": 2,
+    "search_depth": "advanced",
+    "source": "https://docs.tavily.com/documentation/api-credits",
+    "worst_case_credits_per_company": 24,
+    "would_be_requests_without_cache": 12
+  },
+  "graph": {
+    "company": "Notion",
+    "degraded": true,
+    "degraded_sections": [
+      "company",
+      "industry",
+      "financial",
+      "news"
+    ],
+    "evidence_verdict": {
+      "company": "degraded",
+      "financial": "degraded",
+      "industry": "degraded",
+      "news": "degraded"
+    },
+    "node_trace": [
+      "grounding",
+      "research",
+      "curate",
+      "evidence_check",
+      "rewrite_query",
+      "research",
+      "curate",
+      "evidence_check",
+      "rewrite_query",
+      "research",
+      "curate",
+      "evidence_check",
+      "degrade",
+      "briefing"
+    ],
+    "report_chars": 175,
+    "research_runs": 3,
+    "retry_count": {
+      "company": 2,
+      "financial": 2,
+      "industry": 2,
+      "news": 2
+    }
+  },
+  "guard": {
+    "blocked_connection_attempts": 0,
+    "label": "S8 dry-run",
+    "rule": "仅放行 127.* / ::1 / localhost，其余连接记录并抛错",
+    "socket_connect_restored": true
+  },
+  "not_measured": [
+    "AsyncTavilyClient.search() 的真实返回结构与字段名",
+    "score 实际分布 / content 长度 / 异常形态",
+    "真实 p95 延迟、单次成本、真实准确率与幻觉率",
+    "真实检索结果落盘缓存后的复用率"
+  ],
+  "provenance": "S8.1 synthetic-free dry-run: 完整 LangGraph 运行，0 次真实 Tavily/模型调用，query 清单采集自生产检索路径 CallBudget.queries；不是检索结果、不是评测分数",
+  "queries": [
+    {
+      "cache_hit": false,
+      "cache_key": "2770f7cfa6349eeddeebd918",
+      "dry_run": true,
+      "executed": false,
+      "query": "Notion company overview background products",
+      "section": "company"
+    },
+    {
+      "cache_hit": false,
+      "cache_key": "41f37c01abf5998b9ab06836",
+      "dry_run": true,
+      "executed": false,
+      "query": "Notion company overview background products refined round 1",
+      "section": "company"
+    },
+    {
+      "cache_hit": false,
+      "cache_key": "91bd428192f27d25fe6da17a",
+      "dry_run": true,
+      "executed": false,
+      "query": "Notion company overview background products refined round 2",
+      "section": "company"
+    },
+    {
+      "cache_hit": false,
+      "cache_key": "5f73c186be4b7bede1078adf",
+      "dry_run": true,
+      "executed": false,
+      "query": "Notion financial results revenue funding valuation",
+      "section": "financial"
+    },
+    {
+      "cache_hit": false,
+      "cache_key": "bc5899cfdccd1540552b38ba",
+      "dry_run": true,
+      "executed": false,
+      "query": "Notion financial results revenue funding valuation refined round 1",
+      "section": "financial"
+    },
+    {
+      "cache_hit": false,
+      "cache_key": "ec5d85552e5682d1a13ddb9d",
+      "dry_run": true,
+      "executed": false,
+      "query": "Notion financial results revenue funding valuation refined round 2",
+      "section": "financial"
+    },
+    {
+      "cache_hit": false,
+      "cache_key": "bac6509195fe919f02b56681",
+      "dry_run": true,
+      "executed": false,
+      "query": "Notion industry market landscape competitors",
+      "section": "industry"
+    },
+    {
+      "cache_hit": false,
+      "cache_key": "5b92fc011f6641a928a36faa",
+      "dry_run": true,
+      "executed": false,
+      "query": "Notion industry market landscape competitors refined round 1",
+      "section": "industry"
+    },
+    {
+      "cache_hit": false,
+      "cache_key": "5f15a35f820e099f4c16d308",
+      "dry_run": true,
+      "executed": false,
+      "query": "Notion industry market landscape competitors refined round 2",
+      "section": "industry"
+    },
+    {
+      "cache_hit": false,
+      "cache_key": "bcfb9fa25ed24667e2774921",
+      "dry_run": true,
+      "executed": false,
+      "query": "Notion recent news announcements partnerships",
+      "section": "news"
+    },
+    {
+      "cache_hit": false,
+      "cache_key": "48802ec3a16bfee7dcdbebb1",
+      "dry_run": true,
+      "executed": false,
+      "query": "Notion recent news announcements partnerships refined round 1",
+      "section": "news"
+    },
+    {
+      "cache_hit": false,
+      "cache_key": "3b0b976d9c7d8b186346500c",
+      "dry_run": true,
+      "executed": false,
+      "query": "Notion recent news announcements partnerships refined round 2",
+      "section": "news"
+    }
+  ],
+  "queries_sorted_by": [
+    "query",
+    "section",
+    "cache_key"
+  ],
+  "schema_version": 1,
+  "settings": {
+    "app_mode": "live",
+    "live_dry_run": true,
+    "live_enabled": false,
+    "live_max_calls_per_run": 0,
+    "max_results_per_query": 3,
+    "max_retry": 2,
+    "search_depth": "advanced",
+    "sections": [
+      "company",
+      "industry",
+      "financial",
+      "news"
+    ],
+    "structured_output": false,
+    "topics": {
+      "financial_analyzer": "finance",
+      "news_analyzer": "news"
+    }
+  }
+}
