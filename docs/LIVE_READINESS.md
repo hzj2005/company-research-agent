@@ -1,9 +1,13 @@
 # S8.0 / S8.1 真实实测准备度报告
 
-> 生成日期：2026-11-14。本文件只记录**只读体检**与 **dry-run 预演**结果。
-> 截至本文，**0 次真实 Tavily 调用、0 次真实模型调用、0 credits 消耗**；
-> 未读取、未打印、未写入 `TAVILY_API_KEY` 或任何模型 key。
-> S8.2 起需要用户明确放行，见第 6 节。
+> 生成日期：2026-11-14（S8.0/S8.1）；同日晚补充 S8.2 实测，见**第 8 节**。
+> **第 1–7 节是当时的历史快照，保留不改**：其中的「0 次真实调用」「真实返回结构未实测」
+> 描述的都是 S8.2 之前的状态，不要当成当前状态引用。
+>
+> **当前累计**：**1 次真实 Tavily 调用**（`advanced`，2 credits）、**0 次真实模型调用**。
+> 密钥只在实调那一次运行时从用户级变量映射进进程内存，未打印、未落盘、未提交。
+> 用户 2026-11-14 21:20 拍板：模型用阿里云百炼 `qwen-plus`、Tavily 放行 2–20 credits、
+> 真实 golden 由助手查 5 家×5 条候选后交用户人工复核（详见第 6 节末）。
 
 ---
 
@@ -95,13 +99,21 @@ query 清单采集自**生产检索路径** `CallBudget.queries`
 缓存命中不扣额度，真实次数以 `CallBudget.calls_made` 为准。
 **本次运行实际扣 0 credits。**
 
-## 6. 阻塞项：S8.2 之前需要用户拍板
+## 6. 历史阻塞项：S8.2 之前需要用户拍板（2026-11-14 21:20 已拍板）
 
 | # | 决策 | 不替用户决定的原因 | 建议默认 |
 |---|---|---|---|
 | Q1 | 模型 key 用哪个 provider、是否允许产生费用 | 只从环境变量读，项目不存密钥；用户明确「谨慎使用、非必要不调用」 | 暂不给 → 只做检索层实测，不写模型准确率类数字 |
 | Q2 | 是否放行 Tavily 额度、放行多少 | 免费额度有限，且 `advanced` 是 2 credits/次 | 先 `TAVILY_MAX_CALLS=1` 验证返回结构（2 credits），确认后再决定是否扩到 3–5 家 |
 | Q3 | 真实 golden 谁标、标多少家 | 人工核验的标准答案不能由模型自己生成（循环论证） | 先 5 家 × 5 事实跑通口径，再决定是否扩到 30–50 家 |
+
+**拍板结果（2026-11-14 21:20）**：
+
+| 决策 | 用户选择 | 执行情况 |
+|---|---|---|
+| Q1 模型 provider | 阿里云百炼 DashScope，`qwen-plus` | `config/loader.py` 新增 `dashscope` provider + `LLM_BASE_URL` / `LLM_MODEL`；`LLM_PROVIDER` 锁定后不回退到其他 key。**尚未发起模型调用**（0 次） |
+| Q2 Tavily 额度 | 放行 2–20 credits | S8.2 只花 **2 credits**（1 次 `advanced`），见第 8 节；剩余额度未动 |
+| Q3 真实 golden | 助手查 5 家×5 条候选、用户复核 | `evals/golden_live_draft.jsonl` 已产出 25 条候选，全部 `pending_human_review`、0 条已核验，**复核前禁止作为指标来源** |
 
 另外两条如实边界：
 
@@ -114,3 +126,44 @@ S8.0/S8.1 **没有**产出任何真实准确率、幻觉率、延迟、成本或
 `evals/scorecard.json` 里的 `1.000` 是 fixture 合成语料上的契约回归分，
 **不能**写进简历当准确率。简历里的效果数字必须来自 S8.2 之后、
 且能由 `docs/RESUME_EVIDENCE.md` 里的命令当场复现；复现不了就标「未测」。
+
+---
+
+## 8. S8.2 单次真实调用实测（2026-11-14 21:29，2 credits）
+
+**做了什么**：`uv run python -m evals.live_probe` 经**生产检索路径**
+（`make_document_tool` → `TavilyRetriever._aget_relevant_documents`）发出 1 次
+`advanced` 检索，query = `Notion company overview background products`，
+`max_results=3` / `topic=general`。产物 `evals/live_probe.json`。
+
+**额度硬约束（非口头声明）**：`CallBudget(1)` + `RecordingClient` 在第 2 次
+`search()` 调用处直接抛错；实测 `calls_made=1`、`sdk_search_invocations=1`、
+`dry_runs=0`。同一 query 立刻再跑一次命中磁盘缓存 → `cache_hits=1`，
+**后续复现不再扣额度**（缓存在 gitignored `evals/cache/tavily/`）。
+
+**此前最大的未知已坐实**：`search()` 返回的顶层字段为
+`query / follow_up_questions / answer / images / results / response_time / request_id`；
+`results` 是 list，本次 3 条，每条含 `url / title / content / score`（另有
+`id`、`raw_content=None`）。`capabilities/tavily_retriever.py:documents_from_results`
+对 `response["results"]` 的**假设成立**：`contract_ok=true`，转出 3 个 Document，
+`metadata_keys = [score, section, source, title, url]`，全部有 URL；
+score 分布 `0.7174–0.8146`，content 长度 `794–2011` 字符。
+分数都高于 `evidence.min_relevance_score=0.4`，说明该阈值在本次样本下不会误杀，
+但**1 个样本不能推断分布**。
+
+**密钥处理**：只在运行那一次用 `winreg` 读 Windows 用户级变量并在**进程内存**中
+映射为 `TAVILY_API_KEY`；脚本自身拒绝去注册表取 key（无 key 直接抛错，有测试）。
+产物不含正文、完整 URL、`tvly-` / `sk-` 任何密钥串；已用正则核对。
+
+**计费**：官方 `advanced = 2 credits/次` × 1 次 = **2 credits（推算，不是账单）**。
+官方未列单价的 `fast` / `ultra-fast` 依旧标 `null`，不猜数字。
+
+**如实边界**：
+
+1. 仅 **1 次请求 / 1 家公司 / 1 个栏目**，不产出 p95、平均成本、成功率或稳定性结论。
+2. **0 次真实模型调用**：`qwen-plus` 的 `with_structured_output` 兼容性只做了
+   0 调用构造验证（`tests/test_s8_dashscope.py`），尚未真调。
+3. **没有产出真实准确率 / 幻觉率**：真实 golden 仍是待复核草稿，
+   且 S7 的逐字匹配口径对真实报告不适用，S8.4 需先解决语义 judge 口径。
+4. S7 `scorecard.json` 的 `1.000` 仍是合成语料契约回归分，**不得写进简历**。
+5. 用户放行上限 20 credits，本阶段只用了 2，剩余未动。

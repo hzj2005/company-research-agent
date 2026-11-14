@@ -140,7 +140,7 @@ class Settings(_Strict):
 class LLMCredentials(_Strict):
     """模型凭据。刻意**不进 Settings**：避免 `model_dump()` / 日志把密钥带出去。"""
 
-    provider: Literal["openrouter", "openai", "gemini"]
+    provider: Literal["openrouter", "dashscope", "openai", "gemini"]
     api_key: SecretStr
     base_url: str | None = None
 
@@ -153,33 +153,57 @@ class MissingLLMCredentials(RuntimeError):
 
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+# 阿里云百炼 DashScope 的 OpenAI 兼容端点；用 ChatOpenAI + base_url 接入，
+# 不引入额外 SDK。可用 LLM_BASE_URL 覆盖（例如代理或其他兼容服务）。
+DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+
+_LLM_PROVIDERS: tuple[tuple[str, str, str | None], ...] = (
+    ("openrouter", "OPENROUTER_API_KEY", OPENROUTER_BASE_URL),
+    ("dashscope", "DASHSCOPE_API_KEY", DASHSCOPE_BASE_URL),
+    ("openai", "OPENAI_API_KEY", None),
+    ("gemini", "GEMINI_API_KEY", None),
+)
 
 
 def resolve_llm_credentials(
     environ: Mapping[str, str] | None = None,
 ) -> LLMCredentials:
-    """按 OpenRouter → OpenAI → Gemini 顺序解析凭据；业务代码禁止直接 `os.getenv`。
+    """按 OpenRouter → DashScope → OpenAI → Gemini 顺序解析凭据。
 
-    `environ` 显式传入时只读该映射（测试用，避免本机 `.env` 污染）；否则加载 `.env`
-    后读进程环境。缺 key 直接抛 `MissingLLMCredentials`，不静默回退到 fixture。
+    - `LLM_PROVIDER` 可显式锁定 provider；锁定后**不**回退到其他 key（避免
+      本机装了多个 key 时静默打到错误的服务商，白烧额度）。
+    - `LLM_BASE_URL` 可覆盖 OpenAI 兼容端点的 base_url。
+    - `environ` 显式传入时只读该映射（测试用，避免本机 `.env` 污染）；否则
+      加载 `.env` 后读进程环境。缺 key 抛 `MissingLLMCredentials`，不静默回退。
     """
     if environ is None:
         load_dotenv(DEFAULT_ENV_PATH, override=False)
     env = environ if environ is not None else os.environ
-    for provider, var in (
-        ("openrouter", "OPENROUTER_API_KEY"),
-        ("openai", "OPENAI_API_KEY"),
-        ("gemini", "GEMINI_API_KEY"),
-    ):
+    explicit = (env.get("LLM_PROVIDER") or "").strip().lower()
+    known = [p for p, _, _ in _LLM_PROVIDERS]
+    if explicit and explicit not in known:
+        raise MissingLLMCredentials(
+            f"未知 LLM_PROVIDER={explicit!r}；可选：{known}"
+        )
+    override_base = (env.get("LLM_BASE_URL") or "").strip()
+    for provider, var, default_base in _LLM_PROVIDERS:
+        if explicit and provider != explicit:
+            continue
         raw = (env.get(var) or "").strip()
-        if raw:
-            return LLMCredentials(
-                provider=provider,
-                api_key=SecretStr(raw),
-                base_url=OPENROUTER_BASE_URL if provider == "openrouter" else None,
-            )
+        if not raw:
+            if explicit:
+                raise MissingLLMCredentials(
+                    f"LLM_PROVIDER={provider}，但缺少 {var}；拒绝回退到其他 provider"
+                )
+            continue
+        return LLMCredentials(
+            provider=provider,
+            api_key=SecretStr(raw),
+            base_url=override_base or default_base,
+        )
     raise MissingLLMCredentials(
-        "live 模式需要 OPENROUTER_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY 之一；"
+        "live 模式需要 OPENROUTER_API_KEY / DASHSCOPE_API_KEY / "
+        "OPENAI_API_KEY / GEMINI_API_KEY 之一；"
         "无 key 请设 APP_MODE=fixture，不会自动回退"
     )
 

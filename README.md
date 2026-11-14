@@ -5,7 +5,7 @@
 >
 > **What this fork adds**: a LangGraph state workflow with evidence-sufficiency checks, a bounded self-correction loop, per-section abstention instead of fabrication, reducer-based parallel writes and real SQLite checkpointing (`graph/`, `capabilities/`, `persistence/`, `config/`, `tests/`). Design and measured baseline: [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md), [`docs/BASELINE.md`](docs/BASELINE.md).
 >
-> **Current status — read before running**: the new graph runs in `fixture` mode on synthetic data and needs no API key (`uv run python -m graph.run --case sparse --show-report`). Since S5-B both **FastAPI `/research` and the LangGraph Studio entry point to the new graph**; `/research` currently consumes only `company` (legacy fields such as `industry` or a request-body API key are ignored). `briefing` runs a real `with_structured_output` LCEL chain against a **local deterministic mock backend**, not a real model. **Zero live Tavily / model calls have been made** — real retrieval is behind a three-way opt-in (`APP_MODE=live` + `TAVILY_LIVE_ENABLED=true` + `TAVILY_MAX_CALLS>0`), a hard per-run call budget and a disk cache, to protect the free quota. S8.0 read-only audit and S8.1 zero-request dry-run are done; no accuracy, latency or cost figures are claimed until live evaluation (S8.2+) is explicitly approved and actually runs.
+> **Current status — read before running**: the new graph runs in `fixture` mode on synthetic data and needs no API key (`uv run python -m graph.run --case sparse --show-report`). Since S5-B both **FastAPI `/research` and the LangGraph Studio entry point to the new graph**; `/research` currently consumes only `company` (legacy fields such as `industry` or a request-body API key are ignored). `briefing` runs a real `with_structured_output` LCEL chain against a **local deterministic mock backend**, not a real model. **Exactly 1 real Tavily search has been made** (S8.2, `advanced` = 2 credits, response-structure verification only) and **0 real model calls**. Real retrieval stays behind a three-way opt-in (`APP_MODE=live` + `TAVILY_LIVE_ENABLED=true` + `TAVILY_MAX_CALLS>0`), a hard per-run call budget and a disk cache. S8.0 read-only audit, S8.1 zero-request dry-run and S8.2 single-call probe are done; **no accuracy, latency or cost figures are claimed** — the human-verified golden set is still a draft awaiting review (`evals/golden_live_draft.jsonl`).
 
 An agentic research tool that turns a company name into a structured, source-backed briefing. The FastAPI backend coordinates specialized research and synthesis steps; the React interface tracks the job and lets you export the finished report as a PDF.
 
@@ -86,9 +86,9 @@ uv run python -m evals.run_eval --compare evals/scorecard.json --output evals/sc
 
 The evaluator refuses to start unless `APP_MODE=fixture` and installs a non-loopback `socket.connect` guard while running, so it cannot consume Tavily or LLM quota even if configuration is changed by mistake. Measured: `tavily=0, llm=0, blocked_connection_attempts=0`.
 
-## Live readiness / dry-run (S8.0–S8.1)
+## Live readiness and first real call (S8.0–S8.2)
 
-No live call has been made. `S8.0` is a read-only audit and `S8.1` is a **0-request dry-run** of the full graph:
+`S8.0` is a read-only audit and `S8.1` is a **0-request dry-run** of the full graph:
 
 ```bash
 uv run python -m evals.live_dryrun     # -> evals/live_dryrun.json
@@ -96,7 +96,11 @@ uv run python -m evals.live_dryrun     # -> evals/live_dryrun.json
 
 It needs **no API key and no quota**: `TAVILY_DRY_RUN=true` is an isolated path that forces a sentinel client (never constructs `AsyncTavilyClient`), records the 12 queries a full run would issue together with their sha256 cache keys, and proves `calls_made=0` with a socket guard plus credential-usage counters. See `docs/LIVE_READINESS.md` for the audit (including the `/models` egress risk and the SDK signature check).
 
-Tavily's published pricing is **1 credit per `basic` search / 2 credits per `advanced` search** (1000 free credits/month). This project defaults to `advanced`, so one full research run is at worst 12 requests ≈ **24 credits per company** without cache — an estimate, not a measured charge; the dry-run itself spent **0 credits**. Real measurement (S8.2+) is deliberately blocked until the API keys and quota are explicitly approved.
+Tavily's published pricing is **1 credit per `basic` search / 2 credits per `advanced` search** (1000 free credits/month). This project defaults to `advanced`, so one full research run is at worst 12 requests ≈ **24 credits per company** without cache — an estimate, not a measured charge.
+
+**S8.2 (approved, 2 credits)**: `evals/live_probe.py` made **exactly one** real `advanced` search through the production retrieval path, hard-capped by `CallBudget(1)` and a `RecordingClient` that blocks a second SDK invocation. Result: `response["results"]` assumption confirmed, 3 results with `url/title/content/score` present (plus `id`, `raw_content`), scores `0.717–0.815`, content `794–2011` chars, `documents_from_results` produced 3 Documents. `evals/live_probe.json` contains **structure only** — no body text, no full URLs, no keys. The real response is cached under the gitignored `evals/cache/tavily/`, so the same query reproduces offline at **0 further credits**. Still **0 model calls** and **no accuracy/latency/cost claim**.
+
+Model provider for live mode is Alibaba Cloud DashScope via its OpenAI-compatible endpoint (`LLM_PROVIDER=dashscope`, `LLM_MODEL=qwen-plus`, `LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1`). Keys stay in OS user variables and are mapped into the process only when a live run is explicitly invoked; see `.env.example`.
 
 ## Prerequisites
 
@@ -112,7 +116,7 @@ verified by socket-level guards in `tests/test_s5_offline.py`.
 
 - Python 3.11 (`.python-version`; the reworked graph and its tests are pinned to 3.11)
 - Node.js 18 or later — only for the upstream React UI
-- `TAVILY_API_KEY` — **optional, and deliberately hard to spend**: set it at OS user level, not in `.env`. Real calls additionally require `APP_MODE=live`, `TAVILY_LIVE_ENABLED=true` and `TAVILY_MAX_CALLS>0`; see `docs/ACTION_PLAN.md` §9.2. This project has made **0 live calls** so far.
+- `TAVILY_API_KEY` — **optional, and deliberately hard to spend**: set it at OS user level, not in `.env`. Real calls additionally require `APP_MODE=live`, `TAVILY_LIVE_ENABLED=true` and `TAVILY_MAX_CALLS>0`; see `docs/ACTION_PLAN.md` §9.2. So far this project has made **1 live Tavily call (2 credits) and 0 model calls**.
 - A model key (OpenRouter / OpenAI / Gemini) — only for `live`; none is configured in this workspace. With `APP_MODE=live` and no model key, `build_graph()` fails **at construction time** with `MissingLLMCredentials`; to exercise live retrieval alone, also set `FEATURES_STRUCTURED_OUTPUT=false`.
 - `TAVILY_MAX_CALLS` is a **per-run** budget: each `/research` request builds its own graph and `CallBudget`, while the Studio entry holds one process-wide instance. Real-call accounting must be read from `CallBudget.calls_made`, not inferred from the config value.
 - Google Maps / MongoDB — upstream UI features only; not used by the new graph.

@@ -324,8 +324,29 @@
 | 全量回归 | `135 passed`（97 + 24 + 14）；`uv pip check` 兼容；工作区干净 |
 
 **S8.0/S8.1 如实边界**：不产出任何真实准确率 / 幻觉率 / 延迟 / 成本 / 真实检索语料；
-`scorecard.json` 的 `1.000` 仍只是 fixture 契约回归分。S8.2 起需用户拍板
-（模型 key、Tavily 额度、真实 golden），未放行前不执行。详见 `docs/LIVE_READINESS.md`
-与 `docs/ACTION_PLAN.md` 12.6。
+`scorecard.json` 的 `1.000` 仍只是 fixture 契约回归分。用户已于同日 21:20 拍板
+（模型 key、Tavily 额度、真实 golden），S8.2 已执行，见第 17 节。
+本节保留为当时 0 调用状态的历史快照。详见 `docs/LIVE_READINESS.md`
+与 `docs/ACTION_PLAN.md` 12.6 / 12.7。
+
+## 17. S8.2 单次真实实测记录（2026-11-14，1 次调用 / 2 credits）
+
+| 项 | 实测 |
+|---|---|
+| 阿里云适配（0 调用） | `config/loader.py` 增 `dashscope` provider、`LLM_PROVIDER` 锁定不回退、`LLM_BASE_URL` 覆盖；`settings.yaml` 模型角色改 `${LLM_MODEL:-...}`（默认值不变）；`tests/test_s8_dashscope.py` 10 例验证 `qwen-plus` + DashScope 端点，MockTransport + 禁网守卫 0 连接 |
+| 用户 key 体检 | 用户级变量名是 `SYSTEM_ALIYUN_APIKEY`（长度 117）、`BASE_URL` 指向 DashScope 兼容端点；当前进程未继承，运行时映射为 `DASHSCOPE_API_KEY` 注入内存，不落盘、不打印、不提交 |
+| 单次真实检索 | `evals/live_probe.py`：`CallBudget(1)` + `RecordingClient` 双上限；`calls_made=1`、`sdk_invocations=1`、`cache_hits=1`（第二次命中缓存 0 额外扣费） |
+| 返回结构 | 顶层 `query/follow_up_questions/answer/images/results/response_time/request_id`；`results` 3 条，含 `url/title/content/score`（另 `id`、`raw_content=None`）；`contract_ok=true` |
+| Document 契约 | `documents_from_results` 转出 3 个，`metadata_keys=[score,section,source,title,url]`，全部有 URL；score `0.7174–0.8146`、content `794–2011` 字符 |
+| 计费 | `advanced` 2 credits/次 × 1 = **2 credits（官方规则推算，非账单）**；用户放行上限 20，剩余未动 |
+| 脱敏 | `evals/live_probe.json` 只含结构统计，无正文 / 完整 URL / 密钥串（正则核对 `tvly-`、`sk-` 均无）；真实响应缓存在 gitignored `evals/cache/tavily/` |
+| 真实 golden 草稿 | `evals/golden_live_draft.jsonl` 25 条候选（5 家×5），全部 `pending_human_review`、`human_verified_claims=0`、7 处来源冲突如实列出；`tests/test_s8_golden_draft.py` 7 例阻止草稿被接进评测台 |
+| 全量回归 | `160 passed`（97+24+14+10+8+7）；golden `--check` 同步；scorecard 重生成门禁 `PASS`；`uv pip check` 103 包兼容 |
+
+**如实边界**：**0 次真实模型调用**（`qwen-plus` 的 `with_structured_output` 只做了
+0 调用构造验证）；1 次请求 / 1 家公司 / 1 栏目，不产出 p95、平均成本或稳定性；
+真实 golden 未经人工复核，**不是标准答案**；S7 逐字匹配口径对真实报告不适用
+（S8.4 需语义 judge）。**累计仍未产出任何真实准确率 / 幻觉率 / 延迟 / 成本数字**，
+简历效果数字必须等 S8.3 之后可复现实测。
 
 **S7 如实边界（最重要）**：这是**合成语料上的契约回归测试**，不是模型能力评测。golden 与被测系统读同一份 fixture，baseline 满分是「按规范把给定文档搬进报告并加对引用」的必然结果，**不得写成「准确率 100%」进简历**。`citation_traceability` 是词法包含代理而非语义蕴含；`hallucination_rate` 是它的互补值而非独立证据；`cost_per_report=0`、`p95_latency_ms` 为本机耗时，都不是真实成本/延迟。原计划「30–50 家真实公司 × 5 事实」的 golden 未做（无 key / 无真实语料，硬编即造假），归 S8；换 `EVAL_DATASET_PATH` 即可复用脚本。`no_inline_citations` 组的 `hallucination_rate=1.0` 属「故意关掉引用」的负向对照，不是默认配置的幻觉率。内容级语义 judge、真实指标、S9 简历仍未开工。

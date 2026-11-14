@@ -1,0 +1,184 @@
+{
+  "status": "ok",
+  "purpose": "S8.2 单次真实调用，核对 search() 返回结构与 Document 契约",
+  "company": "Notion",
+  "section": "company",
+  "query": "Notion company overview background products",
+  "request": {
+    "query": "Notion company overview background products",
+    "max_results": 3,
+    "search_depth": "advanced",
+    "topic": "general"
+  },
+  "response_shape": {
+    "is_dict": true,
+    "top_level_keys": {
+      "query": "str",
+      "follow_up_questions": "NoneType",
+      "answer": "NoneType",
+      "images": "list",
+      "results": "list",
+      "response_time": "float",
+      "request_id": "str"
+    },
+    "results_is_list": true,
+    "results_count": 3,
+    "results": [
+      {
+        "is_dict": true,
+        "keys": {
+          "url": "str",
+          "title": "str",
+          "content": "str",
+          "score": "float",
+          "raw_content": "NoneType",
+          "id": "str"
+        },
+        "has_url": true,
+        "url_host": "research.contrary.com",
+        "url_sha256_12": "fde8d7dd5451",
+        "has_title": true,
+        "content_chars": 2011,
+        "score": 0.8146434,
+        "extra_keys": [
+          "id",
+          "raw_content"
+        ]
+      },
+      {
+        "is_dict": true,
+        "keys": {
+          "url": "str",
+          "title": "str",
+          "content": "str",
+          "score": "float",
+          "raw_content": "NoneType",
+          "id": "str"
+        },
+        "has_url": true,
+        "url_host": "www.cbinsights.com",
+        "url_sha256_12": "e8044b3191cf",
+        "has_title": true,
+        "content_chars": 796,
+        "score": 0.76559335,
+        "extra_keys": [
+          "id",
+          "raw_content"
+        ]
+      },
+      {
+        "is_dict": true,
+        "keys": {
+          "url": "str",
+          "title": "str",
+          "content": "str",
+          "score": "float",
+          "raw_content": "NoneType",
+          "id": "str"
+        },
+        "has_url": true,
+        "url_host": "pitchbook.com",
+        "url_sha256_12": "3704c25a9107",
+        "has_title": true,
+        "content_chars": 794,
+        "score": 0.717408,
+        "extra_keys": [
+          "id",
+          "raw_content"
+        ]
+      }
+    ],
+    "other_top_level_fields": {
+      "query": [
+        "str",
+        "Notion company overview background products"
+      ],
+      "follow_up_questions": [
+        "NoneType",
+        null
+      ],
+      "answer": [
+        "NoneType",
+        null
+      ],
+      "images": [
+        "list",
+        null
+      ],
+      "response_time": [
+        "float",
+        1.92
+      ],
+      "request_id": [
+        "str",
+        "465afd3d-43ad-4537-9517-ab81109149cc"
+      ]
+    },
+    "contract_ok": true,
+    "contract_note": "假设 response['results'] 是 list，且每条含 url/title/content/score"
+  },
+  "document_contract": {
+    "documents_from_results_count": 3,
+    "metadata_keys": [
+      "score",
+      "section",
+      "source",
+      "title",
+      "url"
+    ],
+    "score_min": 0.717408,
+    "score_max": 0.8146434,
+    "all_have_url": true
+  },
+  "budget": {
+    "max_calls": 1,
+    "calls_made": 1,
+    "cache_hits": 1,
+    "dry_runs": 0,
+    "sdk_search_invocations": 1,
+    "queries": [
+      {
+        "query": "Notion company overview background products",
+        "section": "company",
+        "cache_key": "2770f7cfa6349eeddeebd918",
+        "cache_hit": false,
+        "executed": true,
+        "dry_run": false
+      },
+      {
+        "query": "Notion company overview background products",
+        "section": "company",
+        "cache_key": "2770f7cfa6349eeddeebd918",
+        "cache_hit": true,
+        "executed": false,
+        "dry_run": false
+      }
+    ]
+  },
+  "cache": {
+    "dir": "./evals/cache/tavily (gitignore，含真实响应，禁止提交)",
+    "files": [
+      "2770f7cfa6349eeddeebd918.json"
+    ],
+    "second_call_hit_cache": true,
+    "note": "命中缓存不扣额度；后续同一 query 可离线复现"
+  },
+  "credits": {
+    "depth": "advanced",
+    "per_search_credits": 2,
+    "estimated_credits_used": 2,
+    "source": "https://docs.tavily.com/documentation/api-credits",
+    "unknown_reason": null,
+    "note": "官方计费规则推算，不是实测扣费账单"
+  },
+  "credentials": {
+    "key_source": "process env TAVILY_API_KEY (injected at runtime)",
+    "key_printed": false,
+    "key_written_to_output": false
+  },
+  "caveats": [
+    "仅 1 次真实请求、1 家公司、1 个栏目，不能推断稳定性、p95 或平均成本",
+    "本产物只含结构统计，不含检索正文或完整 URL",
+    "未调用任何模型，不产出准确率 / 幻觉率数字"
+  ]
+}

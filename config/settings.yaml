@@ -52,10 +52,12 @@ models:
   temperature: 0
   max_retries: 1                  # 结构化输出校验失败后的重试次数
   roles:
-    research: ${OPENROUTER_MODEL:-google/gemini-3.8-flash}
-    briefing: ${OPENROUTER_MODEL:-google/gemini-3.8-flash}
-    editor: ${OPENROUTER_MODEL:-google/gemini-3.8-flash}
-    judge: ${OPENROUTER_MODEL:-google/gemini-3.8-flash}
+    # LLM_MODEL 由运行环境指定（阿里云百炼用 qwen-plus，OpenRouter 用
+    # google/gemini-3.8-flash）；默认值保持上游原样，不改动历史行为。
+    research: ${LLM_MODEL:-google/gemini-3.8-flash}
+    briefing: ${LLM_MODEL:-google/gemini-3.8-flash}
+    editor: ${LLM_MODEL:-google/gemini-3.8-flash}
+    judge: ${LLM_MODEL:-google/gemini-3.8-flash}
   fixture:
     # fixture 模式下不调用任何外部模型，返回确定性结构化输出
     stub: true
