@@ -64,6 +64,9 @@ def make_chat_model(
         kwargs["base_url"] = creds.base_url
     if http_async_client is not None:
         kwargs["http_async_client"] = http_async_client
+        # 注入自定义 transport 后仍让 SDK 再包一层 socket-options transport 会
+        # 打印代理告警并可能改走系统代理；显式传空值保证 mock 链路完全本地。
+        kwargs["http_socket_options"] = ()
     if creds.provider == "openrouter":
         kwargs["default_headers"] = dict(_OPENROUTER_HEADERS)
     return ChatOpenAI(**kwargs)

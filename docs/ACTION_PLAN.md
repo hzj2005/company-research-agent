@@ -29,7 +29,7 @@
 | **S2** | #2 状态契约 | `StateGraph(ResearchState)` + `add_messages` / `merge_docs` reducer；`compile(checkpointer=...)` 接真实 SQLite Saver；`thread_id` 按模板 | `persistence/`、`graph/state.py`、单元测试 | 进程重启后同一 thread 可恢复；并行写回不覆盖；恢复前后 State 一致 | ✅ 已完成（10 个 pytest 全通过） |
 | **S3** | #3 自纠正回路 | `evidence_check` 判定 + `add_conditional_edges` + `retry_count<=2` + `degrade` 降级拒答 | `graph/conditions.py`、`graph/nodes/`、`graph/builder.py`、`graph/run.py`、3 类 fixture 用例 | sparse 样本触发回退并在 2 轮内收敛；empty 样本输出「无公开依据」且不编造 | ✅ 已完成（23 passed） |
 | **S4** | #4 并行与子图 | `research` 换成编译子图，`dispatch` 用 `Send` 按白名单精确派发 4 analyst | `graph/subgraphs/`、白板图（第 7.5 节） | 主图 7 节点可完整画出；reducer 合并可验证 | ✅ 已完成（43 passed，见第 7.7 节） |
-| **S5** | #5 LangChain 深化 | Tavily 封 `BaseRetriever`；`with_structured_output` + 字段置信度 + 校验重试；行内引用 | `capabilities/`、Pydantic schema | 每条 Fact 能对回 source_url；抽取失败自动重试不静默丢字段 | 🔄 进行中（8.1 已完成，见第 8.7 节；计划见第 8 节） |
+| **S5** | #5 LangChain 深化 | Tavily 封 `BaseRetriever`；`with_structured_output` + 字段置信度 + 校验重试；行内引用 | `capabilities/`、Pydantic schema | 每条 Fact 能对回 source_url；抽取失败自动重试不静默丢字段 | ✅ 完成（8.1–8.5，见 8.7 / 9.6；**仅 fixture，live 实测归 S8**） |
 | **S6** | #6 HITL | 成稿前 `interrupt()` 复核 + `Command(resume=...)`；复核留痕导出标注 | `graph/nodes/human_review.py` | 中断→恢复后 State 一致；依赖真实 checkpointer | ⏳ |
 | **S7** | #7 评测台 | golden set（30–50 公司 × 5 事实）、8 项指标、4 组 A/B、scorecard、CI | `evals/`、`.github/workflows/eval.yml` | 一条命令出分，能定位退化用例 | ⏳ |
 | **S8** | #8 真实实测 | **需 key**。切 `APP_MODE=live`，真实模型 + 真实 Tavily + 真实 DB 跑全量 | 对比表、失败案例、成本/延迟取舍 | 每个数字能由脚本与日志当场复现 | ⏳ 阻塞：等 key |
@@ -207,7 +207,7 @@ START → grounding → [research 子图] → curate → evidence_check
 
 ### 7.6 边界（不谎称）
 
-- 仍是 fixture 模板简报，不接真实 LLM / Tavily（S5）；对外入口仍指原版图（用户拍板 S5 再切）；内容级 `citation_traceability` 仍归 S7。
+- 仍是 fixture 模板简报，不接真实 LLM / Tavily（S5）；对外入口仍指原版图（用户拍板 S5 再切）；内容级 `citation_traceability` 仍归 S7。【S4 历史快照：两个入口已在 S5-B 切到新图，见 9.6】
 - **不写「主图从 11 节点收敛到 6～7」**：原版 11 节点图本项目并未重建，S3 起主图本来就是 7 节点。S4 的真实变化是「把 research 单节点换成 4 路 Send 并行子图，并让精确回退由图编排而非 Python 过滤实现」。
 
 ### 7.7 S4 实测结果（2026-11-14 15:10）
@@ -225,7 +225,7 @@ START → grounding → [research 子图] → curate → evidence_check
 
 **实测踩到并修掉的坑**：编译子图直接当主图节点时，若把主图已有的 `review_notes` 传进子图、又由子图输出带回，`append_notes` reducer 会把旧记录重复累加（sparse 首轮 4 条变 8 条）。修法：`StateGraph(..., input_schema=..., output_schema=...)` 隔离子图输入/输出，且 `Send` 只带编排参数、不带累积字段。另实测两个 API 事实：`Send` 必须从 `langgraph.types` 导入（`langgraph.constants` 在 1.2.22 已弃用）；`StateGraph` 的 `input`/`output` 参数也已弃用，应用 `input_schema`/`output_schema`。
 
-**S4 如实边界**：仍是 fixture 模板简报；对外入口仍指原版图（S5 再切）；内容级 `citation_traceability` 仍归 S7。
+**S4 如实边界**：仍是 fixture 模板简报；对外入口仍指原版图（S5 再切）；内容级 `citation_traceability` 仍归 S7。【S4 历史快照：S5-B 起入口已切换，见 9.6】
 
 ### 7.8 S4 复查修正（2026-11-14 15:40，用户要求逐条对账后补）
 
@@ -336,3 +336,70 @@ START → grounding → [research 子图] → curate → evidence_check
 **两个诚实边界**：① 首次构造 `ChatOpenAI` 约 6s 是 SDK 一次性初始化（后续调用 0.02s），不是网络等待；② 这些结果只证明 LangChain 链路与契约正确，**不代表任何真实模型能力**，准确率/延迟/成本一个数字都不写。live 实测仍阻塞在 key（S8）。
 
 **S5 剩余**：8.2 Tavily `BaseRetriever` 与双模式工具工厂、8.3 `briefing` 接结构化输出并消费开关、8.4 两个入口切到新图、8.5 全量验证与文档收尾。
+
+---
+
+## 9. S5-B 执行计划：S5 剩余 8.2–8.5（含 Tavily 额度护栏）
+
+> 制定：2026-11-14 16:36 | 前置：`3e57ebf`（S5.1 完成，55 passed，工作区干净）
+> 用户约束：**`TAVILY_API_KEY` 已设在 Windows 用户变量，谨慎使用、不要把免费额度跑没了，非必要不调用**。
+
+### 9.1 key 现状实测（只查存在性，不读取/打印明文，不发起任何 API 请求）
+
+| 项 | 实测结果 | 影响 |
+|---|---|---|
+| `TAVILY_API_KEY` 用户级 | ✅ 存在（长度 54） | 可供 S8 真实实测使用 |
+| `TAVILY_API_KEY` 当前进程 | ❌ 未继承 | 终端/IDE 需重启才能继承；**本阶段不需要它**，也不写进 `.env` |
+| `OPENROUTER_API_KEY` / `OPENAI_API_KEY` / `GEMINI_API_KEY` / `GEMINI_API_KEY` 用户级与进程级 | ❌ 全部未设置 | live LLM 链路仍不可实跑；8.3 用本地 mock 后端真跑 LCEL，不得写成真实模型结果 |
+
+**结论**：本阶段真实 Tavily 调用次数目标 = **0**，真实模型调用次数 = **0**，并且要有代码级证据（预算计数器 + 测试断言），不能只靠「我没去调」。
+
+### 9.2 额度护栏设计（写进代码，不靠约定）
+
+1. **三重 opt-in**：`APP_MODE=live` + `TAVILY_LIVE_ENABLED=true` + `TAVILY_MAX_CALLS>0`，缺任一律抛 `LiveRetrievalDisabled`，**绝不悄悄回退 fixture**。默认值分别是 `fixture / false / 0`，即「装好 key 也调不动」。
+2. **进程内硬预算**：`CallBudget` 计数，每次真实请求前 `consume()`，用尽抛 `TavilyBudgetExceeded`；暴露 `calls_made / cache_hits / remaining` 供测试与日志核对。
+3. **先查缓存再扣额度**：`(query, params)` 的 sha256 落盘 `evals/cache/tavily/*.json`（加入 `.gitignore`）。命中缓存直接返回 `Document`，**不消耗额度**；S8 真调一次后可反复离线复现。
+4. **dry-run**：`TAVILY_DRY_RUN=true` 只记录「将要发出的 query」并返回空结果，0 次真实请求。
+5. **key 只由环境变量解析**：`config.loader.resolve_tavily_credentials()` 用 `SecretStr`、不进 `Settings`、不写日志、不接收请求体里的 `tavily_api_key`。`/research` 请求体的 key 字段在新图中**明确不消费**（上游遗留字段，文档写清）。
+6. **测试永不用真 client**：注入 fake client / fake retriever；加一条断言 `AsyncTavilyClient` 在 fixture 与测试里从未被实例化。
+
+### 9.3 任务与验收
+
+| # | 动作 | 产出 | 验收标准 |
+|---|---|---|---|
+| 8.2 | `TavilyRetriever(BaseRetriever)` + 预算/缓存/dry-run + 工具工厂双模式 | `capabilities/tavily_retriever.py`、`capabilities/retrieval.py`、`config/{loader,settings}.yaml`、`.env.example`、`tests/test_s5_retriever.py` | 默认配置下真实 client 0 次构造；`max_calls=0` 抛错；`=1` 时第 2 次抛 `TavilyBudgetExceeded`；缓存命中不扣额度；dry-run 0 次请求；fixture 三档零回归 |
+| 8.3 | `briefing` 接结构化输出 + 消费 `features.structured_output` | `capabilities/briefing.py`、`graph/nodes/report.py`、`tests/test_s5_briefing.py` | on 走真 LCEL（fixture 用本地 mock 后端，逐栏目留痕 `structured_extract`）；off 与 S4 报告**逐字一致**（822/829/561）；每条 Fact 的 `source_url` 落在 `references`；降级栏目不编造 |
+| 8.4 | 两个对外入口切到新图 | `langgraph_entry.py`、`application.py`、`AGENT.md` 6.7 例外、`tests/test_s5_entrypoints.py` | 顶层 `graph` 可编译且不带 checkpointer（Server 注入）；`process_research` 用 `CheckpointSession` + `astream(updates)` 写 `job_status`、从 `aget_state` 取到 report（fixture 822 字符）；全程 0 次外部调用 |
+| 8.5 | 全量实测、文档同步、提交 | `ACTION_PLAN` 9.6、`BASELINE` 13、`README`、`AGENT.md`、`commit`、工作区日志 | pytest 全过、三档 + A/B 回归、`uv pip check`、Tavily/模型真实调用计数 = 0 有据可查、工作区干净 |
+
+### 9.4 技术决策（避免上一轮那种「标 ✅ 标早了」）
+
+1. **fixture 也真跑 LCEL**：`briefing` 的结构化分支在 fixture 模式用 `httpx.MockTransport` 注入 `ChatOpenAI`，handler 从 prompt 的 `<documents>` 里把每篇文档确定性转成 `Fact(claim=content, source_url=url, confidence=score)`。这样 `prompt | with_structured_output` 是**真实执行**的，但它是确定性 stub 而非模型能力，文档必须写死这条边界。
+2. **on/off 报告逐字一致是设计目标**：因 stub 的 claim 就是 `doc["content"]`，两条路径渲染结果相同；用 `review_notes` 的 `structured_extract` 留痕 + mock 请求计数证明 on 分支确实走了链路，而不是靠报告差异。
+3. **不在节点内 `asyncio.gather`**：4 个栏目抽取在 `briefing` 内串行 loop（mock 单次 ~0.02s），符合 `AGENT.md` 6.4；不新增子图、不动 S4 的主图结构。
+4. **`initial_state(company)` 之外的上游入参不伪装支持**：`company_url / industry / hq_location / model / 请求体 key` 新图不消费，README 与文档如实写明；`thread_id` 在模板基础上追加 `job_id` 保证并发隔离。
+5. **入口切换不碰 `/config`、`/stream`、PDF 等上游端点**，只替换 `process_research` 的图与 `langgraph_entry.py` 的导出，缩小改动面。
+
+### 9.5 边界（不谎称）
+
+- 本阶段**不发起任何真实 Tavily / 模型调用**；不计任何准确率、延迟、成本数字；live 实测与真实指标仍归 S8，需用户明确放行额度后才执行。
+- fixture 的结构化输出是确定性 stub，**不代表真实模型能力**；`citation_traceability` 内容级判定仍归 S7。
+- S6 HITL、S7 评测台、S9 简历不提前开工、不假装完成。
+
+### 9.6 S5-B 实测结果（2026-11-14，0 次真实 Tavily / 模型调用）
+
+**新增**：`capabilities/{tavily_retriever,briefing}.py`、`tests/test_s5_{retriever,briefing,entrypoints,offline}.py`；改造 `capabilities/{retrieval,llm}.py`、`graph/nodes/report.py`、`config/{loader,settings}.yaml`、`.env.example`、`langgraph_entry.py`、`application.py`、`README.md`、`.gitignore`。
+
+| 验收项 | 实测结果 |
+|---|---|
+| 额度护栏 | 默认 `APP_MODE=fixture / live.enabled=false / max_calls=0`；三重 opt-in 缺一即抛 `LiveRetrievalDisabled`；缺 key 抛 `MissingTavilyCredentials`，**不回退 fixture** |
+| 硬预算 | `max_calls=1` 时第 2 次不同 query 抛 `TavilyBudgetExceeded`，fake client 只收到 1 次；缓存命中 `calls_made` 不增且不会凭空多出额度；dry-run 返回空且 client 0 次调用 |
+| **0 次真实调用的硬证据** | `tests/test_s5_offline.py` 把 `socket.connect` 换成守卫（只放行本地回环，Windows asyncio self-pipe 需要），完整跑一次图仍产出 822 字符报告，被拦截的外部连接次数 = **0**；另有 reload Studio 入口 + 替换 `AsyncTavilyClient` 为抛错哨兵的用例 |
+| 结构化输出双路径 | on 真跑 `prompt \| with_structured_output(SectionBrief)`，三档留痕 4/4/3 条 `structured_extract`；off 与 S4 报告**逐字一致**；12 篇文档截断时 10 条结论全部带 `[n]` |
+| URL 级回溯 | 注入编造 URL 的 `SectionBrief` → `dropped_uncited_facts` + 整栏拒答，报告不含编造内容；后台 `degraded=True` 同样拒答 |
+| 入口切换 | Studio 顶层 `graph` 编译后含 7 个业务节点、`checkpointer=None`（Server 注入）；`process_research` 用 `CheckpointSession` + `astream(updates)` 完成，`current_step` 落在业务节点；**真发 POST `/research`** 端到端完成且报告 822 字符；请求体 key 未被消费/外泄 |
+| 全量回归 | `85 passed`；三档 `822/829/561`、research 1/2/3、引用 8/9/6 与 S4 完全一致；`FEATURES_SELF_CORRECTION=false` 与 `FEATURES_STRUCTURED_OUTPUT=false` 均生效；`uv pip check` 103 包兼容 |
+
+**踩到并修掉的两个真问题**：① `httpx.MockTransport` 的 handler 里把 human 消息按 `role == "human"` 找，但 OpenAI 请求体里是 `role == "user"`，导致 payload 为空、四栏全部误判降级；改为从 `user`/`human` 取并兼容多模态 part list，补了回归用例。② `make_briefing_node` 初版用模块级全局 `_index` 传引用编号，并发下会串号；改为显式传参。另给注入 client 的 `ChatOpenAI` 加 `http_socket_options=()`，消除 SDK 的代理告警。
+
+**如实边界**：`AsyncTavilyClient.search()` 的 live 行为**未实测**（0 次真实请求）；fixture 结构化输出是确定性 stub，不代表模型能力；`citation_traceability` 内容级判定仍归 S7；真实准确率/延迟/成本仍归 S8，需用户明确放行额度。

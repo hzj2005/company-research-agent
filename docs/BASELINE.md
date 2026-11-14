@@ -214,7 +214,7 @@
 | 旧引用边界 | `*_data` 按 URL 累积，「URL 不再返回」的旧引用**移除不掉**：实测第 1 轮 old URL、第 2 轮仅新增 new URL，最终 references 仍含 old。已写 `test_url_that_stops_being_returned_is_retained_as_known_limitation` 如实记录；需按栏目维护「本轮有效 URL 集合」才能解决（S5/S7）。`replace_mapping` 只在「同 URL 新版本被判低分」时移除旧引用，已由真实链路用例覆盖 |
 | 复查后回归 | `46 passed`；三档 `report_chars` 822/829/561、research 1/2/3、引用 8/9/6 零变化 |
 
-**S4 如实边界**：仍是 fixture 模板简报，不接真实 LLM/Tavily；对外入口仍指原版图（S5 再切）；内容级 `citation_traceability` 仍归 S7。主图本来就是 7 节点，不谎称「从 11 节点收敛到 6～7」。
+**S4 如实边界**：仍是 fixture 模板简报，不接真实 LLM/Tavily；对外入口仍指原版图（S5 再切）；内容级 `citation_traceability` 仍归 S7。主图本来就是 7 节点，不谎称「从 11 节点收敛到 6～7」。【S4 历史快照：S5-B 起两个入口已切到新图，见第 13 节】
 
 ---
 
@@ -235,3 +235,22 @@
 **API 事实（前置探针实测）**：`convert_to_openai_tool(SectionBrief)` 可生成 tool spec；`ValidationError` 与 `OutputParserException` 都是 `ValueError` 子类；`GenericFakeChatModel.with_structured_output` 抛 `NotImplementedError`，因此无 key 测试只能走 mock HTTP；`BaseRetriever` 最小子类 `ainvoke` 可用；新图 `astream(stream_mode="updates")` 产出 `{节点名: {字段: 值}}` 共 5 个事件，可直接喂 `application.py` 的 `current_step`；顶层无 checkpointer 的 `build_graph(...).compile()` 有 9 节点可用；`AsyncSqliteSaver.from_conn_string` 返回 async context manager，不能在模块顶层直接当 saver 用。
 
 **S5.1 如实边界**：以上只验证 LangChain 调用链与数据契约，**未调用任何真实模型 / Tavily**，不产出准确率、延迟、成本数字；live 实测仍阻塞在 key（S8）。`Fact.source_url` 只做到 URL 级回溯，内容级 `citation_traceability` 仍归 S7。
+
+---
+
+## 13. S5-B 验证记录（2026-11-14，8.2–8.5；0 次真实 Tavily / 模型调用）
+
+用户明确约束：`TAVILY_API_KEY` 已设在 Windows 用户级变量，谨慎使用、非必要不调用。**实测**：用户级变量存在（长度 54，未读取明文），当前进程未继承；`OPENROUTER/OPENAI/GEMINI` 三组模型 key 均未设置。因此本阶段把「0 次真实调用」做成可验证的代码事实，而不是约定。
+
+| 验证点 | 真实结果 |
+|---|---|
+| 三重 opt-in | 默认 `fixture / enabled=false / max_calls=0`；缺任一抛 `LiveRetrievalDisabled`，缺 key 抛 `MissingTavilyCredentials`，**不回退 fixture** |
+| 硬预算 + 缓存 | 预算 1 时第 2 次不同 query 抛 `TavilyBudgetExceeded`，fake client 只收到 1 次；缓存命中不扣额度也不凭空增加额度；dry-run 0 次 client 调用 |
+| **零外部连接硬证据** | `tests/test_s5_offline.py` 守卫 `socket.connect`（只放行本地回环，Windows asyncio self-pipe 需要），完整跑一次图仍产出 822 字符报告，被拦截的外部连接 = **0**；Studio 入口 reload 时把 `AsyncTavilyClient` 换成抛错哨兵仍通过 |
+| 结构化输出真跑 | on 走 `prompt \| with_structured_output(SectionBrief)`，三档留痕 4/4/3 条；off 与 S4 报告**逐字一致**；12 篇文档截断时 10 条结论全带 `[n]`；编造 URL 被剔除并整栏拒答 |
+| 入口切换 | Studio 顶层图 7 业务节点、`checkpointer=None`（Server 注入）；`process_research` 用 `CheckpointSession` + `astream(updates)`；**真发 POST `/research`** 完成且报告 822 字符，请求体 key 未被消费或外泄 |
+| 回归 | `85 passed`；三档 822/829/561、research 1/2/3、引用 8/9/6 与 S4 一致；两个 A/B 开关生效；`uv pip check` 103 包兼容 |
+
+**本阶段实测踩到并修掉的两个真问题**：① OpenAI 请求体里 human 消息的 role 是 `user` 而非 `human`，mock handler 取错消息 → payload 为空、四栏静默误判降级；改为兼容 `user`/`human` 与多模态 part list，并补回归用例。② `make_briefing_node` 初版用模块级全局 `_index` 传引用编号，并发会串号；改显式传参。另给注入 client 的 `ChatOpenAI` 加 `http_socket_options=()` 消掉 SDK 代理告警。
+
+**S5-B 如实边界**：`AsyncTavilyClient.search()` 的真实行为**未实测**（0 次真实请求）；fixture 结构化输出是确定性 stub，**不代表模型能力**；`/research` 现在只消费 `company`，`company_url/industry/hq_location/model/请求体 key` 均不消费；内容级 `citation_traceability` 仍归 S7；真实准确率/延迟/成本与 S8 实测仍阻塞在「用户明确放行额度」+ 模型 key。

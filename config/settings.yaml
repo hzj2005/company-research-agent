@@ -39,6 +39,14 @@ retrieval:
     enabled: true
     # 预留：后续 A/B 用，先不引入额外依赖
     strategy: score_desc
+  live:
+    # ⚠️ Tavily 免费额度护栏：默认全关，装了 key 也调不动。
+    # 真实调用需同时满足 APP_MODE=live + TAVILY_LIVE_ENABLED=true + TAVILY_MAX_CALLS>0。
+    # 缓存命中不扣额度；dry_run 只记录 query，0 次真实请求。
+    enabled: ${TAVILY_LIVE_ENABLED:-false}
+    max_calls_per_run: ${TAVILY_MAX_CALLS:-0}
+    dry_run: ${TAVILY_DRY_RUN:-false}
+    cache_dir: ${TAVILY_CACHE_DIR:-./evals/cache/tavily}
 
 models:
   temperature: 0

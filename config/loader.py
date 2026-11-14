@@ -85,12 +85,22 @@ class RerankConfig(_Strict):
     strategy: str
 
 
+class LiveRetrievalConfig(_Strict):
+    """Tavily 免费额度护栏。默认值保证「装了 key 也调不动」。"""
+
+    enabled: bool = False
+    max_calls_per_run: int = Field(default=0, ge=0, le=100)
+    dry_run: bool = False
+    cache_dir: str = "./evals/cache/tavily"
+
+
 class RetrievalConfig(_Strict):
     queries_per_analyst: int = Field(ge=1)
     max_results_per_query: int = Field(ge=1)
     search_depth: str
     topics: dict[str, str]
     rerank: RerankConfig
+    live: LiveRetrievalConfig
 
 
 class FixtureConfig(_Strict):
@@ -172,6 +182,44 @@ def resolve_llm_credentials(
         "live 模式需要 OPENROUTER_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY 之一；"
         "无 key 请设 APP_MODE=fixture，不会自动回退"
     )
+
+
+class TavilyCredentials(_Strict):
+    """检索凭据。同样刻意不进 Settings，且不进任何日志。"""
+
+    api_key: SecretStr
+
+    def resolved_key(self) -> str:
+        return self.api_key.get_secret_value()
+
+
+class MissingTavilyCredentials(RuntimeError):
+    """live 检索缺 key；不允许偷偷回退到 fixture。"""
+
+
+def resolve_tavily_credentials(
+    environ: Mapping[str, str] | None = None,
+) -> TavilyCredentials:
+    """只从环境变量 / `.env` 读 TAVILY_API_KEY；业务代码禁止直接 `os.getenv`。
+
+    Windows 用户级变量需要重启终端/IDE 才会被进程继承；读不到时明确报错，
+    不会自动改用请求体传入的 key，也不会悄悄回退 fixture。
+    """
+    if environ is None:
+        load_dotenv(DEFAULT_ENV_PATH, override=False)
+    env = environ if environ is not None else os.environ
+    raw = (env.get("TAVILY_API_KEY") or "").strip()
+    if not raw:
+        raise MissingTavilyCredentials(
+            "live 检索需要 TAVILY_API_KEY（建议只设在用户级环境变量）；"
+            "非必要不调用，无 key 请保持 APP_MODE=fixture"
+        )
+    return TavilyCredentials(api_key=SecretStr(raw))
+
+
+def resolve_live_cache_dir(settings: Settings) -> Path:
+    p = Path(settings.retrieval.live.cache_dir)
+    return p if p.is_absolute() else (ROOT / p).resolve()
 
 
 def load_settings(

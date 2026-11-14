@@ -15,8 +15,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
-from backend.graph import Graph
 from backend.llm import DEFAULT_OPENROUTER_MODEL, OPENROUTER_BASE_URL
+
+# S5-B 起：对外入口指向二次开发的新图（原版 backend/graph.py 保留作 upstream 对照）
+from capabilities.retrieval import make_document_tool
+from config.loader import build_thread_id, get_settings
+from graph.builder import build_graph
+from graph.state import initial_state
+from persistence.checkpointer import CheckpointSession
 from backend.services.mongodb import MongoDBService
 from backend.services.pdf_service import PDFService
 from backend.classes.state import EventQueue, job_status
@@ -102,44 +108,47 @@ async def research(data: ResearchRequest):
         logger.error(f"Error initiating research: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
-async def process_research(job_id: str, data: ResearchRequest):
-    """Process research request asynchronously and store results"""
+async def process_research(job_id: str, data: ResearchRequest, db_path=None):
+    """Process research request asynchronously and store results.
+
+    S5-B：用新图（7 节点 + research 子图）替代原版线性 DAG。
+    `db_path` 仅作测试注入点，让端到端用例落在临时 SQLite 而不污染项目 data/。
+
+    如实边界：新图当前只消费 `company`；上游的 `company_url / industry /
+    hq_location / model / 请求体里的 api_key` 均**不消费**。检索与模型凭据只从
+    环境变量解析（见 config/loader.py），不接收请求体传 key，避免密钥进日志。
+    """
     try:
         if mongodb:
             mongodb.create_job(job_id, data.model_dump(exclude={"tavily_api_key", "openrouter_api_key"}))
-        
-        await asyncio.sleep(0.5)  # Brief delay
-        
+
+        await asyncio.sleep(0.5)  # Brief delay (kept from upstream for SSE startup)
+
         logger.info(f"Starting research for {data.company}")
+        settings = get_settings()
+        # job_id 保证并发请求各有独立 checkpoint 线程，不互相覆盖
+        thread_id = build_thread_id(f"{data.company}:{job_id}", settings=settings)
 
-        graph = Graph(
-            company=data.company,
-            url=data.company_url,
-            industry=data.industry,
-            hq_location=data.hq_location,
-            job_id=job_id,
-            tavily_api_key=data.tavily_api_key,
-            openrouter_api_key=data.openrouter_api_key,
-            model=data.model,
-        )
+        async with CheckpointSession(settings=settings, path=db_path) as session:
+            compiled = session.compile(build_graph(settings, make_document_tool(settings)))
+            config = session.config_for(thread_id)
 
-        final_state = {}
-        
-        # Stream through the graph and update progress
-        async for state in graph.run(thread={}):
-            final_state.update(state)
-            node_name = list(state.keys())[0] if state else 'unknown'
-            logger.debug(f"Node completed: {node_name}")
-            
-            # Update job status with current step
-            job_status[job_id].update({
-                "status": "processing",
-                "current_step": node_name,
-                "last_update": datetime.now().isoformat()
-            })
-        
-        # Extract final report
-        report_content = final_state.get('report') or (final_state.get('editor') or {}).get('report')
+            # astream(updates) 产出 {节点名: {字段: 值}}，直接映射为 current_step
+            async for event in compiled.astream(
+                initial_state(data.company), config=config, stream_mode="updates"
+            ):
+                node_name = next(iter(event), 'unknown') if event else 'unknown'
+                logger.debug(f"Node completed: {node_name}")
+                job_status[job_id].update({
+                    "status": "processing",
+                    "current_step": node_name,
+                    "last_update": datetime.now().isoformat()
+                })
+
+            snapshot = await compiled.aget_state(config)
+            final_state = dict(snapshot.values)
+
+        report_content = final_state.get('report')
         
         if report_content:
             logger.info(f"Research completed. Report length: {len(report_content)}")

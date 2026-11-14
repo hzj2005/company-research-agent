@@ -53,7 +53,7 @@
 4. **禁止在节点内部用 `asyncio.gather` 做本该由图编排的并行**（原版 `briefing.py` 的做法）；并行一律用并行边或 `Send`。
 5. 任何循环**必须**有 `retry_count` 上限（默认 2）与明确降级出口；禁止用「模型自己说够了」当终止条件。
 6. 回退必须精确控制重搜范围，禁止唤醒全部 analyst。S4 用 `Send` 按 `sections_to_research` 白名单动态派发（见 `graph/subgraphs/research.py`）：**`Send` 从 `langgraph.types` 导入**，`langgraph.constants` 在 1.2.22 已弃用。
-7. `compile()` **必须**传 `checkpointer`；`interrupt()` 必须与 checkpointer 同时存在；统一走 `persistence.CheckpointSession.compile()`。**例外**：子图 `compile()` 不另传，运行时继承父图 saver；且子图必须用 `StateGraph(..., input_schema=..., output_schema=...)` 隔离累积字段，否则 `review_notes` 会被主图 reducer 重复累加（S4 实测踩到）。`input`/`output` 旧参数名已弃用。
+7. `compile()` **必须**传 `checkpointer`；`interrupt()` 必须与 checkpointer 同时存在；统一走 `persistence.CheckpointSession.compile()`。**例外一**：子图 `compile()` 不另传，运行时继承父图 saver；且子图必须用 `StateGraph(..., input_schema=..., output_schema=...)` 隔离累积字段，否则 `review_notes` 会被主图 reducer 重复累加（S4 实测踩到）。`input`/`output` 旧参数名已弃用。**例外二**：`langgraph_entry.py` 供 LangGraph Server 加载，模块顶层无法 `await` `AsyncSqliteSaver.from_conn_string()`（它是 async context manager），故由 Server 注入 saver；该例外**只适用于这一个文件**，CLI 与 `application.py` 仍必须走 `CheckpointSession`。
 8. `thread_id` 由 `config.loader.build_thread_id()` 按配置模板生成，禁止硬编码或留空。
 9. 条件函数保持无副作用、可单测：给定 State → 返回分支名字符串。
 10. 每个节点、每条条件边必须有对应 pytest 用例；新增边不改测试视为未完成。
@@ -72,6 +72,8 @@
 4. 模型统一经 `create_llm(role, config)` 获取，角色分为 `research / briefing / editor / judge`。
 5. 抽取校验失败 → 重试一次 → 仍失败则该栏目降级并记入 `review_notes`，**禁止静默丢字段**。
 6. 禁止在 prompt 中写 `Never mention "no information found"` 这类迫使模型编造的指令。原版 `backend/prompts.py` 仍保留该指令（上游原文件，未删），但 **S3 新图完全不加载它**；S5 接真实模型时也不得复用。
+7. **Tavily 免费额度是红线**：真实检索必须同时满足 `APP_MODE=live` + `TAVILY_LIVE_ENABLED=true` + `TAVILY_MAX_CALLS>0`；`CallBudget` 硬计数先于请求，缓存优先、dry-run 不发请求。测试 / CI / 演示**禁止构造 `AsyncTavilyClient`**，一律注入 fake。key 只经 `config.loader.resolve_tavily_credentials()` 解析，不接收请求体 key、不写日志、不写进 `.env`。任何真实调用次数必须能被测试核对。
+8. fixture 模式可用本地 `httpx.MockTransport` 真跑 LCEL，但文档与注释必须写明「确定性 stub，非模型能力」。mock handler 取消息时按 `role in ("user", "human")`（OpenAI 请求体是 `user`），否则会静默抽不出事实误判降级。`features.structured_output=false` 的报告必须与 S4 模板逐字一致，作为 A/B 基线；节点内传递引用编号用显式参数，禁止模块级全局可变变量。
 
 ## 8. 可溯源约定
 
@@ -161,3 +163,5 @@ FEATURES_SELF_CORRECTION=false uv run python -m graph.run --case sparse --trace
 - ❌ 栏目级回退用全局 `max(retry_count.values())` 当检索轮次 / 把「旧引用可移除」写成无条件的结论
 - ❌ 硬编码模型名 / 业务代码直接 `os.getenv` 读 key / 把凭据放进 `Settings` / 缺 key 悄悄回退 fixture
 - ❌ 用 `GenericFakeChatModel` 测 `with_structured_output` / mock HTTP 指向可达外网 / 把 mock 结果写成真实模型指标
+- ❌ 用真实 Tavily / 模型额度跑测试或演示 / 绕过 `CallBudget` 发包 / 把请求体传入的 key 当凭据
+- ❌ 模块级全局可变变量传递引用编号 / 把 fixture 确定性 stub 说成模型能力 / 谎称 live 已实测

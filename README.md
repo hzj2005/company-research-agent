@@ -5,7 +5,7 @@
 >
 > **What this fork adds**: a LangGraph state workflow with evidence-sufficiency checks, a bounded self-correction loop, per-section abstention instead of fabrication, reducer-based parallel writes and real SQLite checkpointing (`graph/`, `capabilities/`, `persistence/`, `config/`, `tests/`). Design and measured baseline: [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md), [`docs/BASELINE.md`](docs/BASELINE.md).
 >
-> **Current status — read before running**: the new graph runs in `fixture` mode on synthetic data and needs no API key (`uv run python -m graph.run --case sparse --show-report`). The FastAPI `/research` endpoint and the LangGraph Studio entry **still point to the upstream linear DAG**; they will be switched to the new graph when real LLM/retrieval is wired (S5). No accuracy, latency or cost figures are claimed until live evaluation (S8) actually runs.
+> **Current status — read before running**: the new graph runs in `fixture` mode on synthetic data and needs no API key (`uv run python -m graph.run --case sparse --show-report`). Since S5-B both **FastAPI `/research` and the LangGraph Studio entry point to the new graph**; `/research` currently consumes only `company` (legacy fields such as `industry` or a request-body API key are ignored). `briefing` runs a real `with_structured_output` LCEL chain against a **local deterministic mock backend**, not a real model. **Zero live Tavily / model calls have been made** — real retrieval is behind a three-way opt-in (`APP_MODE=live` + `TAVILY_LIVE_ENABLED=true` + `TAVILY_MAX_CALLS>0`), a hard per-run call budget and a disk cache, to protect the free quota. No accuracy, latency or cost figures are claimed until live evaluation (S8) actually runs.
 
 An agentic research tool that turns a company name into a structured, source-backed briefing. The FastAPI backend coordinates specialized research and synthesis steps; the React interface tracks the job and lets you export the finished report as a PDF.
 
@@ -18,13 +18,13 @@ An agentic research tool that turns a company name into a structured, source-bac
 - Runs on any model available through [OpenRouter](https://openrouter.ai) — pick it from the in-app Settings — or on direct OpenAI/Gemini keys.
 - Streams research progress to the browser and supports PDF export.
 - Optionally persists jobs and reports in MongoDB.
-- **This fork also adds** a separate LangGraph workflow (`graph/`) with evidence-sufficiency checks, a bounded self-correction loop, per-section abstention instead of fabrication, and SQLite checkpointing. It runs today from the CLI in `fixture` mode with no API key.
+- **This fork also adds** a LangGraph workflow (`graph/`) with evidence-sufficiency checks, a bounded self-correction loop, per-section abstention instead of fabrication, structured output with URL-level traceability, and SQLite checkpointing. It runs today from the CLI, `/research` and LangGraph Studio in `fixture` mode with no API key and zero external calls.
 
 ## Architecture
 
-Two graphs live in this repository. **The FastAPI `/research` endpoint and LangGraph Studio still use the upstream graph** (see "Current status" above); the reworked graph is exercised through the CLI until real LLM/retrieval is wired in S5.
+Two graphs live in this repository. Since S5-B, **both public entry points (`application.py` → `/research`, and `langgraph_entry.py` → Studio) compile the reworked `graph/`**; the upstream linear DAG is kept only as an untouched reference. All entry points currently run `fixture` mode; live retrieval is explicitly disabled by default.
 
-### Upstream — unchanged
+### Upstream — unchanged (reference only, no longer wired to the entry points)
 
 ```text
 React + Vite UI → POST /research → FastAPI application → Research graph
@@ -52,23 +52,27 @@ research subgraph:  START → dispatch ──Send──→ analyst(company)
 - `Send` fans out four analysts in parallel; reducer-backed state merges their writes without overwrites (measured: 4 branches 0.181s vs 0.600s sequential).
 - `evidence_check` is a real node with three conditional edges. Retry is bounded by `max_retry` (2) and ends in an explicit "no public evidence found" abstention, never invented facts.
 - Every step is persisted by an `AsyncSqliteSaver` checkpointer (`persistence/checkpointer.py`) and survives a restart.
-- The data source is currently an `@tool`-wrapped local fixture (`capabilities/retrieval.py`); real Tavily + structured LLM output is S5.
+- `briefing` has two paths behind `features.structured_output`: **on** runs `prompt | model.with_structured_output(SectionBrief)` with URL-level traceability and bounded validation retry; **off** keeps the S4 template and produces a byte-identical report (A/B baseline). In `fixture` mode the "model" is a local `httpx.MockTransport` deterministic stub — **not a real model capability**.
+- The data source is an `@tool`-wrapped fixture by default (`capabilities/retrieval.py`). `live` mode adds `TavilyRetriever(BaseRetriever)` plus a call budget, disk cache and dry-run; it is **disabled by default** even when a key is installed.
 
 ```bash
 uv run python -m graph.run --case sparse --show-report --trace
+# A/B: FEATURES_STRUCTURED_OUTPUT=false uv run python -m graph.run --case sparse --trace
+# live 检索需显式放行：APP_MODE=live TAVILY_LIVE_ENABLED=true TAVILY_MAX_CALLS=1
+# 先看会发哪些 query（0 次真实请求）：TAVILY_DRY_RUN=true ...
 ```
 
 ## Prerequisites
 
-The keys below are for the **upstream FastAPI/React app**. The reworked `graph/` CLI
-needs none of them in `fixture` mode.
+The reworked graph and all entry points need **no API key** in `fixture` mode.
+The React UI / OpenRouter / Google Maps / MongoDB items below are **upstream leftovers**;
+`/research` now runs the new graph and does not consume a request-body API key.
 
 - Python 3.11 (`.python-version`; the reworked graph and its tests are pinned to 3.11)
-- Node.js 18 or later
-- An [OpenRouter API key](https://openrouter.ai/keys) — set in the backend `.env` or pasted into the app's Settings (alternatively, an OpenAI key, plus an optional Gemini key)
-- A Tavily API key entered in the app for each research session (or a backend fallback key)
-- A Google Maps API key only if you want location autocomplete
-- MongoDB only if you want persistent jobs and reports
+- Node.js 18 or later — only for the upstream React UI
+- `TAVILY_API_KEY` — **optional, and deliberately hard to spend**: set it at OS user level, not in `.env`. Real calls additionally require `APP_MODE=live`, `TAVILY_LIVE_ENABLED=true` and `TAVILY_MAX_CALLS>0`; see `docs/ACTION_PLAN.md` §9.2. This project has made **0 live calls** so far.
+- A model key (OpenRouter / OpenAI / Gemini) — only for `live`; none is configured in this workspace.
+- Google Maps / MongoDB — upstream UI features only; not used by the new graph.
 
 ## Run locally
 

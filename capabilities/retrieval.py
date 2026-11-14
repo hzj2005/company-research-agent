@@ -1,11 +1,13 @@
-"""文档数据源（S3）。
+"""文档数据源工厂（S3 fixture → S5-B 双模式）。
 
-按 AGENT.md 第 7.3 条把数据源封装成 LangChain `@tool`，节点里不直接读文件、
-不 new 第三方 client。当前只实现 `fixture` 模式：`evals/fixtures/tavily_responses.json`
-里的三类合成样本，按「公司 / 栏目 / 轮次」取回结果，无需任何 API key。
+业务节点只见到一个 `@tool`：`fetch_company_documents(company, sections, round_no)`，
+模式差异全部收敛在这层，节点里没有 `if app.mode == ...` 的分支判断。
 
-`live` 模式（真实 Tavily Retriever）留到 S5，这里显式抛 NotImplementedError，
-不伪装成已实现、也不悄悄回退到 fixture。
+- **fixture（默认）**：只读 `evals/fixtures/tavily_responses.json` 的合成样本，
+  0 次网络请求、0 次 Tavily 调用、不需要任何 key。
+- **live**：`TavilyRetriever(BaseRetriever)` + 三重 opt-in 护栏；未放行、缺 key、
+  额度用尽一律明确抛错，**绝不悄悄回退 fixture**。测试通过 `retriever_factory`
+  注入离线替身，同样 0 次真实调用。
 """
 
 from __future__ import annotations
@@ -13,11 +15,23 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
+from langchain_core.retrievers import BaseRetriever
 from langchain_core.tools import StructuredTool, tool
 
-from config.loader import ROOT, Settings, get_settings
+from capabilities.tavily_retriever import (
+    CallBudget,
+    LiveRetrievalDisabled,
+    build_live_retrievers,
+)
+from config.loader import (
+    ROOT,
+    Settings,
+    get_settings,
+    resolve_live_cache_dir,
+    resolve_tavily_credentials,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +40,14 @@ SECTION_FIELDS: dict[str, str] = {
     "industry": "industry_data",
     "financial": "financial_data",
     "news": "news_data",
+}
+
+# 每栏目每轮只发 1 条 query（原版是 2 条）；护栏优先，宁可少召回也不浪费额度
+_SECTION_QUERY_HINTS = {
+    "company": "company overview background products",
+    "industry": "industry market landscape competitors",
+    "financial": "financial results revenue funding valuation",
+    "news": "recent news announcements partnerships",
 }
 
 
@@ -74,27 +96,109 @@ class FixtureStore:
 def load_fixture_store(settings: Settings | None = None) -> FixtureStore:
     s = settings or get_settings()
     if s.app.mode != "fixture":
-        raise NotImplementedError(
-            "live 检索将在 S5 用 BaseRetriever 接入 Tavily；当前请先设 APP_MODE=fixture"
+        raise LiveRetrievalDisabled(
+            "fixture 样本库只在 APP_MODE=fixture 下可用；live 请走 make_document_tool 的检索工具"
         )
     return FixtureStore(resolve_fixture_path(s))
 
 
-def make_document_tool(settings: Settings | None = None) -> StructuredTool:
-    """构造供 research 节点调用的工具；模式差异只在这层，业务节点无分支判断。"""
+def build_live_query(company: str, section: str, round_no: int) -> str:
+    """确定性 query：回退轮换措辞，让缓存 key 与首轮不同。"""
+    hint = _SECTION_QUERY_HINTS.get(section, section)
+    suffix = "" if round_no <= 0 else f" refined round {round_no}"
+    return f"{company} {hint}{suffix}"
+
+
+def _document_to_dict(doc: Any, section: str, round_no: int) -> dict[str, Any]:
+    meta = doc.metadata if hasattr(doc, "metadata") else {}
+    return {
+        "url": meta.get("url", ""),
+        "title": meta.get("title", ""),
+        "score": float(meta.get("score", 0.0) or 0.0),
+        "content": getattr(doc, "page_content", ""),
+        "section": section,
+        "round": round_no,
+        "source": meta.get("source", "tavily"),
+    }
+
+
+def make_document_tool(
+    settings: Settings | None = None,
+    *,
+    retriever_factory: Callable[[Settings], dict[str, BaseRetriever]] | None = None,
+    budget: CallBudget | None = None,
+    cache_dir: Path | None = None,
+    live_client: Any = None,
+) -> StructuredTool:
+    """构造供 research 子图调用的检索工具；模式差异只在这层。
+
+    `retriever_factory` / `live_client` 是**离线编排注入点**：传入时跳过
+    `AsyncTavilyClient` 构造与凭据解析，供测试和 CI 在 0 次真实调用下验证链路。
+    生产 live 路径不传这些参数，凭据只从环境变量解析。
+    """
     s = settings or get_settings()
-    store = load_fixture_store(s)
+
+    if s.app.mode == "fixture":
+        store = load_fixture_store(s)
+
+        @tool
+        async def fetch_company_documents(
+            company: str, sections: list[str], round_no: int
+        ) -> dict[str, list[dict[str, Any]]]:
+            """按公司名、栏目列表和回退轮次取回检索文档。返回 {栏目: [文档]}。"""
+            result = store.fetch(company, sections, round_no)
+            logger.info(
+                "fixture fetch company=%s round=%s sections=%s docs=%s",
+                company, round_no, sections, sum(len(v) for v in result.values()),
+            )
+            return result
+
+        return fetch_company_documents
+
+    # ---- live：三重 opt-in，任何一项不满足都不发请求 ----------------------
+    live = s.retrieval.live
+    if not live.enabled or live.max_calls_per_run <= 0:
+        raise LiveRetrievalDisabled(
+            "Tavily 真实检索默认禁用（保护免费额度）。需同时设置 "
+            "APP_MODE=live、TAVILY_LIVE_ENABLED=true、TAVILY_MAX_CALLS>0；"
+            "仅查看会发哪些 query 请用 TAVILY_DRY_RUN=true"
+        )
+
+    active_budget = budget or CallBudget(live.max_calls_per_run, dry_run=live.dry_run)
+    if retriever_factory is not None:
+        retrievers = retriever_factory(s)
+    else:
+        if live_client is None:
+            creds = resolve_tavily_credentials()
+            from tavily import AsyncTavilyClient
+
+            live_client = AsyncTavilyClient(api_key=creds.resolved_key())
+        retrievers = build_live_retrievers(
+            s,
+            client=live_client,
+            budget=active_budget,
+            cache_dir=cache_dir or resolve_live_cache_dir(s),
+        )
 
     @tool
     async def fetch_company_documents(
         company: str, sections: list[str], round_no: int
     ) -> dict[str, list[dict[str, Any]]]:
         """按公司名、栏目列表和回退轮次取回检索文档。返回 {栏目: [文档]}。"""
-        result = store.fetch(company, sections, round_no)
+        out: dict[str, list[dict[str, Any]]] = {}
+        for section in sections:
+            retriever = retrievers.get(section)
+            if retriever is None:
+                out[section] = []
+                continue
+            query = build_live_query(company, section, round_no)
+            docs = await retriever.ainvoke(query)
+            out[section] = [_document_to_dict(d, section, round_no) for d in docs]
         logger.info(
-            "fixture fetch company=%s round=%s sections=%s docs=%s",
-            company, round_no, sections, sum(len(v) for v in result.values()),
+            "live fetch company=%s round=%s sections=%s docs=%s budget=%s/%s cache_hits=%s",
+            company, round_no, sections, sum(len(v) for v in out.values()),
+            active_budget.calls_made, active_budget.max_calls, active_budget.cache_hits,
         )
-        return result
+        return out
 
     return fetch_company_documents
