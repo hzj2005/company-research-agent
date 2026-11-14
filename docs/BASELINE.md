@@ -287,4 +287,23 @@
 | 零外部连接 | 复核 + 恢复全程 `socket.connect` 守卫（只放行回环），被拦截外部连接 = **0** |
 | 回归 | `97 passed`；两个 A/B 开关生效；`uv pip check` 103 包兼容 |
 
-**S6 如实边界**：只有 CLI，没有前端 / API 复核端点；payload 与 decision 都是 JSON，属**可验证的图编排能力**而非产品化 HITL；`auto_approve_review=true` 是无人值守默认值，避免 `/research` 永久卡在中断。S7 评测台、S8 真实实测（需模型 key + 用户放行额度）、S9 简历仍未开工。
+**S6 如实边界**：只有 CLI，没有前端 / API 复核端点；payload 与 decision 都是 JSON，属**可验证的图编排能力**而非产品化 HITL；`auto_approve_review=true` 是无人值守默认值，避免 `/research` 永久卡在中断。【S6 历史快照】S7 评测台已完成（见第 15 节），S8 真实实测（需模型 key + 用户放行额度）、S9 简历仍未开工。
+
+---
+
+## 15. S7 评测台验证记录（2026-11-14，0 次真实 Tavily / 模型调用）
+
+| 验证点 | 真实结果 |
+|---|---|
+| 一条命令出分 | `uv run python -m evals.run_eval` → `evals/scorecard.json`（5 组 A/B × 3 case = 15 次完整图运行），退出码 0 |
+| golden 同步 | `build_golden --check` 通过；`evals/golden.jsonl` 28 行 = 1 meta + 3 case + 23 claim + 1 abstain，全部由 fixture + settings 规则派生 |
+| baseline | `fact_accuracy=1.000`、`citation_traceability=1.000`、`abstain_rate=1.000`、`hallucination_rate=0.000`、`self_correction_success=1.0`、`avg_retry_rounds=1.000`；gate PASS |
+| 可定位退化用例 | `self_correction_off` → `fact_accuracy=0.870`、`self_correction_success=0`，退化 id 精确为 `sparse:company:0/1/2` |
+| A/B 如实判定 | `fewer_results` / `free_text_output` / `no_human_review` 三组标 `no_effect`（原因见 ACTION_PLAN 11.5），不伪造对照收益 |
+| CI 回归门禁 | 本地模拟 CI：`--compare evals/scorecard.json` → `PASS`、`degraded_case_ids=[]`；容差 0.02、方向 higher/lower、排除 `p95_latency_ms` |
+| 反向证伪 | 注入「Notion 已完成 IPO」→ `content_mismatch` 被抓、三项指标下降；伪造拒答 → `empty:company:abstain` 失败（指标不是恒满分） |
+| 可复现 | 两次独立评测的 `inputs_sha256` 与剔除 `elapsed_ms`/`p95` 后的全部字段逐字一致；scorecard 无时间戳 |
+| 额度护栏 | `APP_MODE=live` 启动即拒；`socket.connect` 非回环连接立即抛错；实测 `tavily=0 / llm=0 / blocked_connection_attempts=0` |
+| 全量回归 | `114 passed`（S6 的 97 + S7 的 17）；`uv pip check` 103 包兼容 |
+
+**S7 如实边界（最重要）**：这是**合成语料上的契约回归测试**，不是模型能力评测。golden 与被测系统读同一份 fixture，baseline 满分是「按规范把给定文档搬进报告并加对引用」的必然结果，**不得写成「准确率 100%」进简历**。`citation_traceability` 是词法包含代理而非语义蕴含；`hallucination_rate` 是它的互补值而非独立证据；`cost_per_report=0`、`p95_latency_ms` 为本机耗时，都不是真实成本/延迟。原计划「30–50 家真实公司 × 5 事实」的 golden 未做（无 key / 无真实语料，硬编即造假），归 S8；换 `EVAL_DATASET_PATH` 即可复用脚本。内容级语义 judge、真实指标、S9 简历仍未开工。

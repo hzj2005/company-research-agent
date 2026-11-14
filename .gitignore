@@ -42,3 +42,5 @@ htmlcov/
 *.log
 # Tavily live 检索缓存（含真实响应，禁止提交）
 evals/cache/
+# 本地/CI 评测的临时 scorecard；正式基线是 evals/scorecard.json（需提交）
+evals/scorecard.*.json

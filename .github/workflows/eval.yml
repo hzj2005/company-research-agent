@@ -1,0 +1,51 @@
+# S7 评测回归门禁
+#
+# 只跑 fixture：0 次真实 Tavily / 模型调用，不需要任何 API key，也不会消耗
+# 用户级 TAVILY_API_KEY 的免费额度（run_eval.py 内另有 socket 禁网守卫）。
+#
+# 基线是仓库里提交的 evals/scorecard.json；本次结果写到 scorecard.next.json，
+# 由 CI 比对，不自动覆盖。开发者本地确认退化是预期的之后再更新基线：
+#   uv run python -m evals.run_eval            # 会把新基线写回 evals/scorecard.json
+#
+# 注意：这些分数只在合成 fixture 语料上有意义，不是真实模型准确率。
+name: eval
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install (frozen lock)
+        run: uv sync --frozen
+
+      - name: Golden set is in sync with fixture/settings
+        run: uv run python -m evals.build_golden --check
+
+      - name: Unit and integration tests
+        run: uv run pytest -q
+
+      - name: Eval scorecard + regression gate
+        run: >-
+          uv run python -m evals.run_eval
+          --compare evals/scorecard.json
+          --output evals/scorecard.next.json
+
+      - name: Upload scorecard
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scorecard
+          path: evals/scorecard.next.json
+          if-no-files-found: ignore

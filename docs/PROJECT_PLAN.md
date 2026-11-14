@@ -213,6 +213,8 @@ class SectionBrief(BaseModel):
 
 ## 7. 评测台设计
 
+> **实施状态注记（2026-11-14，S7 已完成）**：本节是**目标设计**，其中 7.1 的「30–50 家真实公司 × 5 条可核验事实」属于 **live 阶段目标**，S7 未照做——当前无模型 key、无真实检索语料，而 fixture 文件首行明确禁止把合成样本当事实来源，硬编 50 家公司的 CEO / 融资数据等于编造标注。S7 实际交付的是**评测台基础设施 + fixture 派生 golden（3 场景 / 23 claim / 1 拒答）**，用于契约回归与 CI 门禁；真实 golden 与真实指标归 S8，届时只需替换 `EVAL_DATASET_PATH`，评测脚本不用改。7.2 的 `citation_traceability` 在 S7 以**词法包含代理**实现，语义蕴含判定仍需 judge。完整偏差说明、指标口径与实测数字见 `docs/ACTION_PLAN.md` 第 11 节、`docs/BASELINE.md` 第 15 节。**S7 分数不得当作真实准确率写进简历。**
+
 ### 7.1 golden set
 
 `evals/golden.jsonl`，30～50 家公司 × 每家 5 条可核验事实：

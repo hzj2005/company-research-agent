@@ -68,6 +68,22 @@ uv run python -m graph.run --resume --case sparse --db ./data/review.db \
   --decision reject-sections --reject-sections news --show-report
 ```
 
+## Evaluation (S7)
+
+One command runs the whole eval suite in `fixture` mode and writes `evals/scorecard.json`:
+
+```bash
+uv run python -m evals.run_eval                 # 5 A/B groups x 3 cases, 15 real graph runs
+uv run python -m evals.build_golden --check    # CI: golden set in sync with fixture/settings
+uv run python -m evals.run_eval --compare evals/scorecard.json --output evals/scorecard.next.json
+```
+
+`.github/workflows/eval.yml` runs `pytest` + the scorecard + a regression gate against the committed baseline; regressions beyond `0.02` fail the build and print the degraded golden item ids (e.g. `sparse:company:2`).
+
+> **Read this before quoting any number.** The golden set is **derived from the synthetic fixture corpus** (`provenance: synthetic-fixture-derived`), not from real company facts. A baseline score of `1.000` means "the system reproduces the given documents with correct citations under the configured rules" — a **contract-regression test**, not model accuracy. `citation_traceability` here is a lexical-containment proxy, not semantic entailment; `cost_per_report` is `0.0` because there are zero external calls. The planned 30–50 human-verified companies require real retrieval + keys and belong to a later live-measurement stage. None of these numbers should be presented as real-world accuracy in a résumé.
+
+The evaluator refuses to start unless `APP_MODE=fixture` and installs a non-loopback `socket.connect` guard while running, so it cannot consume Tavily or LLM quota even if configuration is changed by mistake. Measured: `tavily=0, llm=0, blocked_connection_attempts=0`.
+
 ## Prerequisites
 
 The reworked graph and all entry points need **no API key** in `fixture` mode.

@@ -1,15 +1,23 @@
 # ============================================================
 # 评测配置：golden set / 指标 / A-B / CI 容差
-# 运行：python -m evals.run_eval --config config/eval.yaml
+# 运行：uv run python -m evals.run_eval
 # 铁律：所有简历数字只能由本配置驱动的脚本产出
 # ============================================================
 
 dataset:
   path: ${EVAL_DATASET_PATH:-./evals/golden.jsonl}
-  # 30~50 家公司，每家 5 条可核验事实；故意混入若干"查不到公开依据"的样本
-  min_companies: 30
-  facts_per_company: 5
-  fields:
+  # ── 诚实边界（S7，2026-11-14）──────────────────────────────
+  # PROJECT_PLAN 7.1 的「30~50 家真实公司 × 5 事实」是 **live 阶段目标**：
+  # 需要真实检索语料 + 人工/LLM 核验标注。当前无模型 key、无真实语料，
+  # evals/fixtures/tavily_responses.json 首行明确写着「合成样本，禁止当作
+  # 评测指标或事实来源」，所以 fixture 阶段不硬凑公司名与事实。
+  # 现有 golden 由 build_golden.py 从 fixture 语料 + settings 阈值规则自动派生，
+  # 是「给定语料下系统应产出什么」的可机器核验契约，不是真实世界准确率。
+  # S8 拿到真实语料后替换本 path 即可，run_eval.py 不需要改。
+  provenance: synthetic-fixture-derived
+  min_companies: 3            # fixture 的 3 个场景原型（不是 30~50 家真实公司）
+  facts_per_company: 5        # live 目标值；fixture 阶段由派生器按实际文档数决定
+  fields:                     # live golden 的字段模板，fixture 阶段不使用
     - founded_year
     - ceo
     - funding_round
@@ -24,16 +32,34 @@ fixture:
     - empty             # 完全查无，重试超限后降级拒答
 
 metrics:
-  - fact_accuracy             # 命中 expected 的字段占比
-  - citation_traceability     # 带 source_url 且来源确实支持 claim 的结论占比（核心）
-  - abstain_rate              # 应拒答样本中正确输出"无公开依据"的比例
-  - hallucination_rate        # 无来源或与来源矛盾的结论占比
+  - fact_accuracy             # 报告命中 golden expected claims 的比例（相对给定语料）
+  - citation_traceability     # 结论带有效 source_url 且 claim 文本被该来源正文包含的比例
+  - abstain_rate              # 应拒答栏目中正确输出"无公开依据"的比例
+  - hallucination_rate        # 无来源/来源无效/来源不支持的结论占比 = 1 - citation_traceability
   - self_correction_success   # 首轮 insufficient、回退后转 sufficient 的比例
   - avg_retry_rounds
   - p95_latency_ms
   - cost_per_report
 
+# 回归比对方向：higher = 越大越好，lower = 越小越好。
+# 只用于 ci.protected_metrics 的比对；不在此表里的指标不参与门禁。
+metric_direction:
+  fact_accuracy: higher
+  citation_traceability: higher
+  abstain_rate: higher
+  hallucination_rate: lower
+  self_correction_success: higher
+  avg_retry_rounds: lower
+  cost_per_report: lower
+
+# 与机器负载相关、跨机器不可复现，CI 比对与 A/B 差异判定一律排除。
+# cost_per_report 在 fixture 下恒为 0（不是真实成本），但它是确定值，仍可比对。
+non_deterministic_metrics:
+  - p95_latency_ms
+
 thresholds:
+  # 只作用于 baseline 组；A/B 组是"关掉能力"的对照，本就会退化，不套阈值。
+  fact_accuracy_min: 0.90
   citation_traceability_min: 0.90
   hallucination_rate_max: 0.10
   abstain_rate_min: 0.90

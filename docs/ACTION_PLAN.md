@@ -31,7 +31,7 @@
 | **S4** | #4 并行与子图 | `research` 换成编译子图，`dispatch` 用 `Send` 按白名单精确派发 4 analyst | `graph/subgraphs/`、白板图（第 7.5 节） | 主图 7 节点可完整画出；reducer 合并可验证 | ✅ 已完成（43 passed，见第 7.7 节） |
 | **S5** | #5 LangChain 深化 | Tavily 封 `BaseRetriever`；`with_structured_output` + 字段置信度 + 校验重试；行内引用 | `capabilities/`、Pydantic schema | 每条 Fact 能对回 source_url；抽取失败自动重试不静默丢字段 | ✅ 完成（8.1–8.5，见 8.7 / 9.6；**仅 fixture，live 实测归 S8**） |
 | **S6** | #6 HITL | 成稿前 `interrupt()` 复核 + `Command(resume=...)`；复核留痕导出标注 | `graph/nodes/human_review.py` | 中断→恢复后 State 一致；依赖真实 checkpointer | ✅ 完成（10.1–10.4，见 10.5；仅 fixture） |
-| **S7** | #7 评测台 | golden set（30–50 公司 × 5 事实）、8 项指标、4 组 A/B、scorecard、CI | `evals/`、`.github/workflows/eval.yml` | 一条命令出分，能定位退化用例 | ⏳ |
+| **S7** | #7 评测台 | ~~30–50 真实公司~~ → fixture 派生 golden（3 场景 / 23 claim / 1 拒答）、8 项指标、4 组 A/B、scorecard、CI | `evals/`、`.github/workflows/eval.yml` | 一条命令出分，能定位退化用例 | ✅ 完成（11.1–11.9，仅 fixture；**真实 golden 归 S8**） |
 | **S8** | #8 真实实测 | **需 key**。切 `APP_MODE=live`，真实模型 + 真实 Tavily + 真实 DB 跑全量 | 对比表、失败案例、成本/延迟取舍 | 每个数字能由脚本与日志当场复现 | ⏳ 阻塞：等 key |
 | **S9** | #9 简历交付 | 3–4 条描述 + 面试追问清单 | `docs/RESUME.md` | 每条能指到具体文件与 commit | ⏳ |
 
@@ -386,7 +386,7 @@ START → grounding → [research 子图] → curate → evidence_check
 
 - 本阶段**不发起任何真实 Tavily / 模型调用**；不计任何准确率、延迟、成本数字；live 实测与真实指标仍归 S8，需用户明确放行额度后才执行。
 - fixture 的结构化输出是确定性 stub，**不代表真实模型能力**；`citation_traceability` 内容级判定仍归 S7。
-- S6 HITL、S7 评测台、S9 简历不提前开工、不假装完成。
+- S6 HITL、S7 评测台、S9 简历不提前开工、不假装完成。【S5 历史快照：S6 见第 10 节、S7 见第 11 节，均已于本日完成】
 
 ### 9.6 S5-B 实测结果（2026-11-14，0 次真实 Tavily / 模型调用）
 
@@ -472,7 +472,7 @@ START → grounding → [research 子图] → curate → evidence_check
 - 只做 CLI resume；**不提供 API/SSE 复核端点**，上游流式逻辑一行不动（用户拍板）。
 - 人工复核没有前端界面，payload 与 decision 都是 JSON；这不是「产品化 HITL」，是**可验证的图编排能力**。
 - `auto_approve_review=true` 是无人值守默认值，避免 `/research` 永久卡在中断；真实复核需显式关掉它。
-- 全程 fixture、0 次真实 Tavily / 模型调用；S7 评测台、S8 真实实测、S9 简历不提前开工。
+- 全程 fixture、0 次真实 Tavily / 模型调用；S7 评测台、S8 真实实测、S9 简历不提前开工。【S6 历史快照：S7 已完成，见第 11 节；S8/S9 仍未开工】
 
 ### 10.5 S6 实测结果（2026-11-14，0 次真实 Tavily / 模型调用）
 
@@ -496,4 +496,108 @@ uv run python -m graph.run --resume --case sparse --db ./data/review.db \
   --decision reject-sections --reject-sections news --note "新闻来源存疑" --show-report
 ```
 
-**如实边界**：只做 CLI resume，**没有** API/SSE 复核端点（用户拍板）；payload 与 decision 都是 JSON，不是产品化前端 HITL；`data/` 与 `*.db` 已在 `.gitignore`。S7/S8/S9 仍未开工。
+**如实边界**：只做 CLI resume，**没有** API/SSE 复核端点（用户拍板）；payload 与 decision 都是 JSON，不是产品化前端 HITL；`data/` 与 `*.db` 已在 `.gitignore`。【S6 历史快照】S7 已于本日完成（见第 11 节），S8/S9 仍未开工。
+
+---
+
+## 11. S7 评测台（2026-11-14，全程 fixture、0 次真实外部调用）
+
+### 11.1 先纠正一个计划偏差：不编造 golden set
+
+原表与 `PROJECT_PLAN.md` 7.1 写的是「30–50 家真实公司 × 每家 5 条可核验事实」。执行前复核发现这条在当前条件下**不能照做**：
+
+1. `evals/fixtures/tavily_responses.json` 首行是项目自己写下的铁律：「合成样本……**禁止当作评测指标或事实来源**，真实指标只在 `APP_MODE=live` 下由 `evals/run_eval.py` 产出」；
+2. 当前没有模型 key，也没有真实检索语料，用户明确要求「谨慎使用 Tavily 免费额度，非必要不调用」；
+3. 于是硬写 50 家公司的 CEO / 融资轮次 / 成立年份，本质就是**编造标注**。拿编造的答案算出「准确率 95%」写进简历，面试一追问来源就穿，与本项目全程「不谎称」的取舍直接冲突。
+
+**改法**：golden 由 `evals/build_golden.py` 从 fixture 语料 + `config/settings.yaml` 的 evidence 阈值规则**自动派生**（独立重算合格文档、回退轮数、应拒答栏目，不 import 任何图节点、不读被测系统输出），全部条目标注 `provenance: synthetic-fixture-derived`。它回答的是「给定这批语料，系统应当产出什么」，即**契约回归测试**，不是模型能力评测。`config/eval.yaml` 的 `min_companies` 由 30 改为 3 并写明原因；S8 拿到真实语料 / 人工核验标注后，只要换掉 `EVAL_DATASET_PATH`，`run_eval.py` 一行不用改。
+
+这不削弱 S7 的工程验收（一条命令出分、能定位退化用例、数字可复现），但**S7 的分数不能当真实效果写进简历**——M4 简历数字必须来自 S8。
+
+### 11.2 交付物
+
+| 文件 | 职责 |
+|---|---|
+| `evals/build_golden.py` | 从 fixture + settings 派生 golden；`--check` 供 CI 校验同步（改了 fixture/阈值却没重生成就失败） |
+| `evals/golden.jsonl` | 28 行 = 1 meta + 3 case + 23 claim + 1 abstain；每条 claim 自带 `source_content`，评测器自包含 |
+| `evals/config.py` | `config/eval.yaml` 的 Pydantic 强类型校验（`extra="forbid"`），A/B 字段写错当场失败而不是静默出分 |
+| `evals/metrics.py` | 报告解析、8 项指标、阈值门禁、A/B 有效性判定、回归比对（纯函数，可单测） |
+| `evals/run_eval.py` | 编排 5 组 A/B × 3 case 真跑 LangGraph、写 `evals/scorecard.json`、CLI 与退出码 |
+| `evals/scorecard.json` | 提交的基线分数，含用例级 `claim_records` / `failures`，可定位到具体结论 |
+| `.github/workflows/eval.yml` | golden 同步 → 全量 pytest → 评测 + 回归门禁 → 上传 scorecard |
+| `tests/test_s7_eval.py` | 17 例，含反向证伪与额度护栏 |
+
+**额度护栏**（对用户「不要把免费额度用没了」的硬落实）：`run_eval.py` 只在 `APP_MODE=fixture` 下启动，`live` 直接抛 `RuntimeError`；运行期间给 `socket.connect` 装守卫，非回环连接立即抛错。所以即使配置被误改，本脚本也**不可能**消耗 Tavily / 模型额度。实测 `blocked_connection_attempts=0`、`tavily=0`、`llm=0`。
+
+### 11.3 指标口径（fixture 下的准确定义）
+
+| 指标 | 定义 | 边界 |
+|---|---|---|
+| `fact_accuracy` | 报告命中 golden `expected_text` + 同一 `source_url` 的条数 / 23 | 相对给定语料的召回，不是真实事实正确率 |
+| `citation_traceability` | 非拒答结论中「[n] 能映射回本次 References 的 URL，且 claim 文本归一化后出现在该 URL 的来源正文里」的占比 | **词法包含代理**，能抓拼错 URL / 张冠李戴 / 凭空造句，**不等价语义蕴含**；真实 judge 归 S8 |
+| `abstain_rate` | 应拒答栏目真正输出拒答话术、无结论、且 `degraded_sections` 含该栏目的比例 | 1 条样本 |
+| `hallucination_rate` | `1 - citation_traceability` | **互补指标，不是独立证据**，避免把同一数字当成两次验证 |
+| `self_correction_success` | 首轮 insufficient、回退后转 sufficient 的比例 | 分母 1（sparse），其余 case 不计入 |
+| `avg_retry_rounds` | 各 case `max(retry_count.values())` 均值 | 由 State 直接读，非估算 |
+| `p95_latency_ms` | 本机墙钟 | 列为 `non_deterministic_metrics`，**不参与** CI 比对与 A/B 判定 |
+| `cost_per_report` | fixture 下恒为 `0.0` | 0 次真实调用，**不是真实单次成本** |
+
+scorecard 不写时间戳；`inputs_sha256` 覆盖 settings / eval / golden / fixture 四份输入，分数变动能区分「输入变了」还是「代码变了」。
+
+### 11.4 实测结果
+
+| 组 | fact_accuracy | traceability | abstain | hallucination | self_correction | avg_retry | 判定 |
+|---|---|---|---|---|---|---|---|
+| **baseline** | **1.000** | **1.000** | **1.000** | **0.000** | **1.0** | **1.000** | gate PASS |
+| `self_correction_off` | 0.870 | 1.000 | 1.000 | 0.000 | 0.0 | 0.000 | **changed** |
+| `fewer_results` | 1.000 | 1.000 | 1.000 | 0.000 | 1.0 | 1.000 | no_effect |
+| `free_text_output` | 1.000 | 1.000 | 1.000 | 0.000 | 1.0 | 1.000 | no_effect |
+| `no_human_review` | 1.000 | 1.000 | 1.000 | 0.000 | 1.0 | 1.000 | no_effect |
+
+关掉自纠正后 `fact_accuracy` 掉 `0.130435`（23 条里丢 3 条），`self_correction_success` 1→0，退化用例被精确定位为 `sparse:company:0/1/2`（Linear 公司栏首轮只有 1 篇，不再回退就直接拒答）。这是**唯一一组真实有效的对照收益**，可解释、可复现。
+
+### 11.5 为什么如实标出 3 组 no_effect
+
+- `fewer_results`（`retrieval.max_results_per_query=1`）：`capabilities/retrieval.py:make_document_tool` 的 fixture 分支直接 `store.fetch(...)`，**根本不读这个参数**；它只在 live 的 `TavilyRetriever` 里生效（S8）。
+- `free_text_output`：S5 已实测结构化输出 on/off 报告**逐字一致**，所以内容指标必然相同。它证明的是「接入 LCEL 没改变可见报告」，不是「结构化输出没价值」。
+- `no_human_review`：`features.human_review` 默认就是 `false`，override 与默认值同值；这组要在 `AUTO_APPROVE_REVIEW=false` 的复核场景才有对照意义。
+
+评测台用 `compute_ab_effect()` 只比确定性指标向量：完全一致就标 `no_effect` 并写明原因，**不编造 delta**。这比「4 组开关全部有提升」更经得起追问。
+
+### 11.6 CI 门禁与可复现
+
+```bash
+uv run python -m evals.build_golden --check          # golden 与 fixture/settings 同步
+uv run pytest -q                                     # 全量回归
+uv run python -m evals.run_eval                      # 一条命令出分并更新基线
+uv run python -m evals.run_eval --compare evals/scorecard.json --output evals/scorecard.next.json
+```
+
+CI 对 `protected_metrics`（fact_accuracy / citation_traceability / abstain_rate / hallucination_rate）按 `regression_tolerance=0.02` 与方向（higher/lower）比对上一版；超容差或出现「上一版通过、本版失败」的 golden item 即失败，并打印 `degraded_case_ids`。阈值只对 baseline 生效（A/B 组本就是"关掉能力"的对照）。
+
+### 11.7 反向验证：指标不是恒满分
+
+`tests/test_s7_eval.py` 里专门做了证伪，否则 1.0 毫无说服力：
+
+- 把一条有据结论改成「Notion 已于 2026 年完成 IPO，市值 1 万亿」但保留 `[n]` → `content_mismatch` 被抓，`fact_accuracy` / `traceability` 下降、`hallucination_rate` 上升；
+- 本应拒答的 company 栏硬塞一条无来源结论 → `empty:company:abstain` 判失败；
+- `APP_MODE=live` 启动被拒、未知 A/B 组名报错、非回环连接被守卫拦截、两条独立评测的确定性部分逐字一致。
+
+### 11.8 S7 如实边界（不谎称）
+
+1. **这是契约回归，不是能力评测**：golden 与被测系统读同一份 fixture，baseline 满分是「系统把给定文档按规范搬进报告并加对引用」的必然结果，**不能写成「准确率 100%」**。
+2. `citation_traceability` 是词法包含代理，不是语义蕴含 judge；真实判定需 S8 的模型/人工核验。
+3. 只有 3 个场景原型、23 条 claim、1 条拒答；真实 30–50 家 × 5 事实的 golden 仍未做。
+4. `cost_per_report=0`、`p95_latency_ms` 是本机耗时，均非真实成本/延迟；真实数字归 S8。
+5. S6 的复核留痕尚未导出为评测标注；没有 API/SSE 复核端点。
+6. S8（真实实测，需模型 key + 用户明确放行 Tavily 额度）、S9（简历）仍未开工。
+
+### 11.9 用法速查
+
+```bash
+uv run python -m evals.run_eval                       # 全量 5 组，写 evals/scorecard.json
+uv run python -m evals.run_eval --baseline-only       # 快速自检
+uv run python -m evals.run_eval --ab self_correction_off
+uv run python -m evals.build_golden --check           # CI 同步校验
+```
+
