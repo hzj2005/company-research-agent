@@ -32,7 +32,7 @@
 | **S5** | #5 LangChain 深化 | Tavily 封 `BaseRetriever`；`with_structured_output` + 字段置信度 + 校验重试；行内引用 | `capabilities/`、Pydantic schema | 每条 Fact 能对回 source_url；抽取失败自动重试不静默丢字段 | ✅ 完成（8.1–8.5，见 8.7 / 9.6；**仅 fixture，live 实测归 S8**） |
 | **S6** | #6 HITL | 成稿前 `interrupt()` 复核 + `Command(resume=...)`；复核留痕导出标注 | `graph/nodes/human_review.py` | 中断→恢复后 State 一致；依赖真实 checkpointer | ✅ 完成（10.1–10.4，见 10.5；仅 fixture） |
 | **S7** | #7 评测台 | ~~30–50 真实公司~~ → fixture 派生 golden（3 场景 / 23 claim / 1 拒答）、8 项指标、4 组 A/B、scorecard、CI | `evals/`、`.github/workflows/eval.yml` | 一条命令出分，能定位退化用例 | ✅ 完成（11.1–11.9，仅 fixture；**真实 golden 归 S8**） |
-| **S8** | #8 真实实测 | **需 key**。切 `APP_MODE=live`，真实模型 + 真实 Tavily + 真实 DB 跑全量 | 对比表、失败案例、成本/延迟取舍 | 每个数字能由脚本与日志当场复现 | ⏳ 阻塞：等 key |
+| **S8** | #8 真实实测 | **需 key**。切 `APP_MODE=live`，真实模型 + 真实 Tavily + 真实 DB 跑全量 | 对比表、失败案例、成本/延迟取舍 | 每个数字能由脚本与日志当场复现 | 📋 规划完成（12.1–12.6），待用户拍板 3 项后执行 |
 | **S9** | #9 简历交付 | 3–4 条描述 + 面试追问清单 | `docs/RESUME.md` | 每条能指到具体文件与 commit | ⏳ |
 
 **顺序约束**：S2 是 S3/S4/S5/S6 的前置（都要改 `graph.py` / `state.py`），必须串行；S6 依赖 S2 的 checkpointer；S8 依赖 S7 且需要 key。
@@ -623,4 +623,59 @@ uv run python -m evals.build_golden --check           # CI 同步校验
 | P8 | 测试硬编码 golden 路径、守卫还原断言写成 `is not None`（恒真） | 改用 `dataset_path(cfg)`；断言还原为原函数对象 |
 
 **复验**：`121 passed`（S6 的 97 + S7 的 24）、CI 门禁模拟 `PASS / degraded_case_ids=[]`、golden `--check` 同步、`uv sync --frozen` 与 `uv pip check` 103 包兼容、工作区干净。P1–P4 用同一批探针重跑：分别得到 `traceability=0.0 / fact_accuracy=1.0`、`expected_research_runs=3`、`passed=False + fewer_results:...`、两个独立指纹。**全程 0 次真实外部调用，未读取或使用 `TAVILY_API_KEY`。**
+
+---
+
+## 12. S8 真实实测行动方案（2026-11-14 规划完成，待拍板后执行）
+
+> 本节只做规划与前置体检设计，**不发起任何真实 Tavily / 模型调用**。S7 的分数是合成语料契约回归，M4 简历数字必须来自本节的执行结果。
+
+### 12.1 为什么必须先问用户（3 个决策点）
+
+| # | 待定项 | 为什么不能替用户决定 | 建议默认 |
+|---|---|---|---|
+| Q1 | 模型 key 用哪个 provider（`OPENROUTER_API_KEY` / `OPENAI_API_KEY` / `GEMINI_API_KEY`），是否允许产生费用 | 只从环境变量读，项目不存密钥；用户此前明确「谨慎使用、非必要不调用」 | 若暂不给 key，S8 只做 **S8.0–S8.2 检索层实测**，不产出模型相关效果数字 |
+| Q2 | Tavily 免费额度放行多少 | 用户级 `TAVILY_API_KEY` 存在但当前进程未继承；`live` 需三重 opt-in | 先 `TAVILY_DRY_RUN=true`（0 请求）看 query，再 `TAVILY_MAX_CALLS=3`，命中缓存不扣额度 |
+| Q3 | 真实 golden 谁标、标多少家 | 30–50 家 × 5 事实需要人工核验，不能由模型自己生成标准答案（会循环论证） | 先 5 家 × 5 事实跑通链路，确认口径后再决定是否扩到 30–50 家 |
+
+### 12.2 分步任务与验收
+
+| 步 | 动作 | 验收 / 产出 | 真实调用 |
+|---|---|---|---|
+| **S8.0** | 凭据与配置体检（**只读**）：进程是否继承各类 key、`live` 三重开关默认值、`.env` / `.gitignore`、上游 `/models` 出网风险、`AsyncTavilyClient.search` 静态签名 | `docs/LIVE_READINESS.md`；**只打印布尔值与长度，绝不打印 key 内容** | 0 |
+| **S8.1** | dry-run 预演：`TAVILY_DRY_RUN=true` 跑一遍完整图，记录会发哪些 query、`CallBudget` 计数、sha256 cache key | query 清单与预算日志；禁网探针证明 0 次外部连接 | 0 |
+| **S8.2** | 最小真实调用：`TAVILY_MAX_CALLS=1` 单 query，核对 `AsyncTavilyClient.search()` **真实返回结构**（字段名、score 范围、content 长度、异常形态），结果落盘缓存 | `docs/LIVE_FINDINGS.md` + 缓存样本；这是当前最大的未知（S5-B 起一直标注"未实测"） | ≤1 |
+| **S8.3** | 端到端 live 小样本：Q1/Q2 放行后跑 3–5 家公司，记录每次的 query 数、token、延迟、失败案例 | 真实 `p95_latency_ms` / `cost_per_report` 口径（含计费依据），失败案例逐条 | ≤ 用户上限 |
+| **S8.4** | 真实 golden + judge：按 Q3 把人工核验事实写成同 schema jsonl；把 `citation_traceability` 从词法代理升级为「自动词法 + 人工抽检一致率」，明确区分自动与人工 | `evals/golden_live.jsonl`、标注口径说明；换 `EVAL_DATASET_PATH` 即可复用 S7 脚本 | 0 |
+| **S8.5** | 前后对比：fixture 契约回归 vs live 真实指标；如实写「fixture 满分 ≠ live 准确率」，列出拒答 / 错引 / 超时案例 | `docs/LIVE_REPORT.md` 对比表 | 可复用缓存 |
+| **S8.6** | 简历数字出处表：每条数字 → 文件 + commit + 可复现命令 | `docs/RESUME_EVIDENCE.md`；无法当场复现的数字一律不写 | 0 |
+
+### 12.3 硬约束（沿用前几阶段，不放松）
+
+- 真实调用总次数 ≤ `TAVILY_MAX_CALLS` × 运行次数，且每次运行前先 dry-run；缓存命中优先。
+- 密钥只从环境变量 / `.env` 读，**不写进任何提交文件、日志、scorecard**；`code_sha256` 不含密钥。
+- 上游 `/models` 接口会出网（S5-B 审计结论）：live 体检时绕开或明确记录，不因为"看一下模型列表"白耗额度。
+- `PostgresSaver` 目前未实现（`config/loader.py` 明确抛 `NotImplementedError`）：S8 用 SQLite 完成实测，不临时改持久化方案，除非用户另行要求。
+- 不虚构甲方 / 上线 / 用户量；简历只写「本地实测」。
+- 每个数字都要能由脚本与日志当场复现；复现不了就标「未测」。
+
+### 12.4 降级路径
+
+| 情况 | 能做到的部分 | 简历能写什么 |
+|---|---|---|
+| 无模型 key，但放行 Tavily | S8.0–S8.2 | 「真实检索链路实测、返回结构与额度护栏」，**不能**写模型准确率/幻觉率 |
+| 无模型 key，也不放行 Tavily | 仅 S8.0 + S9 的工程描述 | 只写架构与工程能力（图编排、checkpoint、评测台），**不写任何效果数字** |
+| 三者齐备 | 全部 S8.0–S8.6 | 真实指标 + 成本/延迟取舍，每条可复现 |
+
+### 12.5 执行前检查清单（拍板后第一件事）
+
+```bash
+# 只读体检，不调用任何外部服务
+uv run python -m evals.run_eval --baseline-only     # 确认 S7 基线仍 PASS
+uv run pytest -q                                    # 121 passed 无回归
+# 只打印布尔值/长度，不打印 key 内容
+uv run python -c "import os; print({k: bool(os.getenv(k)) for k in ('TAVILY_API_KEY','OPENROUTER_API_KEY','OPENAI_API_KEY','GEMINI_API_KEY')})"
+```
+
+确认三项决策后再进 S8.1。**在用户明确放行前，不执行 S8.2 及之后的任何步骤。**
 
