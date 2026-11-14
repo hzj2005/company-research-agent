@@ -54,12 +54,18 @@ research subgraph:  START → dispatch ──Send──→ analyst(company)
 - Every step is persisted by an `AsyncSqliteSaver` checkpointer (`persistence/checkpointer.py`) and survives a restart.
 - `briefing` has two paths behind `features.structured_output`: **on** runs `prompt | model.with_structured_output(SectionBrief)` with URL-level traceability and bounded validation retry; **off** keeps the S4 template and produces a byte-identical report (A/B baseline). In `fixture` mode the "model" is a local `httpx.MockTransport` deterministic stub — **not a real model capability**.
 - The data source is an `@tool`-wrapped fixture by default (`capabilities/retrieval.py`). `live` mode adds `TavilyRetriever(BaseRetriever)` plus a call budget, disk cache and dry-run; it is **disabled by default** even when a key is installed.
+- **S6 HITL** is opt-in: with `FEATURES_HUMAN_REVIEW=true` and `AUTO_APPROVE_REVIEW=false`, an extra `human_review` node calls `interrupt()` before `briefing` and the run pauses. A second CLI process resumes it from the SQLite checkpoint with `Command(resume=...)`. A reviewer can approve, reject the whole report, or reject selected sections — rejected sections abstain instead of inventing content. Default `FEATURES_HUMAN_REVIEW=false` keeps the main graph at exactly 7 nodes.
 
 ```bash
 uv run python -m graph.run --case sparse --show-report --trace
 # A/B: FEATURES_STRUCTURED_OUTPUT=false uv run python -m graph.run --case sparse --trace
 # live 检索需显式放行：APP_MODE=live TAVILY_LIVE_ENABLED=true TAVILY_MAX_CALLS=1
 # 先看会发哪些 query（0 次真实请求）：TAVILY_DRY_RUN=true ...
+
+# S6 人工复核（两步，两个独立进程，共用同一个 db）
+uv run python -m graph.run --case sparse --review --db ./data/review.db
+uv run python -m graph.run --resume --case sparse --db ./data/review.db \
+  --decision reject-sections --reject-sections news --show-report
 ```
 
 ## Prerequisites

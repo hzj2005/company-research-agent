@@ -114,6 +114,8 @@ class ResearchState(InputState):
     degraded: bool
     degraded_sections: Annotated[list[str], append_unique]
     review_notes: Annotated[list[dict[str, Any]], append_notes]
+    # S6 HITL：人工复核的原始决策（受控 dict），供审计与 resume 后追溯
+    review_decision: Annotated[dict[str, Any], replace_mapping]
     report: str
 
 
@@ -136,6 +138,7 @@ def initial_state(company: str, **kwargs: Any) -> dict[str, Any]:
         "degraded": False,
         "degraded_sections": [],
         "review_notes": [],
+        "review_decision": {},
         "report": "",
         **kwargs,
     }

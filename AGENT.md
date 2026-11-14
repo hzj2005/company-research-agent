@@ -60,6 +60,8 @@
 11. 主图节点名 `research` 保持不变（内部是子图），CLI 轨迹统计与回归用例依赖该名字；子图的派发字段（`active_section` 等）不得污染 `ResearchState`，子图输出字段必须是主图字段的子集且同名 reducer。
 12. 栏目级重试下，检索轮次**只能**取 `retry_count[active_section]`，禁止 `max(retry_count.values())`（S4 复查实测：各栏目不同步回退时会错拿别的栏目轮次的数据）。回退留痕用每栏目字典，不写单一 `round`。
 13. `*_data` 按 URL 累积是「保留旧证据」的设计取舍；`replace_mapping` 只在「同 URL 新版本被判低分/无 URL」时移除旧引用。文档与测试**不得**写成「旧引用自动移除」，也不得用手工构造空 State 绕开真实 reducer 链来自我证明。
+14. `interrupt()` 必须与真实 checkpointer 同时存在；默认 `FEATURES_HUMAN_REVIEW=false`，开关关闭时 `build_graph` **不得注册** `human_review` 节点（`test_s4_subgraph.py:97` 精确断言主图 7 节点）。`auto_approve_review=true` 是无人值守默认值，避免 `/research` 永久卡在中断。
+15. resume 决策必须是受控 dict（`approved / rejected_sections / note`）：非法值 fail-safe 成「不批准」，栏目走白名单过滤且去重；人工否决只追加 `degraded_sections` 并复用拒答文案，**不得生成新结论**。恢复靠 `Command(resume=...)` + 同一 `thread_id` 的磁盘 checkpoint，不靠进程内变量；节点恢复时会重跑，因此 `interrupt()` 前不得有副作用。
 
 ## 7. LangChain 硬性约定
 
@@ -168,3 +170,4 @@ FEATURES_SELF_CORRECTION=false uv run python -m graph.run --case sparse --trace
 - ❌ 用真实 Tavily / 模型额度跑测试或演示 / 绕过 `CallBudget` 发包 / 把请求体传入的 key 当凭据
 - ❌ 模块级全局可变变量传递引用编号 / 把 fixture 确定性 stub 说成模型能力 / 谎称 live 已实测
 - ❌ `build_graph()` 自建 briefing backend 却不 `aclose()` / fixture stub 硬编码 `confidence` / 把「0 次外部调用」只写在文档里而不落测试
+- ❌ 无 checkpointer 的 `interrupt()` / 默认开启人工复核让 `/research` 永久暂停 / 人工否决后仍输出原结论或留无引用事实

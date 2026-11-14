@@ -23,6 +23,7 @@ from graph.nodes.decide import (
     make_evidence_check_node,
     make_rewrite_query_node,
 )
+from graph.nodes.human_review import make_human_review_node
 from graph.nodes.report import make_briefing_node
 from graph.state import ResearchState
 from graph.subgraphs.research import build_research_subgraph
@@ -39,6 +40,7 @@ def build_graph(
     不传时 `make_briefing_node` 会自建（仅测试/短生命周期脚本使用，兼容旧调用）。
     """
     builder = StateGraph(ResearchState)
+    review_enabled = settings.features.human_review
 
     builder.add_node("grounding", make_grounding_node(settings))
     # 编译后的子图直接当节点：主图 astream 里仍叫 research（前置探针实测）
@@ -47,6 +49,8 @@ def build_graph(
     builder.add_node("evidence_check", make_evidence_check_node(settings))
     builder.add_node("rewrite_query", make_rewrite_query_node(settings))
     builder.add_node("degrade", make_degrade_node(settings))
+    if review_enabled:
+        builder.add_node("human_review", make_human_review_node(settings))
     builder.add_node("briefing", make_briefing_node(settings, backend=briefing_backend))
 
     builder.add_edge(START, "grounding")
@@ -54,18 +58,21 @@ def build_graph(
     builder.add_edge("research", "curate")
     builder.add_edge("curate", "evidence_check")
 
-    # 条件函数保持纯函数，settings 由闭包注入
+    # 条件函数保持纯函数，settings 由闭包注入；S6 开关关闭时目标仍是 briefing
+    after_evidence = "human_review" if review_enabled else "briefing"
     builder.add_conditional_edges(
         "evidence_check",
         lambda state: route_after_evidence(state, settings=settings),
         {
-            "pass": "briefing",
+            "pass": after_evidence,
             "retry": "rewrite_query",
             "degrade": "degrade",
         },
     )
     builder.add_edge("rewrite_query", "research")
-    builder.add_edge("degrade", "briefing")
+    builder.add_edge("degrade", after_evidence)
+    if review_enabled:
+        builder.add_edge("human_review", "briefing")
     builder.add_edge("briefing", END)
 
     return builder

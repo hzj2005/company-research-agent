@@ -30,7 +30,7 @@
 | **S3** | #3 自纠正回路 | `evidence_check` 判定 + `add_conditional_edges` + `retry_count<=2` + `degrade` 降级拒答 | `graph/conditions.py`、`graph/nodes/`、`graph/builder.py`、`graph/run.py`、3 类 fixture 用例 | sparse 样本触发回退并在 2 轮内收敛；empty 样本输出「无公开依据」且不编造 | ✅ 已完成（23 passed） |
 | **S4** | #4 并行与子图 | `research` 换成编译子图，`dispatch` 用 `Send` 按白名单精确派发 4 analyst | `graph/subgraphs/`、白板图（第 7.5 节） | 主图 7 节点可完整画出；reducer 合并可验证 | ✅ 已完成（43 passed，见第 7.7 节） |
 | **S5** | #5 LangChain 深化 | Tavily 封 `BaseRetriever`；`with_structured_output` + 字段置信度 + 校验重试；行内引用 | `capabilities/`、Pydantic schema | 每条 Fact 能对回 source_url；抽取失败自动重试不静默丢字段 | ✅ 完成（8.1–8.5，见 8.7 / 9.6；**仅 fixture，live 实测归 S8**） |
-| **S6** | #6 HITL | 成稿前 `interrupt()` 复核 + `Command(resume=...)`；复核留痕导出标注 | `graph/nodes/human_review.py` | 中断→恢复后 State 一致；依赖真实 checkpointer | ⏳ |
+| **S6** | #6 HITL | 成稿前 `interrupt()` 复核 + `Command(resume=...)`；复核留痕导出标注 | `graph/nodes/human_review.py` | 中断→恢复后 State 一致；依赖真实 checkpointer | ✅ 完成（10.1–10.4，见 10.5；仅 fixture） |
 | **S7** | #7 评测台 | golden set（30–50 公司 × 5 事实）、8 项指标、4 组 A/B、scorecard、CI | `evals/`、`.github/workflows/eval.yml` | 一条命令出分，能定位退化用例 | ⏳ |
 | **S8** | #8 真实实测 | **需 key**。切 `APP_MODE=live`，真实模型 + 真实 Tavily + 真实 DB 跑全量 | 对比表、失败案例、成本/延迟取舍 | 每个数字能由脚本与日志当场复现 | ⏳ 阻塞：等 key |
 | **S9** | #9 简历交付 | 3–4 条描述 + 面试追问清单 | `docs/RESUME.md` | 每条能指到具体文件与 commit | ⏳ |
@@ -136,14 +136,16 @@
 
 ### 6.3 登记但不在本阶段动的边界（不假装已修）
 
-| 项 | 现状 | 归属 |
+> **历史快照**：本表是 S3 复查当时（S4 之前）的记录，「现状」列描述的是**当时**的代码，不是当前状态。入口接线、三个行为偏差已在 S4 / S5-B 解决，见 7.8 / 9.6 / 10.5 与 `BASELINE` 13–14；当前仍欠的只有内容级 `citation_traceability`（S7）。
+
+| 项 | 现状（当时） | 归属 / 后续 |
 |---|---|---|
-| **对外入口仍跑原版图** | `langgraph_entry.py:4`、`application.py:115` 仍指向 `backend.graph.Graph`；新图只能靠 CLI 跑。规划里原本就没排「接线」这一步 | **用户拍板：等 S5 接真实 LLM/Tavily 后一次切换**，避免 API 现在返回合成报告显得一眼假 |
+| **对外入口仍跑原版图** | `langgraph_entry.py:4`、`application.py:115` 仍指向 `backend.graph.Graph`；新图只能靠 CLI 跑。规划里原本就没排「接线」这一步 | **S5-B 已切换**：两个入口都指向新图（见 9.6 / `BASELINE` 13） |
 | `evidence_check` 只数篇数、不验内容 | `graph/nodes/decide.py:31–37` 判定是「每栏目合格文档 ≥ 2」；empty 报告里「该领域缺少公开规模数据」也带 `[n]` | S7 的 `citation_traceability`（来源确实支持 claim）需要 judge / golden set，S3 无实现手段 |
 | `any(retry_count >= max_retry)` 整体降级 | `graph/conditions.py:45`：一个栏目达上限会连累其他栏目 | S4 拆子图时一并改成栏目级降级 |
 | `degrade.enabled=false` 仍置 `degraded=True` | `graph/nodes/decide.py:78–97`，只影响措辞 | S4 明确该配置语义或删除 |
 | `curated_data` 按 URL 累积 | `merge_docs` 无法移除上一轮已失效引用 | S4 配合子图重算 |
-| `features.structured_output` / `human_review` | 已可环境变量覆盖，但代码尚未消费 | S5 / S6 生效 |
+| `features.structured_output` / `human_review` | **历史快照（S3 复查当时）**：已可环境变量覆盖，但代码尚未消费 | 现已落地并验收：`structured_output` 见 9.6，`human_review` 见 10.5 |
 
 ---
 
@@ -425,3 +427,73 @@ START → grounding → [research 子图] → curate → evidence_check
 4. 额外排雷：静态核对 `AsyncTavilyClient.search` 真实签名，`query/max_results/search_depth/topic` 均存在，`topic` 允许 `general/news/finance`、`search_depth` 允许 `advanced`，S8 不会因参数名白花额度。**这是读本地 SDK 签名，不是 API 调用**。
 
 **验收**：`89 passed`；三档 822/829/561、两个 A/B 开关零回归；client 探针 5 次运行 0 个未关闭；`uv pip check` 103 包兼容。**真实 Tavily / 模型调用仍为 0**。
+
+---
+
+## 10. S6 执行计划：HITL 人工复核（图内 `interrupt` + CLI resume）
+
+> 制定：2026-11-14 | 前置：`867da1d`（S5-B 复查补账完成，`89 passed`，工作区干净）
+> 用户拍板：交互形态 = **图内 `interrupt()` + CLI 两步式 resume**；不动上游 SSE、不加 API resume 端点。
+
+### 10.1 前置探针实测（真跑，不查文档猜）
+
+| 探针 | 结果 |
+|---|---|
+| `interrupt` / `Command` 导入 | 均在 `langgraph.types`；`Command(resume=...)` 参数存在 |
+| 首轮 `astream(updates)` | 产出 `['before', '__interrupt__']`；`aget_state().next == ('review',)`；payload 可从 `snapshot.tasks[].interrupts[].value` 取 |
+| **跨 session 恢复** | 关闭 `CheckpointSession`、重开一个指向同一 SQLite 文件，用 `Command(resume={...})` 成功续跑，恢复后 `next == ()` |
+| 现有断言约束 | `tests/test_s4_subgraph.py:97` **精确断言主图 7 节点集合** → 默认配置绝不能新增节点 |
+
+### 10.2 设计决策
+
+1. **默认零行为变化**：`FEATURES_HUMAN_REVIEW` 默认改为 `false`。开关关时 `build_graph` 不注册 `human_review`，条件边仍是 `pass→briefing` / `degrade→briefing`，主图严格 7 节点，三档 CLI 的报告与轨迹逐字不变。
+2. **开关开时图结构**：`evidence_check` 的 `pass` 与 `degrade` 都先经过 `human_review` 再到 `briefing`（主图 8 节点）。`retry` 分支不变。
+3. **两级开关**：`human_review=true` + `auto_approve_review=true` → 节点存在但**不调用** `interrupt()`，写 `auto_approved` 留痕（A/B 基线用）；`auto_approve_review=false` → 真 `interrupt()` 暂停。
+4. **resume 决策契约**（受控 dict，不是自由文本）：`{"approved": bool, "rejected_sections": [str], "note": str}`。
+   - `approved=true` → 原样出稿；
+   - `approved=false` → 全栏目拒答；
+   - `rejected_sections` → 只把这些栏目追加进 `degraded_sections`（`append_unique` reducer），并置 `degraded=True`。
+   **人工决定必须能改变最终报告**，不能只是留个痕迹。
+5. **不编造红线**：人工拒答复用 `degrade.message`「该类信息未找到公开依据」，不生成新文案、不留无引用结论。
+6. **跨进程恢复**：CLI 第一次跑到中断即结束进程（打印 `thread_id` + interrupt payload），第二次 `--resume` 重开 `CheckpointSession` 指向同一 db 续跑；这比同一进程内 `input()` 更能证明 S2 的 checkpointer 不是摆设。
+7. **0 外部调用**：全程 fixture；`briefing_backend_scope` 两次运行各建各关；禁网守卫继续生效。
+
+### 10.3 任务与验收
+
+| # | 动作 | 产出 | 验收标准 |
+|---|---|---|---|
+| 10.1 | State 契约 + `human_review` 节点 + 条件边接线 | `graph/state.py`、`graph/nodes/human_review.py`、`graph/builder.py`、`config/{settings.yaml,.env.example}` | 默认 7 节点、三档零回归；开关开时 8 节点且 `pass/degrade` 都经过复核 |
+| 10.2 | CLI 两步式 resume | `graph/run.py` | `--review` 打印 thread_id 与 interrupt payload；`--resume --decision approve/reject` 能在**新进程**续跑出报告 |
+| 10.3 | 验收测试 | `tests/test_s6_hitl.py` | 默认零回归、auto 不中断、真 interrupt 暂停、跨 session 恢复、拒绝后报告改变且不编造、开关关闭时无节点 |
+| 10.4 | 全量实测、文档同步、提交 | `ACTION_PLAN` 10.5、`BASELINE` 14、`README`、`AGENT.md`、commit、工作区日志 | pytest 全过、三档 + A/B 零回归、`uv pip check`、真实调用 0 次、工作区干净 |
+
+### 10.4 边界（不谎称）
+
+- 只做 CLI resume；**不提供 API/SSE 复核端点**，上游流式逻辑一行不动（用户拍板）。
+- 人工复核没有前端界面，payload 与 decision 都是 JSON；这不是「产品化 HITL」，是**可验证的图编排能力**。
+- `auto_approve_review=true` 是无人值守默认值，避免 `/research` 永久卡在中断；真实复核需显式关掉它。
+- 全程 fixture、0 次真实 Tavily / 模型调用；S7 评测台、S8 真实实测、S9 简历不提前开工。
+
+### 10.5 S6 实测结果（2026-11-14，0 次真实 Tavily / 模型调用）
+
+**新增**：`graph/nodes/human_review.py`、`tests/test_s6_hitl.py`；改造 `graph/{state,builder,run}.py`、`config/settings.yaml`、`.env.example`。
+
+| 验收项 | 实测结果 |
+|---|---|
+| 默认零回归 | `FEATURES_HUMAN_REVIEW=false` → 主图严格 7 节点、无中断；三档 822/829/561、research 1/2/3、引用 8/9/6 与 S5 一致 |
+| 两级开关 | 开 `human_review` 后主图 8 节点；`auto_approve=true` 不中断且写 `auto_approved` 留痕；`auto_approve=false` 真 `interrupt()` |
+| **跨进程恢复** | CLI 两个独立进程实测：第一步打印 `thread_id` / interrupt payload；第二步 `node_trace` 只有 `["human_review", "briefing"]`（前半段从磁盘恢复、未重跑），报告 829 字符与基线一致 |
+| 人工决定能改报告 | `reject-sections news` → 只有 News 段输出「该类信息未找到公开依据」，其余栏目照常出稿；`reject` → 四栏全拒答、References 为空、无合成事实残留 |
+| fail-safe | 非法 resume 值按「不批准」处理并整份拒答；未知栏目被白名单过滤且去重 |
+| 0 外部调用 | `test_s6_hitl.py` 守卫 `socket.connect`（只放行回环），复核 + 恢复全程被拦截外部连接 = **0** |
+| 全量回归 | `97 passed`；两个 A/B 开关生效；`uv pip check` 103 包兼容 |
+
+**CLI 用法**（两次运行必须用同一 `--db` 与同一公司）：
+
+```bash
+uv run python -m graph.run --case sparse --review --db ./data/review.db
+uv run python -m graph.run --resume --case sparse --db ./data/review.db \
+  --decision reject-sections --reject-sections news --note "新闻来源存疑" --show-report
+```
+
+**如实边界**：只做 CLI resume，**没有** API/SSE 复核端点（用户拍板）；payload 与 decision 都是 JSON，不是产品化前端 HITL；`data/` 与 `*.db` 已在 `.gitignore`。S7/S8/S9 仍未开工。

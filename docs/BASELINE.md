@@ -268,3 +268,23 @@
 | 回归 | `89 passed`；三档 822/829/561、两个 A/B 开关、`uv pip check` 103 包兼容 |
 
 **新增边界说明**：上游 `GET /models` 会向 OpenRouter 发请求、不受本项目护栏约束（用户拍板只补文档不动上游端点）；`APP_MODE=live` 无模型 key 会在 `build_graph()` 构造期抛 `MissingLLMCredentials`，只跑检索需 `FEATURES_STRUCTURED_OUTPUT=false`；`TAVILY_MAX_CALLS` 是 per-run 预算。
+
+---
+
+## 14. S6 HITL 验证记录（2026-11-14，0 次真实 Tavily / 模型调用）
+
+用户拍板形态：**图内 `interrupt()` + CLI 两步式 resume**，不动上游 SSE、不加 API resume 端点。
+
+**前置探针（真跑）**：`interrupt` / `Command` 均在 `langgraph.types`；首轮 `astream(updates)` 产出 `__interrupt__`，`aget_state().next == ('review',)`；**关闭 `CheckpointSession`、重开指向同一 SQLite 后**用 `Command(resume=...)` 续跑成功，恢复后 `next == ()`。另发现 `test_s4_subgraph.py:97` 精确断言主图 7 节点 → 默认配置不能新增节点。
+
+| 验证点 | 真实结果 |
+|---|---|
+| 默认零回归 | `FEATURES_HUMAN_REVIEW=false` → 7 节点、无中断；三档 822/829/561 与 S5 逐字一致 |
+| 开关打开 | 8 节点（多 `human_review`）；`auto_approve=true` 写 `auto_approved` 不中断；`false` 真暂停 |
+| **跨进程恢复** | 两个独立 CLI 进程：第一步打印 payload / thread_id；第二步 `node_trace=["human_review","briefing"]`，前半段从磁盘恢复未重跑，报告 829 字符 |
+| 人工决定生效 | `--decision reject-sections --reject-sections news` → 仅 News 段拒答、该栏目引用移除；`--decision reject` → 四栏全拒答、References 空、无「（合成）」残留 |
+| fail-safe | 非法 resume 值整份拒答；未知栏目被白名单过滤且去重 |
+| 零外部连接 | 复核 + 恢复全程 `socket.connect` 守卫（只放行回环），被拦截外部连接 = **0** |
+| 回归 | `97 passed`；两个 A/B 开关生效；`uv pip check` 103 包兼容 |
+
+**S6 如实边界**：只有 CLI，没有前端 / API 复核端点；payload 与 decision 都是 JSON，属**可验证的图编排能力**而非产品化 HITL；`auto_approve_review=true` 是无人值守默认值，避免 `/research` 永久卡在中断。S7 评测台、S8 真实实测（需模型 key + 用户放行额度）、S9 简历仍未开工。

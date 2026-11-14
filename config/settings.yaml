@@ -66,8 +66,8 @@ features:
   self_correction: ${FEATURES_SELF_CORRECTION:-true}       # 条件边回退总开关（S3 已生效）
   structured_output: ${FEATURES_STRUCTURED_OUTPUT:-true}   # with_structured_output（S5 生效）
   inline_citations: ${FEATURES_INLINE_CITATIONS:-true}     # 行内引用渲染（S3 已生效）
-  human_review: ${FEATURES_HUMAN_REVIEW:-true}             # interrupt 复核（S6 生效）
-  auto_approve_review: ${AUTO_APPROVE_REVIEW:-true}
+  human_review: ${FEATURES_HUMAN_REVIEW:-false}            # S6 HITL：默认关，开关关时主图严格 7 节点
+  auto_approve_review: ${AUTO_APPROVE_REVIEW:-true}        # 开了 human_review 仍需显式关这里才会 interrupt
 
 report:
   # 报告结构保持与原版一致，便于做前后对比
