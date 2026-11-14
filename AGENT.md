@@ -39,7 +39,7 @@
 
 - 所有节点函数 `async def`，签名统一 `(state: ResearchState) -> dict[str, Any]`；需要配置时用**节点工厂闭包**注入：`def make_xxx_node(settings: Settings) -> Callable`，不要往签名里塞 keyword-only 参数（LangGraph 不认）。
 - 节点是**纯函数**：只读 State、返回字段字典；禁止就地修改传入 State、禁止写全局可变状态（原版 `job_status` 全局字典只允许在 API 适配层使用）。
-- 日志用 `logging`，禁止 `print`；禁止裸 `except: pass`，异常必须记录或向上抛。
+- 日志用 `logging`，业务节点禁止 `print`；**CLI 入口（`graph/run.py`）允许 print 结构化结果**。禁止裸 `except: pass`，异常必须记录或向上抛。
 - 所有阈值、上限、模型名、路径、开关一律从配置读，**禁止硬编码魔法数字**。
 - 密钥只从环境变量读，禁止写进代码、yaml、日志或 commit。
 
@@ -50,7 +50,7 @@
 3. 并行节点写同一字段**必须**用 `Annotated[..., reducer]`；`messages` 用 `add_messages`，文档字典用按 URL 去重的 `merge_docs`，禁止直接 `operator.add` 到 dict。
 4. **禁止在节点内部用 `asyncio.gather` 做本该由图编排的并行**（原版 `briefing.py` 的做法）；并行一律用并行边或 `Send`。
 5. 任何循环**必须**有 `retry_count` 上限（默认 2）与明确降级出口；禁止用「模型自己说够了」当终止条件。
-6. 回退用 `Command(goto=...)` 精确指向目标节点，禁止用无条件边唤醒全部 analyst。
+6. 回退必须精确控制重搜范围，禁止唤醒全部 analyst。S3 单节点形态用「条件边 + `sections_to_research` 不足栏目白名单」实现（见 `graph/conditions.py`）；S4 拆成 4 analyst 子图后若存在多分支唤醒风险，改用 `Command(goto=...)`。
 7. `compile()` **必须**传 `checkpointer`；`interrupt()` 必须与 checkpointer 同时存在；统一走 `persistence.CheckpointSession.compile()`。
 8. `thread_id` 由 `config.loader.build_thread_id()` 按配置模板生成，禁止硬编码或留空。
 9. 条件函数保持无副作用、可单测：给定 State → 返回分支名字符串。
@@ -63,7 +63,7 @@
 3. 外部数据源必须封装成 `BaseRetriever` 或 `@tool`；禁止在节点里 `new AsyncTavilyClient`（原版 `base.py` L24 的做法）。
 4. 模型统一经 `create_llm(role, config)` 获取，角色分为 `research / briefing / editor / judge`。
 5. 抽取校验失败 → 重试一次 → 仍失败则该栏目降级并记入 `review_notes`，**禁止静默丢字段**。
-6. 禁止在 prompt 中写 `Never mention "no information found"` 这类迫使模型编造的指令。
+6. 禁止在 prompt 中写 `Never mention "no information found"` 这类迫使模型编造的指令。原版 `backend/prompts.py` 仍保留该指令（上游原文件，未删），但 **S3 新图完全不加载它**；S5 接真实模型时也不得复用。
 
 ## 8. 可溯源约定
 
@@ -115,6 +115,11 @@ uv run python -c "from config.loader import get_settings; print(get_settings().a
 
 # 依赖完整性自检
 uv pip check
+
+# S3 自纠正回路三条验收场景（无需 key）
+uv run python -m graph.run --case sufficient --show-report --trace
+uv run python -m graph.run --case sparse --show-report --trace
+uv run python -m graph.run --case empty --show-report --trace
 
 # 后续实现后启用：
 # uv run python -m graph.run --company Notion

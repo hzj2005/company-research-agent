@@ -27,7 +27,7 @@
 | **S0** | #10 #11 #12 | 方案、规范、双模式配置 | `PROJECT_PLAN.md` / `AGENT.md` / `.env.example` / `config/*.yaml` | 文件存在 | ✅ 已完成 |
 | **S1** | **#1 基座落地与原版 baseline** | ① 原仓库落到工作区，保留 LICENSE + 上游 commit + attribution<br>② 建独立 venv，从官方 PyPI 装齐依赖<br>③ 补做阶段 0 欠账：`yaml.safe_load` 全量解析校验<br>④ 真正 import 并编译原版 `StateGraph`，导出节点/边清单<br>⑤ 记录 baseline 报告结构与耗时口径 | `backend/`、`LICENSE`、`docs/UPSTREAM.md`、`docs/BASELINE.md`、`.venv/`、`requirements.lock.txt` | 原版图对象能编译；两份 YAML 全量解析通过；baseline 文档有代码位置依据 | ✅ 已完成（可达部分；live 调研剥离为 #13） |
 | **S2** | #2 状态契约 | `StateGraph(ResearchState)` + `add_messages` / `merge_docs` reducer；`compile(checkpointer=...)` 接真实 SQLite Saver；`thread_id` 按模板 | `persistence/`、`graph/state.py`、单元测试 | 进程重启后同一 thread 可恢复；并行写回不覆盖；恢复前后 State 一致 | ✅ 已完成（10 个 pytest 全通过） |
-| **S3** | #3 自纠正回路 | `evidence_check` 判定 + `add_conditional_edges` + `retry_count<=2` + `degrade` 降级拒答 | `graph/conditions.py`、`graph/nodes/degrade.py`、3 类 fixture 用例 | sparse 样本触发回退并在 2 轮内收敛；empty 样本输出「无公开依据」且不编造 | ⏳ |
+| **S3** | #3 自纠正回路 | `evidence_check` 判定 + `add_conditional_edges` + `retry_count<=2` + `degrade` 降级拒答 | `graph/conditions.py`、`graph/nodes/`、`graph/builder.py`、`graph/run.py`、3 类 fixture 用例 | sparse 样本触发回退并在 2 轮内收敛；empty 样本输出「无公开依据」且不编造 | ✅ 已完成（23 passed） |
 | **S4** | #4 并行与子图 | 去掉节点内 `asyncio.gather`，改 LangGraph 并行边 / `Send`，4 analyst 收成 `research_subgraph` | `graph/subgraphs/`、白板图 | 主图 6–7 节点，可完整画出；reducer 合并可验证 | ⏳ |
 | **S5** | #5 LangChain 深化 | Tavily 封 `BaseRetriever`；`with_structured_output` + 字段置信度 + 校验重试；行内引用 | `capabilities/`、Pydantic schema | 每条 Fact 能对回 source_url；抽取失败自动重试不静默丢字段 | ⏳ |
 | **S6** | #6 HITL | 成稿前 `interrupt()` 复核 + `Command(resume=...)`；复核留痕导出标注 | `graph/nodes/human_review.py` | 中断→恢复后 State 一致；依赖真实 checkpointer | ⏳ |
@@ -88,3 +88,27 @@
 - 每个技术结论都要能指到具体文件与行号 / commit。
 - 每次完成一步：更新任务状态 → 写工作区记忆日志 → 再进入下一步。
 - 遇到环境阻塞（缺 key、装不上包）如实记录，不静默降级、不编造结果。
+
+---
+
+## 5. S3 实测记录（2026-11-14）
+
+新增 `capabilities/retrieval.py`（`@tool` 封装 fixture 数据源）、`graph/conditions.py`（纯函数三路路由）、`graph/nodes/{collect,decide,report}.py`、`graph/builder.py`（7 节点 + 条件边）、`graph/run.py`（CLI）、`tests/test_s3_loop.py`。
+
+`uv run python -m graph.run --case <case> --trace` 三条真实运行轨迹：
+
+| case | research 执行次数 | retry_count | verdict | degraded | 轨迹终点 |
+|---|---|---|---|---|---|
+| sufficient | 1 | `{}` | 4 栏目全 sufficient | false | `evidence_check → briefing` |
+| sparse | 2 | `company=1` | 回退后 4 栏目全 sufficient | false | `evidence_check → rewrite_query → research → … → briefing` |
+| empty | 3（= max_retry+1） | `company=2` | company=degraded，其余 sufficient | true | `… → degrade → briefing` |
+
+- **精确回退**：sparse 第二轮 `research` 的 `sections` 只有 `["company"]`，没有唤醒其余 3 个栏目。
+- **不编造**：empty 报告 Company Overview 输出「该类信息未找到公开依据」，`low-relevance` 无关 URL 出现 **0 次**；其余栏目仍正常输出。
+- **引用同源**：正文 `[n]` 与末尾 References 由同一份 `state["references"]` 生成，CLI 报告可直接核对。
+- **条件边真实存在**：编译后图对象里 `evidence_check` 为 conditional source，分支 3 条（测试断言）。
+- **A/B 开关生效**：`features.self_correction=false` 时 sparse 直接 degrade，research 只跑 1 次。
+
+`uv run python -m pytest -q` → **23 passed**（S2 及补账 16 + S3 7）。
+
+**S3 如实边界**：仍为 fixture 模板简报，未接真实 LLM（S5）、未拆并行子图（S4）、未接 HITL（S6）；原版 `backend/prompts.py` 未改动但新图不加载它。`live` 检索在 `capabilities/retrieval.py` 中显式抛 `NotImplementedError`，留到 S5。

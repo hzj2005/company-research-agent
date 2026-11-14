@@ -149,3 +149,20 @@
 5. **文档同步**：`AGENT.md` 第 3、12、13 节与本文命令全部改为 `uv run`，补「禁止直接 pip install」「禁止无 reducer 重复写」两条红线。
 
 复查后 `uv run python -m pytest -q` → **16 passed**。`requirements.lock.txt` 保留为 S1 历史快照，依赖以 `pyproject.toml` + `uv.lock` 为准。
+
+---
+
+## 9. S3 验证记录（2026-11-14，自纠正回路）
+
+图结构（编译后对象）：7 节点 `grounding / research / curate / evidence_check / rewrite_query / degrade / briefing`，`evidence_check` 挂 3 条条件边（`pass / retry / degrade`），`rewrite_query → research` 构成回路。相对上游「12 节点 / 14 边 / **0 条件边**」是结构性变化。
+
+| 验收项 | 真实结果 |
+|---|---|
+| sufficient 一轮通过 | research 1 次、retry_count 空、8 篇合格文档、8 条引用 |
+| sparse 触发回退并收敛 | research 2 次、company retry=1、回退只重搜 `["company"]`、补足后 sufficient |
+| empty 上限收敛并拒答 | research 3 次（max_retry 2 + 首轮）、company retry=2、degraded=true、报告输出「该类信息未找到公开依据」 |
+| 不编造 | 低分无关 URL 在报告中出现 0 次；其他栏目内容仍保留 |
+| 引用同源 | 正文行内 `[n]` 与末尾 References 同一份 `references` 字典 |
+| 开关 A/B | `self_correction=false` → 不回退，直接 degrade |
+
+复现命令：`uv run python -m graph.run --case empty --show-report --trace`；测试 `uv run python -m pytest -q` → 23 passed。
