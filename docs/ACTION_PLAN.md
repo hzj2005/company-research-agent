@@ -10,6 +10,7 @@
 | 项 | 实测结果 | 对执行的影响 |
 |---|---|---|
 | Python | WorkBuddy 内置 3.13.14 / `D:\Python\Python311` 等 4 个解释器 | 用 3.11 建独立 venv，兼容性最好 |
+| 包管理 | `uv 0.8.15` 已装；`uv.lock` + `pyproject.toml` 已生成 | 命令统一 `uv run` |
 | pip 镜像 | `pypi.tuna.tsinghua.edu.cn` **返回 `from versions: none`，不可用** | 统一改用 `-i https://pypi.org/simple`（已实测可装 PyYAML） |
 | 关键依赖 | 全局环境 langchain / langgraph / pydantic / pytest **全部 MISSING** | 必须建独立 venv 装依赖，否则任何「跑通」都是空话 |
 | 上游仓库 | 本地已有快照，commit `23fe92d`（2026-10-26），含 `LICENSE`、`.git`、多语言 README | 可直接落地，保留 fork 来源与 commit 历史 |
@@ -52,13 +53,31 @@
 | 动作 | 结果 |
 |---|---|
 | 上游落地 | 143 个文件、`LICENSE` 完整、上游 commit `23fe92d` 与 remote `upstream` 可查、`.env.example` 冲突另存 `docs/upstream.env.example` |
-| venv | Python 3.11.9 独立环境；官方 PyPI 源装齐 99 个包并导出 `requirements.lock.txt`；清华镜像不可用（已记录） |
+| venv | Python 3.11.9 独立环境；官方 PyPI 源装齐 99 个包并导出 `requirements.lock.txt`；清华镜像不可用（已记录）。**S2 复查后改用 uv 重建**，见第 4 节 |
 | YAML | 两份配置 `yaml.safe_load` 全量通过，阶段 0 欠账解除 |
 | 图对象 | 真实 `compile()` 成功；**12 节点 / 14 边 / 0 条件边 / 无 checkpointer**，与静态核查一致 |
 | 纯节点 | grounding / collector / curator 真跑成功；阈值 0.4 过滤行为与引用数可复现 |
 | 新发现缺陷 | `typing.TypedDict` + Python 3.11 + pydantic 2.14 导致 `get_input_schema()` 抛 `PydanticUserError` → S2 改用 `typing_extensions.TypedDict` 并补 schema 用例 |
 
 完整证据见 `docs/BASELINE.md` 与 `baseline/upstream_graph.json`。
+
+---
+
+## 4. S2 后复查与补账（2026-11-14，用户要求「先检查再进下一阶段」）
+
+逐条对账 S0–S2 的承诺与仓库实况，发现 5 个缺口，全部已补：
+
+| # | 缺口 | 影响 | 处理 |
+|---|---|---|---|
+| 1 | `.venv` 是 `python -m venv` 建的，不是 uv | 用户明确要求 uv 环境；依赖不可复现 | 新增 `pyproject.toml` / `.python-version` / `uv.lock`，`uv venv --python 3.11 --clear` 重建，`uv sync --frozen` 复跑幂等、`uv pip check` 103 包兼容 |
+| 2 | 无 `pyproject.toml`，但 `langgraph.json` 写着 `dependencies: ["."]` | LangGraph Server 装不上项目 | pyproject 已可 build（`uv sync` 实测 Build 成功） |
+| 3 | `langgraph` / sqlite saver / pytest / pyyaml 只靠手动 pip 安装 | 换机器 `pip install -r requirements.txt` 会缺依赖 | 全部写进 `pyproject.toml` 并锁进 `uv.lock` |
+| 4 | `evals/fixtures/tavily_responses.json` 被 3 处引用却不存在 | S3 的回退/降级用例无数据可跑 | 补 `sufficient / sparse / empty` 三类合成样本 + `tests/test_fixtures.py` 5 个契约测试 |
+| 5 | `ResearchState` 里 `retry_count` / `evidence_verdict` / `rewrite_queries` / `briefings` / `review_notes` 是裸 dict/list，且缺 `degraded` 字段 | S3 回退第二轮会整体覆盖第一轮状态，直接违背 AGENT.md 第 6.3 条 | 补 `merge_mapping` / `append_unique` / `append_notes` reducer、`degraded` + `degraded_sections` 字段，新增两轮写回回归测试 |
+
+复查后 `uv run python -m pytest -q` → **16 passed**（原 10 + fixture 契约 5 + reducer 回归 1）。
+
+仍未做、且不属于本阶段欠账的：S4 重建完整业务图后补端到端用例（`docs/BASELINE.md` 第 7 节已挂）；#13 真实 `/research` baseline 等 key。
 
 ---
 

@@ -17,8 +17,11 @@
 ## 3. 技术栈
 
 - Python 3.11+，async-first，全量 type hints
-- 实测锁定版本（见 `requirements.lock.txt`）：`langchain 1.3.9` / `langchain-core 1.8.0` / `langgraph 1.2.22` / `langgraph-checkpoint 4.3.2` / `langgraph-checkpoint-sqlite 3.1.3` / `pydantic 2.14.3`
-- `langgraph` 原仓库仅为传递依赖，本项目已**显式安装**；运行统一用项目内 `.venv/Scripts/python.exe`
+- 依赖唯一真源：`pyproject.toml` + `uv.lock`（解析 106 包 / 实装 103 包）；`requirements.lock.txt` 只是 S1 阶段的 pip 快照，不作准
+- 实测锁定版本：`langchain 1.3.9` / `langchain-core 1.8.0` / `langgraph 1.2.22` / `langgraph-checkpoint 4.3.2` / `langgraph-checkpoint-sqlite 3.1.3` / `pydantic 2.14.3`
+- `langgraph` 原仓库仅为传递依赖，本项目已在 `pyproject.toml` 中**显式声明**
+- **虚拟环境由 uv 管理**：`.python-version=3.11`，`.venv` 由 `uv venv --python 3.11` 创建；所有命令统一 `uv run python ...`，禁止直接 `pip install` 改环境
+- `langgraph.json` 的 `dependencies: ["."]` 依赖 `pyproject.toml` 可安装包，删掉 pyproject 会让 LangGraph Server 失效
 - Pydantic v2（结构化输出与配置模型）
 - **State 的 TypedDict 必须从 `typing_extensions` 导入**：原版 `backend/classes/state.py` 用 `typing.TypedDict`，在 Python 3.11 + pydantic 2.14 下 schema 内省会抛 `PydanticUserError`（见 `docs/BASELINE.md` 第 3 节）
 - **LangGraph 1.2 的 `get_input_schema()` 只列外部输入 channel，完整字段要用 `get_output_schema()`**；测试两者都要覆盖
@@ -99,20 +102,27 @@
 ## 12. 常用命令
 
 ```bash
-# 运行测试（必须用项目 venv）
-.venv/Scripts/python.exe -m pytest -q
+# 首次落地 / 换机器（读 .python-version + uv.lock，幂等）
+uv sync
 
-# 重新采集上游基线（不联网，占位 key）
-.venv/Scripts/python.exe baseline/inspect_upstream.py
+# 新增依赖（会同时更新 pyproject.toml 与 uv.lock）
+uv add <package>          # 开发依赖用 uv add --dev <package>
 
-# 校验配置解析
-.venv/Scripts/python.exe -c "from config.loader import get_settings; print(get_settings().app.mode)"
+# 运行测试 / 脚本（一律走 uv run，禁止直接调 .venv 里的 python）
+uv run python -m pytest -q
+uv run python baseline/inspect_upstream.py
+uv run python -c "from config.loader import get_settings; print(get_settings().app.mode)"
+
+# 依赖完整性自检
+uv pip check
 
 # 后续实现后启用：
-# .venv/Scripts/python.exe -m graph.run --company Notion
-# .venv/Scripts/python.exe -m evals.run_eval --config config/eval.yaml
-# APP_MODE=live .venv/Scripts/python.exe -m evals.run_eval --config config/eval.yaml
+# uv run python -m graph.run --company Notion
+# uv run python -m evals.run_eval --config config/eval.yaml
+# APP_MODE=live uv run python -m evals.run_eval --config config/eval.yaml
 ```
+
+`uv` 默认走官方 PyPI（已在 `pyproject.toml` 的 `[[tool.uv.index]]` 固定）；本机 `pip.ini` 指向的清华镜像返回 `from versions: none`，**不要**给 uv 配成该源。
 
 ## 13. 禁止清单（速查）
 
@@ -126,3 +136,5 @@
 - ❌ 无来源的事实、无脚本支撑的指标
 - ❌ 硬编码密钥、阈值、模型名、thread_id
 - ❌ 把二次开发写成独立开发
+- ❌ 直接 `pip install` 改环境、手写依赖版本却不同步 `uv.lock`
+- ❌ 给会被回退/并行重复写入的 dict/list 字段不配 reducer

@@ -1,0 +1,50 @@
+[project]
+name = "company-research-agent-selfcorrect"
+version = "0.2.0"
+description = "基于 guy-hartstein/company-research-agent (Apache-2.0) 二次开发：带自纠正回路、可溯源、可回归评测的 LangGraph 公司调研工作流"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+license = { text = "Apache-2.0" }
+
+# 上游 requirements.txt 里的运行依赖，加上本项目新增的显式依赖。
+# 注意：langgraph / langgraph-checkpoint-sqlite / pytest / pyyaml 在上游只是
+# 传递依赖或靠手动安装，这里全部显式声明，保证 uv sync 后即可跑测试与图。
+dependencies = [
+  "certifi==2026.10.19",
+  "fastapi==0.121.2",
+  "langchain==1.3.9",
+  "langchain-openai==1.2.1",
+  "langchain-google-genai==3.0.3",
+  "langchain-community==0.4.1",
+  "langgraph==1.2.22",
+  "langgraph-checkpoint-sqlite==3.1.3",
+  "pymongo==4.18.2",
+  "reportlab==4.5.0",
+  "tavily-python==0.7.24",
+  "uvicorn[standard]==0.38.0",
+  "python-dotenv==1.2.2",
+  "httpx==0.28.1",
+  "pydantic==2.14.3",
+  "PyYAML==6.0.3",
+  "typing-extensions>=4.16",
+]
+
+[dependency-groups]
+dev = [
+  "pytest==9.2.0",
+  "pytest-asyncio==1.5.0",
+]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["backend*", "graph*", "config*", "persistence*", "capabilities*", "evals*", "baseline*"]
+
+# 本机 pip.ini 指向已失效的清华镜像，uv 不读 pip.ini，这里仍显式固定官方源，
+# 保证 uv.lock 在任何机器上解析一致。
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+default = true

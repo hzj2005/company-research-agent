@@ -2,7 +2,7 @@
 
 > 采集脚本：`baseline/inspect_upstream.py` | 机器可读结果：`baseline/upstream_graph.json`
 > 采集时间：2026-11-14 13:10 | 上游 commit：`23fe92d48ea05750e6fd7cffdb78799cea5278d8`
-> 复现：`.venv/Scripts/python.exe baseline/inspect_upstream.py`
+> 复现：`uv run python baseline/inspect_upstream.py`
 
 ---
 
@@ -118,7 +118,7 @@
 ## 7. S2 验证记录（2026-11-14，状态契约与真实持久化）
 
 新增模块：`config/loader.py`、`graph/state.py`、`persistence/checkpointer.py`、`tests/`（3 个测试文件 + conftest）、`pytest.ini`。
-运行：`.venv/Scripts/python.exe -m pytest -q` → **10 passed**。
+运行：`uv run python -m pytest -q` → **10 passed**（S2 当时为 10 个；S2 后复查补测增至 16 个，见第 8 节）。
 
 | 验收点 | 真实测试结果 |
 |---|---|
@@ -135,3 +135,17 @@
 2. LangGraph 1.2 的 `get_input_schema()` 只列外部输入 channel（空），完整字段要用 `get_output_schema()`。
 
 **S2 仍未做的**：尚未把原版 11 节点图切到新 `ResearchState`（S3–S4 会重建图），因此本阶段的验证用的是最小验证图，不是完整业务图。这一点在 S4 完成后必须补一条端到端用例。
+
+---
+
+## 8. S2 后复查补账（2026-11-14）
+
+用户要求「先检查上一步是否干好，再进下一阶段」。逐条对账后确认核心功能无误（配置展开、schema 内省、并行 reducer、checkpoint 落盘/重启恢复/thread 隔离均真跑通过），但补了 5 项：
+
+1. **改 uv 环境**：原 `.venv` 由 `python -m venv` 建；现由 `uv venv --python 3.11 --clear` 重建，`.venv/pyvenv.cfg` 含 `uv = 0.8.15`。新增 `pyproject.toml`（显式声明 langgraph / sqlite saver / pytest / pyyaml，并固定官方 PyPI 源）、`.python-version`、`uv.lock`。`uv sync --frozen` 幂等，`uv pip check` 报 103 包全部兼容。
+2. **修 `langgraph.json` 的隐藏失效**：其 `dependencies: ["."]` 需要项目可安装，此前无 pyproject；`uv sync` 现已成功 build 本项目。
+3. **补 fixture 样本**：`evals/fixtures/tavily_responses.json` 三种 case（sufficient / sparse / empty），并声明为合成数据，禁止当真实指标来源；`tests/test_fixtures.py` 锁住形状与阈值（阈值从 `get_settings()` 读）。
+4. **补 reducer 缺口**：`graph/state.py` 新增 `merge_mapping` / `append_unique` / `append_notes`，给所有会被回退重复写入的 dict/list 字段配 reducer；新增 `degraded` / `degraded_sections`。`tests/test_state.py` 新增两轮写回测试，断言其他 section 不被覆盖。
+5. **文档同步**：`AGENT.md` 第 3、12、13 节与本文命令全部改为 `uv run`，补「禁止直接 pip install」「禁止无 reducer 重复写」两条红线。
+
+复查后 `uv run python -m pytest -q` → **16 passed**。`requirements.lock.txt` 保留为 S1 历史快照，依赖以 `pyproject.toml` + `uv.lock` 为准。

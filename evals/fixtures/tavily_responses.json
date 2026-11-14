@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "note": "合成样本，仅用于 APP_MODE=fixture 的无 key 回归测试。URL 与正文均为虚构占位，不是真实公司数据，禁止当作评测指标或事实来源。真实指标只在 APP_MODE=live 下由 evals/run_eval.py 产出。",
+  "cases": {
+    "sufficient": {
+      "company": "Notion",
+      "hq_location": "San Francisco",
+      "industry": "Productivity Software",
+      "expect": "一轮通过，retry_count 全为 0，degraded=false",
+      "rounds": [
+        {
+          "company": [
+            {"url": "https://example.org/notion/overview", "title": "Notion 产品概览（合成）", "score": 0.93, "source": "company_website", "content": "Notion 提供笔记、文档与协作工作区；目标客户为团队与个人知识工作者。"},
+            {"url": "https://example.org/notion/about", "title": "Notion 关于我们（合成）", "score": 0.88, "source": "company_website", "content": "团队位于 San Francisco，商业模式为订阅制，含免费版与付费版。"}
+          ],
+          "industry": [
+            {"url": "https://example.org/market/productivity", "title": "协同办公市场（合成）", "score": 0.81, "source": "market_report", "content": "协同文档与知识管理市场持续增长，主要需求来自远程协作。"},
+            {"url": "https://example.org/market/competitors", "title": "竞品对比（合成）", "score": 0.76, "source": "market_report", "content": "直接竞品包括同类笔记与文档协作工具，差异化集中在模块化与模板生态。"}
+          ],
+          "financial": [
+            {"url": "https://example.org/notion/funding", "title": "融资信息（合成）", "score": 0.91, "source": "news", "content": "已披露多轮融资，投资方包含多家风投机构。"},
+            {"url": "https://example.org/notion/pricing", "title": "定价页（合成）", "score": 0.85, "source": "company_website", "content": "收入以按席位订阅为主，另提供团队版与企业版。"}
+          ],
+          "news": [
+            {"url": "https://example.org/news/notion-2026", "title": "近期发布（合成）", "score": 0.79, "source": "news", "content": "近期发布新版本，强化了协作与自动化能力。"},
+            {"url": "https://example.org/news/notion-partnership", "title": "合作公告（合成）", "score": 0.72, "source": "news", "content": "宣布与企业软件厂商达成集成合作。"}
+          ]
+        }
+      ]
+    },
+    "sparse": {
+      "company": "Linear",
+      "hq_location": "San Francisco",
+      "industry": "Developer Tools",
+      "expect": "首轮 company 证据不足触发回退，第 1 轮补足后收敛，company retry_count=1",
+      "rounds": [
+        {
+          "company": [
+            {"url": "https://example.org/linear/overview", "title": "Linear 概览（合成）", "score": 0.86, "source": "company_website", "content": "Linear 是面向软件团队的项目管理工具。"}
+          ],
+          "industry": [
+            {"url": "https://example.org/market/devtools", "title": "研发工具市场（合成）", "score": 0.83, "source": "market_report", "content": "研发协作工具市场规模稳定增长。"},
+            {"url": "https://example.org/market/devtools-competition", "title": "研发工具竞品（合成）", "score": 0.77, "source": "market_report", "content": "竞品集中在 issue tracking 与敏捷管理赛道。"}
+          ],
+          "financial": [
+            {"url": "https://example.org/linear/funding", "title": "融资（合成）", "score": 0.9, "source": "news", "content": "公开报道显示完成过多轮融资。"},
+            {"url": "https://example.org/linear/pricing", "title": "定价（合成）", "score": 0.84, "source": "company_website", "content": "按用户数订阅，提供免费档位。"}
+          ],
+          "news": [
+            {"url": "https://example.org/news/linear-2026", "title": "新功能（合成）", "score": 0.78, "source": "news", "content": "推出新的周期规划功能。"},
+            {"url": "https://example.org/news/linear-award", "title": "媒体报道（合成）", "score": 0.71, "source": "news", "content": "入选开发者工具年度榜单。"}
+          ]
+        },
+        {
+          "company": [
+            {"url": "https://example.org/linear/about", "title": "Linear 关于我们（合成）", "score": 0.89, "source": "company_website", "content": "团队分布在美国与欧洲，主打高速、简洁的issue 追踪体验。"},
+            {"url": "https://example.org/linear/customers", "title": "客户案例（合成）", "score": 0.82, "source": "company_website", "content": "客户以软件与互联网公司研发团队为主。"}
+          ]
+        },
+        {
+          "company": [
+            {"url": "https://example.org/linear/faq", "title": "常见问题（合成）", "score": 0.75, "source": "company_website", "content": "提供团队迁移与 API 集成说明。"}
+          ]
+        }
+      ]
+    },
+    "empty": {
+      "company": "Zephyrstone Labs",
+      "hq_location": "",
+      "industry": "Unknown",
+      "expect": "company 每轮都被低分过滤，重试达上限后降级为『无公开依据』，其余章节正常输出",
+      "rounds": [
+        {
+          "company": [
+            {"url": "https://example.org/low-relevance-1", "title": "无关结果（合成）", "score": 0.12, "source": "other", "content": "与该公司无关的内容。"}
+          ],
+          "industry": [
+            {"url": "https://example.org/market/generic-1", "title": "行业概览（合成）", "score": 0.8, "source": "market_report", "content": "该领域缺少公开规模数据。"},
+            {"url": "https://example.org/market/generic-2", "title": "行业挑战（合成）", "score": 0.74, "source": "market_report", "content": "公开资料有限是主要挑战。"}
+          ],
+          "financial": [
+            {"url": "https://example.org/finance/generic-1", "title": "融资概览（合成）", "score": 0.79, "source": "news", "content": "未查到可核验的融资披露。"},
+            {"url": "https://example.org/finance/generic-2", "title": "收入模式（合成）", "score": 0.73, "source": "news", "content": "未查到可核验的收入模式说明。"}
+          ],
+          "news": [
+            {"url": "https://example.org/news/generic-1", "title": "公告（合成）", "score": 0.76, "source": "news", "content": "近期无重大公开公告。"},
+            {"url": "https://example.org/news/generic-2", "title": "报道（合成）", "score": 0.7, "source": "news", "content": "媒体覆盖非常有限。"}
+          ]
+        },
+        {
+          "company": [
+            {"url": "https://example.org/low-relevance-2", "title": "无关结果二（合成）", "score": 0.09, "source": "other", "content": "与该公司无关的内容。"}
+          ]
+        },
+        {
+          "company": [
+            {"url": "https://example.org/low-relevance-3", "title": "无关结果三（合成）", "score": 0.05, "source": "other", "content": "与该公司无关的内容。"}
+          ]
+        }
+      ]
+    }
+  }
+}
