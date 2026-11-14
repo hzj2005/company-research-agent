@@ -1,0 +1,215 @@
+{
+  "purpose": "S8.3 端到端真实报告（1 家公司）：真检索 + 真模型 + 真 checkpoint",
+  "status": "ok",
+  "error": null,
+  "company": "Notion",
+  "config": {
+    "app_mode": "live",
+    "provider": "dashscope",
+    "model": "qwen-plus",
+    "search_depth": "advanced",
+    "structured_output": true,
+    "human_review": false,
+    "sections": [
+      "company",
+      "industry",
+      "financial",
+      "news"
+    ],
+    "max_retry": 2
+  },
+  "budget": {
+    "max_calls": 12,
+    "calls_made": 3,
+    "cache_hits": 1,
+    "remaining": 9,
+    "executed_queries": [
+      {
+        "query": "Notion company overview background products",
+        "section": "company",
+        "cache_hit": true,
+        "executed": false
+      },
+      {
+        "query": "Notion industry market landscape competitors",
+        "section": "industry",
+        "cache_hit": false,
+        "executed": true
+      },
+      {
+        "query": "Notion financial results revenue funding valuation",
+        "section": "financial",
+        "cache_hit": false,
+        "executed": true
+      },
+      {
+        "query": "Notion recent news announcements partnerships",
+        "section": "news",
+        "cache_hit": false,
+        "executed": true
+      }
+    ]
+  },
+  "credits": {
+    "credits_per_search": 2,
+    "spent_this_run": 6,
+    "spent_in_s8_2": 2,
+    "cumulative": 8,
+    "user_ceiling": 50,
+    "within_ceiling": true,
+    "source": "https://docs.tavily.com/documentation/api-credits",
+    "note": "advanced=2 credits/次，按官方计费推算；缓存命中不扣，以 calls_made 为准"
+  },
+  "llm_usage": {
+    "successful_requests": 4,
+    "total_tokens": 7896,
+    "prompt_tokens": 5987,
+    "completion_tokens": 1909,
+    "capture_note": "get_openai_callback 跨 asyncio.run 捕获；若为 0 表示未捕获到，不能据此推断模型没被调用",
+    "total_cost_usd": null,
+    "cost_note": "qwen-plus 不在 OpenAI 价目表内，不套用、不编造成本数字"
+  },
+  "report": "# Notion Research Report\n\n## Company Overview\n\n- Notion was founded in 2013. [6]\n- Notion was founded in 2014. [4]\n- Notion is a privately held company backed by venture capital. [6]\n- Notion's official website is www.notion.com. [6]\n- Notion's headquarters is located at 51 Lloyd Baker Street, London, England, WC1X 9AA, United Kingdom. [4]\n- Notion develops an online work collaboration platform for task and project management, designed to improve team and individual productivity. [6]\n- Notion was formerly known as Canopy Technologies. [6]\n- Notion has approximately 1,200 employees. [6]\n\n## Industry Overview\n\n- Notion operates in the collaborative workspace and productivity software industry, competing with companies like Microsoft, Atlassian, Airtable, Slack, ClickUp, monday.com, Asana, Coda, Obsidian, and Roam Research. [1]\n- Notion views its competition broadly — not as single-point rivals but as parts of an entire industry it aims to consolidate, per CEO Ivan Zhao's 'Legos' analogy. [2]\n- Microsoft launched Loop in November 2021 as a direct competitor to Notion, integrated into Microsoft 365. [3]\n- Legacy note-taking company Evernote declined due to pricing missteps and product stagnation, creating space for Notion and newer entrants like Coda and Roam Research. [2]\n- Enterprise incumbents Microsoft and Atlassian pose key competitive risks to Notion, especially as they leverage existing distribution and procurement entrenchment in large organizations. [3]\n\n## Financial Overview\n\n- Notion VTec Berhad (0083.KL) has a trailing annual dividend rate of 0.00. [5]\n- Notion VTec Berhad (0083.KL) has a price-to-sales ratio (trailing 12 months) of 0.61. [5]\n- Notion VTec Berhad (0083.KL) has a price-to-book ratio of 0.68. [5]\n- Notion VTec Berhad (0083.KL) has an enterprise-to-revenue ratio of 0.70. [5]\n- Notion VTec Berhad (0083.KL) has revenue per share of 0.89. [5]\n- Notion VTec Berhad (0083.KL) has total cash per share of 0.08. [5]\n- Notion VTec Berhad (0083.KL) has shares outstanding of 526,939,733. [5]\n- Notion VTec Berhad (0083.KL) has a fifty-two week high of 0.7550 and a fifty-two week low of 0.0000. [5]\n- Notion VTec Berhad (0083.KL) has an all-time high of 2.4500 and an all-time low of 0.2267. [5]\n- Notion VTec Berhad (0083.KL) has a regular market price of 0.5450 as of 2026-11-06 08:53 UTC. [5]\n\n## News\n\n- Notion Labs, Inc. entered into a strategic collaboration with Keio University on February 25, 2026, signing a memorandum of understanding to integrate Notion AI tools across the university to support education, research, and administration toward Keio’s 'Top Global AI-Native University' vision. [7]\n- Pravesh Mistry, head of global sales at Notion Labs, Inc., represented CRO Erica Anderson at the Keio University MoU signing ceremony and described the collaboration as a 'North Star' model for other educational institutions. [7]\n- ZoomInfo launched an MCP integration with Notion AI, enabling ZoomInfo customers on Notion Business and Enterprise plans to query ZoomInfo’s GTM Intelligence data directly within Notion AI chat. [9]\n- Sia Partners acquired Notion Consulting — a US-based organizational change consulting firm founded in 2015 — to expand its Change Management & Organization capabilities in the US East region. [11]\n\n## References\n\n[1] Notion Competitors: Complete List & Market Landscape — https://www.distillintelligence.com/competitors/notion\n[2] Notion: From Near Collapse to a $10B All‑In‑One Workspace Unicorn | by Xiayi Sun | Medium — https://medium.com/@sherrysun/notion-from-near-collapse-to-a-10b-all-in-one-workspace-unicorn-6113f7e1dc4c\n[3] Report: Notion Business Breakdown & Founding Story | Contrary Research — https://research.contrary.com/report/notion\n[4] Notion - Products, Competitors, Financials, Employees, Headquarters Locations — https://www.cbinsights.com/company/notion\n[5] Notion VTec Berhad (0083.KL) Valuation Measures & Financial Statistics — https://finance.yahoo.com/quote/0083.KL/key-statistics\n[6] Notion 2026 Company Profile: Valuation, Funding & Investors | PitchBook — https://pitchbook.com/profiles/company/168506-47\n[7] Keio and Notion Launch Strategic Collaboration to Realize a Top Global AI-Native University | Keio University — https://www.keio.ac.jp/en/news/20260227-172922\n[8] Notion Reaches $10 Billion Valuation, Boosted By Remote Work — https://www.forbes.com/sites/alexkonrad/2021/10/08/notion-raises-at-10-billion-valuation-boosted-by-remote-work-tiktok\n[9] ZoomInfo Launches MCP Integration With Notion Through GTM.AI — https://www.businesswire.com/news/home/20261103978960/en/ZoomInfo-Launches-MCP-Integration-With-Notion-Through-GTM.AI\n[10] Buzzy Work App Notion Hits $2 Billion Valuation In New Raise — https://www.forbes.com/sites/davidjeans/2020/04/01/buzzy-work-app-notion-hits-2-billion-valuation\n[11] Sia Partners buys organizational change expert Notion Consulting — https://www.consulting.us/news/10182/sia-partners-buys-organizational-change-expert-notion-consulting\n",
+  "report_checks": {
+    "chars": 4998,
+    "headings": [
+      "Company Overview",
+      "Industry Overview",
+      "Financial Overview",
+      "News",
+      "References"
+    ],
+    "inline_citation_markers": 27,
+    "reference_lines": 11,
+    "has_four_sections": true,
+    "has_references_section": true,
+    "abstain_markers": 0
+  },
+  "graph": {
+    "node_trace": [
+      "grounding",
+      "research",
+      "curate",
+      "evidence_check",
+      "briefing"
+    ],
+    "degraded": false,
+    "degraded_sections": [],
+    "retry_count": {},
+    "review_notes": [
+      {
+        "node": "research",
+        "analyst": "company",
+        "round": 0,
+        "sections": [
+          "company"
+        ],
+        "docs": 3
+      },
+      {
+        "node": "research",
+        "analyst": "industry",
+        "round": 0,
+        "sections": [
+          "industry"
+        ],
+        "docs": 3
+      },
+      {
+        "node": "research",
+        "analyst": "financial",
+        "round": 0,
+        "sections": [
+          "financial"
+        ],
+        "docs": 3
+      },
+      {
+        "node": "research",
+        "analyst": "news",
+        "round": 0,
+        "sections": [
+          "news"
+        ],
+        "docs": 3
+      },
+      {
+        "node": "curate",
+        "kept": 11,
+        "dropped": 0,
+        "threshold": 0.4
+      },
+      {
+        "node": "evidence_check",
+        "counts": {
+          "company": 2,
+          "industry": 3,
+          "financial": 3,
+          "news": 3
+        },
+        "verdicts": {
+          "company": "sufficient",
+          "industry": "sufficient",
+          "financial": "sufficient",
+          "news": "sufficient"
+        }
+      },
+      {
+        "node": "structured_extract",
+        "section": "company",
+        "attempt": 1,
+        "status": "ok",
+        "facts": 8
+      },
+      {
+        "node": "structured_extract",
+        "section": "industry",
+        "attempt": 1,
+        "status": "ok",
+        "facts": 5
+      },
+      {
+        "node": "structured_extract",
+        "section": "financial",
+        "attempt": 1,
+        "status": "ok",
+        "facts": 10
+      },
+      {
+        "node": "structured_extract",
+        "section": "news",
+        "attempt": 1,
+        "status": "ok",
+        "facts": 4
+      },
+      {
+        "node": "briefing",
+        "referenced": 11,
+        "truncated_per_section": {
+          "company": 0,
+          "industry": 0,
+          "financial": 0,
+          "news": 0
+        }
+      }
+    ],
+    "company": "Notion"
+  },
+  "timing": {
+    "elapsed_ms": 62875.8,
+    "note": "本机墙钟，含网络往返，非确定性字段，不代表 p95"
+  },
+  "credentials": {
+    "keys_read": [
+      "TAVILY_API_KEY",
+      "DASHSCOPE_API_KEY"
+    ],
+    "key_lengths": {
+      "tavily": 54,
+      "dashscope": 117
+    },
+    "keys_printed": 0,
+    "keys_in_artifact": false,
+    "note": "key 仅存在于进程内存；不写 .env、不进命令行、不进 git"
+  }
+}

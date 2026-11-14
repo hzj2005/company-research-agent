@@ -350,3 +350,25 @@
 简历效果数字必须等 S8.3 之后可复现实测。
 
 **S7 如实边界（最重要）**：这是**合成语料上的契约回归测试**，不是模型能力评测。golden 与被测系统读同一份 fixture，baseline 满分是「按规范把给定文档搬进报告并加对引用」的必然结果，**不得写成「准确率 100%」进简历**。`citation_traceability` 是词法包含代理而非语义蕴含；`hallucination_rate` 是它的互补值而非独立证据；`cost_per_report=0`、`p95_latency_ms` 为本机耗时，都不是真实成本/延迟。原计划「30–50 家真实公司 × 5 事实」的 golden 未做（无 key / 无真实语料，硬编即造假），归 S8；换 `EVAL_DATASET_PATH` 即可复用脚本。`no_inline_citations` 组的 `hallucination_rate=1.0` 属「故意关掉引用」的负向对照，不是默认配置的幻觉率。内容级语义 judge、真实指标、S9 简历仍未开工。
+
+## 18. S8.3 AI 辅助复核 + 首轮端到端真实实测（2026-11-14 22:37 起）
+
+> 第 13–17 节是各阶段当时的历史快照，保留不改；**当前累计以本节与
+> `docs/LIVE_FINDINGS.md` 为准**：4 次真实 Tavily 检索（8 credits）、5 次模型请求。
+
+| 项 | 实测结果 | 产物 / 依据 |
+|---|---|---|
+| AI 辅助复核 | 9 个原始 URL 逐条打开原文；`verified=15 / needs_fix=8 / reject=2`；3 个 URL 打不开；2 处冲突用官方一手来源查清 | `evals/golden_live_review.jsonl`、`docs/GOLDEN_REVIEW.md` |
+| 人工核验状态 | **仍是 0**：25 条 `user_verdict` 全 `null`，`human_verified_claims=0` | `tests/test_s8_golden_review.py` 8 例锁死 |
+| 模型兼容 | `qwen-plus` + `function_calling` 返回合规 `SectionBrief`，3 条 fact URL 全可回溯；1 次请求 / 748 tokens / 3.8 s | `evals/llm_probe.json` |
+| 端到端真实报告 | Notion：3 次检索 + 1 缓存命中 = **6 credits**（累计 **8/50**）；4 次模型请求 / 7896 tokens；62.9 s；4998 字符 / 27 结论 / 11 引用 / 四栏目齐全 / 无降级 | `evals/live_run.json` |
+| 硬预算 | `TAVILY_MAX_CALLS=12` + `CallBudget(12)`，累计超 50 直接作废；实际 `remaining=9` | 同上 `budget` / `credits` |
+| 失败案例 | 词法检查自动抓到 `Company Overview` 里 founded in **2013 vs 2014** 硬矛盾；人工另见「总部伦敦」等未核验表述；来源含 `medium.com` | `evals/live_quality.json` |
+| 引用完整性 | `citation_integrity_ok=true`（27 个 `[n]` 都有对应编号）——**只证明编号齐全，不证明事实正确** | 同上 |
+| 脱敏 | 三个产物均通过 `sk-` / `tvly-` 正则扫描；密钥只在进程内存注入；缓存 4 份在 gitignored `evals/cache/` | 提交前核对 |
+
+**如实边界（最重要）**：1 家公司 1 次运行，**没有**真实准确率 / 幻觉率 / p95 / 成本单价
+（`total_cost_usd=null`，qwen-plus 不在 OpenAI 价目表内，不套用不编造）；
+真实报告出现自相矛盾，说明 S7 fixture 的 `1.000` 只是流程回归分，**不能当准确率写进简历**；
+25 条 golden 未人工核验，S7 逐字匹配对真实报告失效，S8.4 必须先解决语义 judge。
+剩余 42 credits 未动；S8.4–S8.6、S9 简历仍未开工。

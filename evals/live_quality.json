@@ -1,0 +1,68 @@
+{
+  "purpose": "S8.3 真实报告词法质量检查（0 次外部调用）",
+  "source_artifact": "evals/live_run.json",
+  "company": "Notion",
+  "live_run_status": "ok",
+  "checks": {
+    "claims_count": 27,
+    "sections": [
+      "Company Overview",
+      "Industry Overview",
+      "Financial Overview",
+      "News"
+    ],
+    "inline_markers_used": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      9,
+      11
+    ],
+    "reference_numbers": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+    ],
+    "markers_without_reference": [],
+    "citation_integrity_ok": true,
+    "contradictions": [
+      {
+        "section": "Company Overview",
+        "predicate": "founded in YYYY",
+        "values": [
+          2013,
+          2014
+        ]
+      }
+    ],
+    "contradiction_count": 1,
+    "source_domains": {
+      "distillintelligence.com": 1,
+      "medium.com": 1,
+      "research.contrary.com": 1,
+      "cbinsights.com": 1,
+      "finance.yahoo.com": 1,
+      "pitchbook.com": 1,
+      "keio.ac.jp": 1,
+      "forbes.com": 2,
+      "businesswire.com": 1,
+      "consulting.us": 1
+    },
+    "source_domain_count": 10,
+    "method": "词法/结构检查，非语义事实核验",
+    "note": "引用完整性只证明 [n] 有对应编号，不证明该 URL 真的支持结论；矛盾检测只覆盖 founded in YYYY 这类显式模式，未覆盖同义改写的事实冲突"
+  },
+  "verdict_note": "本文件不产出准确率。真实事实是否正确，须由人工核验的 golden + judge 判定（S8.4）。"
+}

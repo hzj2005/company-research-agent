@@ -1,0 +1,62 @@
+{
+  "purpose": "S8.3 最小真实模型调用：核对 with_structured_output 在百炼端点的兼容性",
+  "status": "ok",
+  "error": null,
+  "config": {
+    "app_mode": "live",
+    "provider": "dashscope",
+    "model": "qwen-plus",
+    "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "temperature": 0.0,
+    "max_retries_in_probe": 0,
+    "max_retries_in_production": 1,
+    "structured_output_method": "function_calling"
+  },
+  "result": {
+    "brief_type": "SectionBrief",
+    "section": "company",
+    "degraded": false,
+    "degrade_reason": null,
+    "facts_count": 3,
+    "fact_fields": [
+      "claim",
+      "confidence",
+      "source_url"
+    ],
+    "all_urls_in_allowed_set": true,
+    "confidence_range": [
+      1.0,
+      1.0
+    ],
+    "notes": [
+      {
+        "status": "ok",
+        "attempt": 1
+      }
+    ],
+    "contract_ok": true
+  },
+  "usage": {
+    "successful_requests": 1,
+    "total_tokens": 748,
+    "prompt_tokens": 617,
+    "completion_tokens": 131,
+    "total_cost_usd": null,
+    "cost_note": "get_openai_callback 的价目表只覆盖 OpenAI 官方模型；qwen-plus 单价不在此表内，故不套用、不编造成本数字"
+  },
+  "elapsed_ms": 3788.7,
+  "elapsed_note": "本机墙钟，非确定性字段，不参与 CI 比对",
+  "isolation": {
+    "tavily_client_search_calls": 0,
+    "document_tool_constructed": false,
+    "llm_requests_cap": 1,
+    "llm_requests_cap_note": "探针把 max_retries 置 0；若模型返回不合规，链内不会重试"
+  },
+  "credentials": {
+    "api_key_env_var": "DASHSCOPE_API_KEY",
+    "api_key_characters": 117,
+    "api_key_printed": 0,
+    "api_key_in_artifact": false,
+    "note": "key 仅存在于本进程内存；产物不写值、不写 .env、不进 git"
+  }
+}
