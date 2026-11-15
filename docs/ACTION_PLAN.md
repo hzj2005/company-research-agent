@@ -1441,3 +1441,27 @@ README 里 `POSTGRES_DSN` 的状态列原来复用 `No*`，与「LLM key 必须�
 新增 3 条护栏：后端名非法要报错、缺少表的探测不能误伤「库不存在」、空库要能点名缺哪两张表（用临时数据库建/删验证）。
 
 **回归**：全量 **502 passed**；迁移用更严口径重跑，`11 -> 11，最新状态一致=True，下一步一致=True`。
+
+---
+
+### 12.25 UI 首次真正启动：Tailwind 版本自相矛盾（2026-11-15，0 调用 / 0 credits）
+
+第一次把前端跑起来（`npm install && npm run dev`）就撞到 Vite 报错遮罩：
+
+```
+[plugin:vite:css] [postcss] It looks like you're trying to use `tailwindcss` directly
+as a PostCSS plugin. The PostCSS plugin has moved to a separate package ...
+```
+
+**根因是上游自己矛盾**：`ui/package.json` 写的是 `tailwindcss ^4.3.3`，但
+`ui/src/index.css` 用的是 v3 指令（`@tailwind base/components/utilities`）、
+`postcss.config.js` 也是 v3 写法（`tailwindcss: {}`）、`tailwind.config.js` 用 JS 配置扩展主题。
+三处都是 v3，只有依赖号是 v4 —— 这套前端在原始状态下根本跑不起来。
+
+**修法**：按代码实际写法把依赖钉到 v3（`tailwindcss@^3.4.17`），不动 CSS 与 config。
+备选是迁到 v4（装 `@tailwindcss/postcss` + 改 `@import "tailwindcss"` + `@config` 接 JS 主题），
+但 v4 改了默认边框/ring 等表现，为一个上游 UI 承担视觉回归不值得。
+
+**验证**：`npm run build` 通过（1773 modules，CSS 35.91 kB / JS 532.91 kB，tsc 无错）；
+dev server 下 `/src/index.css` 返回 50 KB 编译结果、`.flex`/`.text-` 等工具类正常生成、
+字体 200。这类问题用 `curl` 看首页 200 是查不出来的——**首页永远是 200，错在样式编译**。
