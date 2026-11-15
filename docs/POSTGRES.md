@@ -40,11 +40,13 @@ checkpoint_blobs, checkpoint_migrations, checkpoint_writes, checkpoints, jobs, r
 `ProactorEventLoop`，会抛 `psycopg.InterfaceError: Psycopg cannot use the 'ProactorEventLoop'`。
 
 ```bash
-# 方式 A：显式指定事件循环（推荐，稳定）
-uv run uvicorn application:app --port 8000 --loop persistence.pg_compat:selector_loop
+# 推荐：统一入口，自动处理事件循环 + 映射模型密钥
+uv run python run_server.py             # 按 .env（当前默认 live）
+uv run python run_server.py --fixture   # 演示模式，0 外部调用
+uv run python run_server.py --reload    # 开发热重载
 
-# 方式 B：带 --reload（uvicorn 在子进程模式下自己会用 Selector）
-uv run uvicorn application:app --reload --port 8000
+# 等价的手工写法（Linux/macOS 可省略 --loop）
+uv run uvicorn application:app --port 8000 --loop persistence.pg_compat:selector_loop
 ```
 
 Linux/macOS 无此问题，正常 `uvicorn application:app` 即可。

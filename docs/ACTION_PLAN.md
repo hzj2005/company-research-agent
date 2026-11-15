@@ -1528,3 +1528,65 @@ if (needsLlmSetup) { setIsSettingsOpen(true); return; }   // 直接不提交
 
 **回归**：506 passed；前端 build 通过；`/config` 实测返回
 `app_mode=fixture, requires_llm_key=false, tavily_configured=true`。
+
+---
+
+### 12.28 「搜别的公司搜不到」：不是坏，是演示语料只覆盖一家（2026-11-15）
+
+#### 12.28.1 根因（代码级）
+
+`capabilities/retrieval.py` 的 fixture store 按公司名精确匹配：
+
+```python
+def find_case(self, company: str) -> dict | None:
+    for case in self.cases.values():
+        if case["company"].lower() == company.lower():
+            return case
+    return None
+```
+
+`evals/fixtures/tavily_responses.json` 里只有一家公司的语料（`sufficient` 场景）。
+所以 Tesla / Figma / 任意公司都拿到 **0 篇文档** → 四个栏目都判「证据不足」→ `degrade`
+输出「该类信息未找到公开依据」。
+
+**这是拒答机制在正常工作**，不是搜索坏了；只是演示模式没有那家公司的数据。
+
+实测（同一份 fixture store）：
+
+| 公司 | company | industry | financial | news |
+|---|---|---|---|---|
+| Notion | 2 | 2 | 2 | 2 |
+| Tesla | 0 | 0 | 0 | 0 |
+
+#### 12.28.2 让「任何公司都能搜」：默认切 live
+
+- 新增 `run_server.py` 统一入口：Windows 事件循环用 `selector_loop`；把系统变量
+  `SYSTEM_ALIYUN_APIKEY` 映射成 `DASHSCOPE_API_KEY`（仅进程内，不落盘、不进 git）；
+  `--fixture` 可随时退回演示模式。
+- `.env` 默认改为 `APP_MODE=live` + `TAVILY_LIVE_ENABLED=true` + `TAVILY_MAX_CALLS=16`。
+- `retrieval.queries_per_analyst / max_results_per_query / search_depth` 支持环境变量覆盖
+  （此前只有它们三个写死，其余配置都可覆盖，不一致）。
+
+#### 12.28.3 两家新公司的真实结果（这就是"正常跑"的样子）
+
+| 公司 | 参数 | 检索 | 花费 | 结果 |
+|---|---|---|---|---|
+| Tesla | 每栏 1 query、上限 4 次 | 4 次（全为新检索） | **8 credits** | 6528 字，四栏 27/10/6/3 条，12 个引用 |
+| Figma | 默认（每栏 2 query、上限 16） | 8 条 query **全部命中缓存** | **0 credits** | 5133 字，四栏 19/6/5/4 条，12 个引用 |
+
+Figma 那次证明：**同一家公司重复跑不花钱**（缓存 key 由 query + 参数取 sha256，命中不扣额度）。
+
+#### 12.28.4 额度与台账
+
+用户 2026-11-15 把放行上限从 50 放宽到 200；台账 `ceiling` 改为 200，累计 **50**（Tesla +8，Figma +0）。
+顺带修掉一处"双真相"：`batch_live` 原来读 `live_run.USER_CREDIT_CEILING`（S8 时点冻结的 50），
+现在读台账 `ceiling`，代码里不再留会漂移的常数。
+
+#### 12.28.5 一个被这次改动炸出来的测试问题
+
+`.env` 改成 live 后，**506 条测试里 50 条失败、7 条报错**：所有走 `get_settings()` 的用例
+都读到了 `.env` 的 `APP_MODE=live`，开始找 key、连真实服务。
+修法：`tests/conftest.py` 用 `setdefault` 把 `APP_MODE=fixture`、`TAVILY_LIVE_ENABLED=false`、
+`TAVILY_MAX_CALLS=0` 一起钉死——测试永远离线。
+
+**回归**：全量 **506 passed**；`--verify` 39/39；两份真实报告存进 `docs/samples/`。

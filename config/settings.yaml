@@ -31,9 +31,10 @@ graph:
   thread_id_template: "{company}:{date}"
 
 retrieval:
-  queries_per_analyst: 2          # 原版 QUERY_FORMAT_GUIDELINES 硬编码 2，改为配置
-  max_results_per_query: 3
-  search_depth: advanced
+  # 每栏每轮生成几条 query。默认 2，与上游一致；额度紧张时可临时调 1
+  queries_per_analyst: ${QUERIES_PER_ANALYST:-2}
+  max_results_per_query: ${MAX_RESULTS_PER_QUERY:-3}
+  search_depth: ${SEARCH_DEPTH:-advanced}
   topics:
     financial_analyzer: finance
     news_analyzer: news

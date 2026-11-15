@@ -22,3 +22,8 @@ import os  # noqa: E402
 
 os.environ.setdefault("JOB_STORE", "memory")
 os.environ.setdefault("CHECKPOINTER", "sqlite")
+# .env 现在默认是 live（真实检索 + 真实模型）。测试进程必须钉死在 fixture，
+# 否则任何走 get_settings() 的用例都会去联网、要 key、烧额度。
+os.environ.setdefault("APP_MODE", "fixture")
+os.environ.setdefault("TAVILY_LIVE_ENABLED", "false")
+os.environ.setdefault("TAVILY_MAX_CALLS", "0")

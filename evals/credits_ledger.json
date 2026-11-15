@@ -1,6 +1,6 @@
 {
-  "ceiling": 50,
-  "note": "Tavily credits 台账：每次真实运行追加一条，total_credits 是唯一真相。脚本只读它来算剩余额度，跑完由 main() 追加；失败也要记账。",
+  "ceiling": 200,
+  "note": "Tavily credits 台账：每次真实运行追加一条，total_credits 是唯一真相；ceiling 是当前放行上限（2026-11-15 用户从 50 放宽到 200，之前 50 已用尽）。",
   "entries": [
     {
       "stage": "S8.2 live_probe",
@@ -29,7 +29,21 @@
       "calls": 5,
       "artifact": "evals/live_batch.json",
       "note": "Stripe 重新检索 4 次 + Notion 补搜 1 次；其余 12 次命中缓存"
+    },
+    {
+      "stage": "S13 界面实测：Tesla（live）",
+      "credits": 8,
+      "calls": 4,
+      "artifact": "docs/samples/tesla_live_report.md",
+      "note": "额度只剩 8，临时把 queries_per_analyst 调成 1：4 次 advanced 检索覆盖四栏，四栏都出内容"
+    },
+    {
+      "stage": "S13 界面实测：Figma（live）",
+      "credits": 0,
+      "calls": 0,
+      "artifact": "docs/samples/figma_live_report.md",
+      "note": "8 条 query 全部命中 S10-B 留下的磁盘缓存（budget=0/16, cache_hits=4），0 credits"
     }
   ],
-  "total_credits": 42
+  "total_credits": 50
 }

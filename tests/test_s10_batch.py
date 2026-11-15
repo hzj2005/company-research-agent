@@ -32,7 +32,7 @@ def test_credits_ledger_counts_failed_runs_too() -> None:
 
 def test_ledger_total_never_exceeds_the_ceiling() -> None:
     ledger = json.loads((ROOT / "evals" / "credits_ledger.json").read_text(encoding="utf-8"))
-    assert ledger["total_credits"] <= ledger["ceiling"] == bl.USER_CREDIT_CEILING
+    assert ledger["total_credits"] <= ledger["ceiling"] == bl.user_credit_ceiling()
 
 
 def test_every_real_run_is_in_the_ledger() -> None:
@@ -62,9 +62,9 @@ def test_dynamic_budget_never_exceeds_the_user_ceiling() -> None:
     already = bl.credits_already_spent()
     max_calls = min(
         bl.GLOBAL_MAX_CALLS,
-        max(0, (bl.USER_CREDIT_CEILING - already) // bl.CREDITS_PER_SEARCH),
+        max(0, (bl.user_credit_ceiling() - already) // bl.CREDITS_PER_SEARCH),
     )
-    assert already + max_calls * bl.CREDITS_PER_SEARCH <= bl.USER_CREDIT_CEILING
+    assert already + max_calls * bl.CREDITS_PER_SEARCH <= bl.user_credit_ceiling()
 
 
 def test_default_companies_start_with_notion_to_reuse_cache() -> None:

@@ -178,8 +178,15 @@ verified by socket-level guards in `tests/test_s5_offline.py`.
 4. Start the API in one terminal:
 
    ```bash
-   .venv/bin/uvicorn application:app --reload --port 8000
+   uv run python run_server.py            # uses .env; live by default (real Tavily + qwen-plus)
+   uv run python run_server.py --fixture  # demo mode: local corpus, zero external calls
+   uv run python run_server.py --reload   # dev hot reload
    ```
+
+   `run_server.py` exists because two things are easy to get wrong: Windows needs
+   `SelectorEventLoop` for async psycopg (uvicorn ignores the global policy), and the model key
+   lives in the OS user variable `SYSTEM_ALIYUN_APIKEY` — the launcher maps it to
+   `DASHSCOPE_API_KEY` in-process, so no secret ever lands in `.env` or git.
 
 5. Start the UI in a second terminal:
 

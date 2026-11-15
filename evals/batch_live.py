@@ -63,12 +63,25 @@ def credits_already_spent() -> int:
     return int(data.get("total_credits", 0))
 
 
+def user_credit_ceiling() -> int:
+    """当前放行额度也只认台账。
+
+    2026-11-15 用户把额度从 50 放宽到 200（台账 `ceiling` 字段 + 一条说明），
+    所以这里不能再读 `live_run.USER_CREDIT_CEILING` 那个 S8 时点的历史常数——
+    那是当时产物里的冻结值，不代表现在的授权。
+    """
+    if not LEDGER.exists():
+        return USER_CREDIT_CEILING
+    data = json.loads(LEDGER.read_text(encoding="utf-8"))
+    return int(data.get("ceiling", USER_CREDIT_CEILING))
+
+
 def append_ledger(entry: dict[str, Any]) -> None:
     """跑完追加一条，并重算 total。失败也追加 —— 额度纪律不接受「没出报告就不算花」。"""
     data = (
         json.loads(LEDGER.read_text(encoding="utf-8"))
         if LEDGER.exists()
-        else {"ceiling": USER_CREDIT_CEILING, "entries": []}
+        else {"ceiling": user_credit_ceiling(), "entries": []}
     )
     data.setdefault("entries", []).append(entry)
     data["total_credits"] = sum(int(e.get("credits", 0)) for e in data["entries"])
@@ -232,8 +245,8 @@ def build_batch(companies: list[str], *, max_calls: int = GLOBAL_MAX_CALLS) -> d
             "spent_this_run": spent,
             "spent_before": before,
             "cumulative": cumulative,
-            "user_ceiling": USER_CREDIT_CEILING,
-            "within_ceiling": cumulative <= USER_CREDIT_CEILING,
+            "user_ceiling": user_credit_ceiling(),
+            "within_ceiling": cumulative <= user_credit_ceiling(),
             "note": "advanced=2 credits/次；缓存命中不扣，以 calls_made 为准",
         },
         "summary": {
@@ -271,14 +284,14 @@ def main() -> int:
     # 本次预算 = min(设计上限, 用户额度剩余)。这样「重跑多少次都不会越过 50」这件事
     # 由算术保证，而不是靠人记住之前花过多少。
     already = credits_already_spent()
-    max_calls = min(GLOBAL_MAX_CALLS, max(0, (USER_CREDIT_CEILING - already) // CREDITS_PER_SEARCH))
+    max_calls = min(GLOBAL_MAX_CALLS, max(0, (user_credit_ceiling() - already) // CREDITS_PER_SEARCH))
     if max_calls <= 0:
         raise SystemExit(
-            f"额度已用尽：已花 {already} / {USER_CREDIT_CEILING}，本次不发起任何真实请求"
+            f"额度已用尽：已花 {already} / {user_credit_ceiling()}，本次不发起任何真实请求"
         )
     print(
         f"[S10-B batch] 已花 {already} credits，本次最多 {max_calls} 次 = "
-        f"{max_calls * CREDITS_PER_SEARCH} credits，累计上限 {USER_CREDIT_CEILING}"
+        f"{max_calls * CREDITS_PER_SEARCH} credits，累计上限 {user_credit_ceiling()}"
     )
 
     report = build_batch(companies, max_calls=max_calls)
