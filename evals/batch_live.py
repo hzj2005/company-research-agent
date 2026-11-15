@@ -46,30 +46,33 @@ DEFAULT_COMPANIES = ["Notion", "Figma", "Stripe", "Airbnb"]
 GLOBAL_MAX_CALLS = 16          # 16 次 × 2 credits = 32；与已用的 8 相加共 40 / 50
 CREDITS_PER_SEARCH = 2         # https://docs.tavily.com/documentation/api-credits: advanced = 2
 
-# 已经真实花掉、且不会重算的产物。重跑时不能把它们当「没花过」。
-CONSUMED_ARTIFACTS = (
-    ("evals/live_run.json", "cumulative"),          # S8.2 探针 2 + S8.3 端到端 6
-    ("evals/live_batch_v1.json", "spent_this_run"),  # S10-B v1：12 次调用（含 Stripe 那 4 次失败检索）
-)
+# 已经真实花掉、且不会重算的额度记在独立台账里。
+# v1 有个真 bug：每家包一层 `asyncio.run`，第 2 家 `Event loop is closed`，
+# Stripe 的 4 次检索发出去了却没拿到报告、也没写缓存。那 8 credits 是真花掉的，
+# 所以 v1 产物永久留档并计入台账 —— **失败也要记账**。
+#
+# 早于台账的两次（S8.2 探针 2 + S8.3 端到端 6）已回填进 `evals/credits_ledger.json`。
+LEDGER = ROOT / "evals" / "credits_ledger.json"
 
 
 def credits_already_spent() -> int:
-    """已花 credits 从既有产物读，不在这里另写一个可能漂移的常数。
+    """已花 credits 只从台账读，不在代码里另写一个会漂移的常数。"""
+    if not LEDGER.exists():
+        return 0
+    data = json.loads(LEDGER.read_text(encoding="utf-8"))
+    return int(data.get("total_credits", 0))
 
-    v1 有个真 bug：每家包一层 `asyncio.run`，第 2 家 `Event loop is closed`，
-    Stripe 的 4 次检索发出去了却没拿到报告、也没写缓存。那 8 credits 是真花掉的，
-    所以 v1 产物永久留档并计入台账 —— **失败也要记账**。
-    """
-    total = 0
-    for rel, field in CONSUMED_ARTIFACTS:
-        path = ROOT / rel
-        if not path.exists():
-            continue
-        data = json.loads(path.read_text(encoding="utf-8"))
-        value = data.get("credits", {}).get(field)
-        if isinstance(value, int):
-            total += value
-    return total
+
+def append_ledger(entry: dict[str, Any]) -> None:
+    """跑完追加一条，并重算 total。失败也追加 —— 额度纪律不接受「没出报告就不算花」。"""
+    data = (
+        json.loads(LEDGER.read_text(encoding="utf-8"))
+        if LEDGER.exists()
+        else {"ceiling": USER_CREDIT_CEILING, "entries": []}
+    )
+    data.setdefault("entries", []).append(entry)
+    data["total_credits"] = sum(int(e.get("credits", 0)) for e in data["entries"])
+    LEDGER.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def _state_summary(state: dict[str, Any]) -> dict[str, Any]:
@@ -280,6 +283,16 @@ def main() -> int:
 
     report = build_batch(companies, max_calls=max_calls)
     OUTPUT.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    if report["credits"]["spent_this_run"] > 0:
+        append_ledger(
+            {
+                "stage": f"S10-B batch（{len(companies)} 家）",
+                "credits": report["credits"]["spent_this_run"],
+                "calls": report["budget"]["calls_made"],
+                "artifact": "evals/live_batch.json",
+                "note": f"companies={','.join(companies)}; ok={report['summary']['ok']}/{report['summary']['runs']}",
+            }
+        )
 
     print(f"[S10-B batch] status={report['status']} -> {OUTPUT.relative_to(ROOT)}")
     print(

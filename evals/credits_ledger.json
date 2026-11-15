@@ -1,0 +1,35 @@
+{
+  "ceiling": 50,
+  "note": "Tavily credits 台账：每次真实运行追加一条，total_credits 是唯一真相。脚本只读它来算剩余额度，跑完由 main() 追加；失败也要记账。",
+  "entries": [
+    {
+      "stage": "S8.2 live_probe",
+      "credits": 2,
+      "calls": 1,
+      "artifact": "evals/live_probe.json",
+      "note": "最小真实探针，坐实 Tavily 返回结构"
+    },
+    {
+      "stage": "S8.3 live_run",
+      "credits": 6,
+      "calls": 3,
+      "artifact": "evals/live_run.json",
+      "note": "Notion 端到端；4 栏目里 1 次命中缓存"
+    },
+    {
+      "stage": "S10-B batch v1（失败：Event loop is closed）",
+      "credits": 24,
+      "calls": 12,
+      "artifact": "evals/live_batch_v1.json",
+      "note": "Stripe 的 4 次检索发出去了但没拿到报告、也没写缓存；真实损失，照样记账"
+    },
+    {
+      "stage": "S10-B batch v2",
+      "credits": 10,
+      "calls": 5,
+      "artifact": "evals/live_batch.json",
+      "note": "Stripe 重新检索 4 次 + Notion 补搜 1 次；其余 12 次命中缓存"
+    }
+  ],
+  "total_credits": 42
+}

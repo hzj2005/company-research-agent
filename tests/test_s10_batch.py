@@ -22,16 +22,40 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_credits_ledger_counts_failed_runs_too() -> None:
     """v1 里 Stripe 那 4 次检索发出去了但没拿到报告 —— 失败也要记账。"""
-    total = bl.credits_already_spent()
-    v1 = ROOT / "evals" / "live_batch_v1.json"
-    run = ROOT / "evals" / "live_run.json"
-    expected = 0
-    if run.exists():
-        expected += json.loads(run.read_text(encoding="utf-8"))["credits"]["cumulative"]
-    if v1.exists():
-        expected += json.loads(v1.read_text(encoding="utf-8"))["credits"]["spent_this_run"]
-    assert total == expected
-    assert total >= 8, "S8.2 + S8.3 的 8 credits 必须始终在账上"
+    ledger = json.loads((ROOT / "evals" / "credits_ledger.json").read_text(encoding="utf-8"))
+    stages = [e["stage"] for e in ledger["entries"]]
+    assert any("v1" in s and "失败" in s for s in stages), "失败的 v1 必须留在台账里"
+    assert ledger["total_credits"] == sum(e["credits"] for e in ledger["entries"])
+    assert bl.credits_already_spent() == ledger["total_credits"]
+    assert ledger["total_credits"] >= 8, "S8.2 + S8.3 的 8 credits 必须始终在账上"
+
+
+def test_ledger_total_never_exceeds_the_ceiling() -> None:
+    ledger = json.loads((ROOT / "evals" / "credits_ledger.json").read_text(encoding="utf-8"))
+    assert ledger["total_credits"] <= ledger["ceiling"] == bl.USER_CREDIT_CEILING
+
+
+def test_every_real_run_is_in_the_ledger() -> None:
+    """真实产物花了多少，台账上就得有对应的一条 —— 防止「跑了但忘了记」。"""
+    ledger = json.loads((ROOT / "evals" / "credits_ledger.json").read_text(encoding="utf-8"))
+    spent_by_artifact = {e["artifact"]: e["credits"] for e in ledger["entries"]}
+    for rel, field in (
+        ("evals/live_run.json", "cumulative"),
+        ("evals/live_batch_v1.json", "spent_this_run"),
+        ("evals/live_batch.json", "spent_this_run"),
+    ):
+        path = ROOT / rel
+        if not path.exists():
+            continue
+        actual = json.loads(path.read_text(encoding="utf-8"))["credits"][field]
+        assert f"evals/{path.name}" in spent_by_artifact, f"{rel} 花了 {actual} 却没进台账"
+    # 最近一次批处理的额度必须能对上
+    batch = ROOT / "evals" / "live_batch.json"
+    if batch.exists():
+        actual = json.loads(batch.read_text(encoding="utf-8"))["credits"]["spent_this_run"]
+        assert sum(
+            e["credits"] for e in ledger["entries"] if e["artifact"] == "evals/live_batch.json"
+        ) >= actual
 
 
 def test_dynamic_budget_never_exceeds_the_user_ceiling() -> None:
