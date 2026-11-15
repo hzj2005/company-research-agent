@@ -31,8 +31,10 @@ graph:
   thread_id_template: "{company}:{date}"
 
 retrieval:
-  # 每栏每轮生成几条 query。默认 2，与上游一致；额度紧张时可临时调 1
-  queries_per_analyst: ${QUERIES_PER_ANALYST:-2}
+  # 每栏每轮生成几条 query。**直接决定花费**：N 条 = 每轮 4N 次检索 = 8N credits。
+  # 默认 1（每轮 4 次检索 / 8 credits）；调到 2 素材翻倍、花费也翻倍。
+  # 注意：2026-11-15 之前这个值是 2，但代码从没读过它（每栏实际只发 1 条），已接上。
+  queries_per_analyst: ${QUERIES_PER_ANALYST:-1}
   # 每个 query 取几条结果。**不影响 credits**（按检索次数计费），只影响素材量与 token
   max_results_per_query: ${MAX_RESULTS_PER_QUERY:-5}
   search_depth: ${SEARCH_DEPTH:-advanced}

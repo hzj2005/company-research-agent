@@ -138,5 +138,5 @@ def test_retrieval_defaults_favour_material_over_credit_saving() -> None:
     """默认每 query 取 5 条：检索按次数计费，多取几条不额外花 credits。"""
     s = load_settings(environ={"APP_MODE": "fixture"})
     assert s.retrieval.max_results_per_query == 5
-    assert s.retrieval.queries_per_analyst == 2
+    assert s.retrieval.queries_per_analyst == 1  # 每栏 1 条 query = 每轮 4 次检索
     assert s.retrieval.search_depth == "advanced"

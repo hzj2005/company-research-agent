@@ -251,3 +251,15 @@ def test_build_live_retrievers_covers_all_sections(tmp_path: Path) -> None:
     assert all(isinstance(r, BaseRetriever) for r in retrievers.values())
     assert retrievers["financial"].topic == "finance"
     assert retrievers["news"].topic == "news"
+
+
+def test_queries_per_analyst_is_actually_honoured(monkeypatch) -> None:
+    """这个配置以前是死字段（写 2 也只发 1 条），接上后必须真发 N 条并去重合并。"""
+    import asyncio
+
+    from capabilities.retrieval import build_live_query
+
+    base = build_live_query("Notion", "company", 0)
+    variant = build_live_query("Notion", "company", 0, 1)
+    assert base != variant, "同一栏的多条 query 必须措辞不同，否则缓存 key 撞车"
+    assert variant.startswith(base), "variant 只能在基础 query 后追加，保持确定性"

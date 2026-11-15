@@ -103,10 +103,16 @@ def load_fixture_store(settings: Settings | None = None) -> FixtureStore:
     return FixtureStore(resolve_fixture_path(s))
 
 
-def build_live_query(company: str, section: str, round_no: int) -> str:
-    """确定性 query：回退轮换措辞，让缓存 key 与首轮不同。"""
+def build_live_query(company: str, section: str, round_no: int, variant: int = 0) -> str:
+    """确定性 query：回退轮换措辞，让缓存 key 与首轮不同。
+
+    `variant` 用于「同一栏发多条 query」：措辞必须稳定，否则缓存失效、
+    同一家公司重复跑也要重新花钱。
+    """
     hint = _SECTION_QUERY_HINTS.get(section, section)
     suffix = "" if round_no <= 0 else f" refined round {round_no}"
+    if variant:
+        suffix += f" variant {variant}"
     return f"{company} {hint}{suffix}"
 
 
@@ -200,14 +206,25 @@ def make_document_tool(
     ) -> dict[str, list[dict[str, Any]]]:
         """按公司名、栏目列表和回退轮次取回检索文档。返回 {栏目: [文档]}。"""
         out: dict[str, list[dict[str, Any]]] = {}
+        per_section = max(1, int(s.retrieval.queries_per_analyst))
         for section in sections:
             retriever = retrievers.get(section)
             if retriever is None:
                 out[section] = []
                 continue
-            query = build_live_query(company, section, round_no)
-            docs = await retriever.ainvoke(query)
-            out[section] = [_document_to_dict(d, section, round_no) for d in docs]
+            merged: list[dict[str, Any]] = []
+            seen: set[str] = set()
+            for variant in range(per_section):
+                query = build_live_query(company, section, round_no, variant)
+                docs = await retriever.ainvoke(query)
+                for d in docs:
+                    item = _document_to_dict(d, section, round_no)
+                    url = str(item.get("url") or "")
+                    if url and url in seen:
+                        continue
+                    seen.add(url)
+                    merged.append(item)
+            out[section] = merged
         logger.info(
             "live fetch company=%s round=%s sections=%s docs=%s budget=%s/%s cache_hits=%s",
             company, round_no, sections, sum(len(v) for v in out.values()),

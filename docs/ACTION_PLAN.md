@@ -1746,3 +1746,48 @@ psycopg_pool 会在归还时丢弃坏连接，但**第一次拿到它的请求�
 | 回滚点 | 旧卷 `pj-pg-data` + `pgdata-old-volume-20261115-1816.tgz` |
 
 **回归**：全量 **511 passed**（新增 `_retry_once` 的两条用例）。
+
+---
+
+### 12.32 一个从没被读过的配置项：`queries_per_analyst`（2026-11-15）
+
+#### 12.32.1 发现
+
+跑字节跳动时看日志，每轮只有 **4 次**检索（每栏 1 条），但配置写的是
+`queries_per_analyst: 2`。全仓 grep 确认：
+
+```
+config/loader.py:101        queries_per_analyst: int = Field(ge=1)   # 只是解析
+tests/test_config_loader.py 断言它等于 2                              # 只是断言
+```
+
+**生产代码里没有任何地方读它。** 也就是说这个旋钮从 S3 起就是死的。
+
+#### 12.32.2 更正之前的说法
+
+12.28 / 12.29 里我写过「每栏 2 条 query、最多 8 次检索 / 16 credits」——**错了**。
+实际从流程到计费一直是「每栏 1 条、每轮 4 次检索、8 credits」。抱歉。
+
+#### 12.32.3 修法：接上，但默认保持 1
+
+- `build_live_query()` 增加 `variant` 参数：同一栏的第 N 条 query 追加 `variant N`。
+  措辞必须稳定，否则缓存 key 每变一次，同一家公司就要重新花钱。
+- `fetch_company_documents()` 按 `queries_per_analyst` 循环发 N 条，结果按 URL 去重合并。
+- 默认值从 2 改成 **1**：接上之后如果还留 2，等于**悄悄把每轮花费翻倍**（8 次 / 16 credits）。
+  想要更多素材再显式设 `QUERIES_PER_ANALYST=2`。
+
+#### 12.32.4 字节跳动实测（这就是「输公司名会怎样」的答案）
+
+| 项 | 值 |
+|---|---|
+| 输入 | `字节跳动`（另有一次 `字节跳动·`，尾随符号不影响检索） |
+| 检索 | 4 次（每栏 1 条，每条 5 篇） |
+| 花费 | **8 credits** |
+| 结果 | 5952 字，四栏 **19 / 11 / 7 / 8** 条，16 个引用 |
+| 来源 | bytedance.com、wikipedia、linkedin、rocketreach 等 |
+
+内容确实在讲字节跳动：2012 年由张一鸣/梁汝波创立、2016 年抖音、2017 年 TikTok、
+收购 Musical.ly、15 万员工、TikTok/CapCut/Lark/Pico 等产品线。
+**私企的财务栏天生偏薄**（7 条），因为没有公开财报——这是检索现实，不是 bug。
+
+**回归**：全量 **512 passed**（新增 `test_queries_per_analyst_is_actually_honoured`）。

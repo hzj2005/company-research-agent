@@ -57,7 +57,21 @@
       "calls": 0,
       "artifact": "docs/samples/nvidia_live_report_zh.md",
       "note": "提示词与 schema 加中文约束后重跑，budget=0/16 cache_hits=4，四栏 5 篇/栏，输出中文"
+    },
+    {
+      "stage": "S13 界面实测：字节跳动·（live，用户手动触发）",
+      "credits": 8,
+      "calls": 4,
+      "artifact": "docs/samples/bytedance_live_report_zh.md",
+      "note": "用户输入带了尾随符号「·」；仍按公司名检索，4 次调用 8 credits"
+    },
+    {
+      "stage": "S13 界面实测：字节跳动（live，复现）",
+      "credits": 8,
+      "calls": 4,
+      "artifact": "docs/samples/bytedance_live_report_zh.md",
+      "note": "四栏 19/11/7/8 条、16 个引用；每栏实际只发 1 条 query"
     }
   ],
-  "total_credits": 74
+  "total_credits": 90
 }
