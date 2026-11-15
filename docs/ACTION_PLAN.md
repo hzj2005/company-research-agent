@@ -32,7 +32,7 @@
 | **S5** | #5 LangChain 深化 | Tavily 封 `BaseRetriever`；`with_structured_output` + 字段置信度 + 校验重试；行内引用 | `capabilities/`、Pydantic schema | 每条 Fact 能对回 source_url；抽取失败自动重试不静默丢字段 | ✅ 完成（8.1–8.5，见 8.7 / 9.6；**仅 fixture，live 实测归 S8**） |
 | **S6** | #6 HITL | 成稿前 `interrupt()` 复核 + `Command(resume=...)`；复核留痕导出标注 | `graph/nodes/human_review.py` | 中断→恢复后 State 一致；依赖真实 checkpointer | ✅ 完成（10.1–10.4，见 10.5；仅 fixture） |
 | **S7** | #7 评测台 | ~~30–50 真实公司~~ → fixture 派生 golden（3 场景 / 23 claim / 1 拒答）、8 项指标、4 组 A/B、scorecard、CI | `evals/`、`.github/workflows/eval.yml` | 一条命令出分，能定位退化用例 | ✅ 完成（11.1–11.9，仅 fixture；**真实 golden 归 S8**） |
-| **S8** | #8 真实实测 | 切 `APP_MODE=live`，真实模型 + 真实 Tavily + 真实 DB 跑全量 | 对比表、失败案例、成本/延迟取舍 | 每个数字能由脚本与日志当场复现 | 🟢 S8.0–S8.5 完成（累计 8/50 credits、6 次模型请求、1 份真实报告、25 条人工核验 golden、1 次真实语义 judge、fixture vs 真机对比表，见 `docs/LIVE_REPORT.md`）；S8.6 起待执行 |
+| **S8** | #8 真实实测 | 切 `APP_MODE=live`，真实模型 + 真实 Tavily + 真实 DB 跑全量 | 对比表、失败案例、成本/延迟取舍 | 每个数字能由脚本与日志当场复现 | 🟢 S8.0–S8.6 全部完成（累计 8/50 credits、6 次模型请求、1 份真实报告、25 条人工核验 golden、1 次真实语义 judge、fixture vs 真机对比表、25 条可复现简历数字出处表，见 `docs/LIVE_REPORT.md` / `docs/RESUME_EVIDENCE.md`）；S9 待执行 |
 | **S9** | #9 简历交付 | 3–4 条描述 + 面试追问清单 | `docs/RESUME.md` | 每条能指到具体文件与 commit | ⏳ |
 
 **顺序约束**：S2 是 S3/S4/S5/S6 的前置（都要改 `graph.py` / `state.py`），必须串行；S6 依赖 S2 的 checkpointer；S8 依赖 S7 且需要 key。
@@ -997,5 +997,54 @@ S8.5 只做记录与对比，**不修硬伤、不复测**（复测需另花额�
 
 **下一步 S8.6**：`docs/RESUME_EVIDENCE.md` 简历数字出处表 → S9 三条简历描述 + 面试追问清单。
 真实准确率 / 幻觉率 / 引用可追溯率 / p95 / 成本单价仍为「未测」，不得写进简历。
+【S8.5 历史快照：S8.6 已完成，见 12.15】
+
+### 12.15 S8.6 执行结果：简历数字出处表（2026-11-15，0 调用 / 0 credits）
+
+**产出**：`evals/build_resume_evidence.py`（生成脚本 + `--verify` 批量复现）、
+`docs/RESUME_EVIDENCE.md`（出处表）、`tests/test_s8_resume_evidence.py`（67 条护栏）。
+另给 `docs/LIVE_REPORT.md` §9、`docs/LIVE_SCORE.md` §6、`docs/LIVE_FINDINGS.md` 开头
+补**状态注记**：历史快照原文保留，指向当前口径文档。
+
+**做法**：只读 10 份既有产物，装 `eval_offline_guard`（实测拦截 **0** 次外部连接）。
+收录 **25 条**可复现数字，分 A 真机实测 / B 评测工程 / C 额度纪律三组，
+每条给出 值 + 出处文件与字段 + 该文件最后修改的 commit + 一条独立可执行的 `python -c` 复现命令。
+命令由 (文件, 字段路径) 自动生成，**不 import 生成脚本本身**，避免自证循环；
+commit 由 `git log -1 --format=%h -- <文件>` 现场取得，上游归因 commit 从 `docs/UPSTREAM.md` 读取。
+`--verify` 对 25 条**逐个起子进程真的执行命令**，stdout 与产物取值逐字比对 → **25 / 25 PASS**。
+
+**口径修正（自查发现并已改）**：`scorecard.summary.groups_run` 长度含 baseline，
+原措辞「6 组 A/B 对照」已改成「6 个评测组（含 baseline 与开关 A/B 组）」；
+§2.1 里手填的「仅 1 份」改为由 `live_run.company` 推导；
+F03 / F17 / F24 措辞里混入手填数字改为引用字段或去掉；
+F13 中英混排标签订正。禁写清单 **9 条**同样带出处与 commit，覆盖
+fixture 准确率 / p95 / 成本 / 幻觉率、AI judge 结果、引用可追溯率、
+「独立开发」「上线 / 甲方 / 用户量」等归因与真实性红线。
+
+**验收**：全量 **318 passed**、`uv pip check` 103 包兼容、密钥零泄漏、
+Tavily 仍 **8 / 50**、本轮 0 次模型请求 / 0 credits。
+变异探针验证：改 `live_run.credits.cumulative` 或 `scorecard.external_calls.tavily`，
+渲染结果都会跟着变 —— 文档确实绑定产物。
+（注：`fact_accuracy` 只出现在禁写清单里、不引用数值，改它文档不变属预期，测试注释已写明。）
+
+**边界不变**：真实准确率 / 幻觉率 / 引用可追溯率 / p95 / 成本单价仍为「未测」；
+本表只保证「写出来的数字查得到」，不保证「系统效果好」。
+
+### 12.16 下一阶段规划：S9 简历交付（待用户放行执行）
+
+**目标**：`docs/RESUME.md`，3–4 条可直接粘贴的简历项目描述 + 面试追问清单。
+**0 调用 / 0 credits**，只读取既有文档与产物，不新增测量、不扩样本、不修硬伤。
+
+1. **每条描述指回出处**：句中的每个数字标注 `RESUME_EVIDENCE.md` 的编号（如 `F01/F04/F13`）
+   与对应 commit；技术点标注具体代码文件（图编排 / 结构化输出 / Retriever / HITL / 评测台）。
+2. **内容边界**：只写架构与工程能力、人工核验数据链路、真机发现的三类硬伤（作为「发现并定位问题」）、
+   额度纪律；**不写**准确率 / 幻觉率 / p95 / 成本单价 / 提升 X% / 上线 / 甲方 / 用户量，
+   不写「独立开发」（Apache-2.0 二次开发归因）。
+3. **面试追问清单**：按「为什么这么设计 / 数字怎么来的 / 哪里还不行 / 怎么复现」组织，
+   每个回答指向具体文件与命令；重点准备 `1.0` 为什么只是契约分、`supported=0` 不是准确率 0%、
+   真机实体混淆为何没被测出来、引用层为何未核验。
+4. **验收**：新增 `tests/test_s9_resume.py`，断言简历里出现的每个数字都能在
+   `RESUME_EVIDENCE.md` 找到编号、禁用词表为空、归因声明存在；
+   全量 pytest 与 `uv pip check` 通过，Tavily 仍 8/50。
 
 

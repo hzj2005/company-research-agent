@@ -7,8 +7,10 @@
 >
 > **状态更新（S8.5，2026-11-15）**：本文是 S8.3 当时的实测快照，§4–§6 写的是**当时**的未完成项，
 > 保留不改以维持时间线真实。之后 S8.4 已完成 25 条人工核验 golden（含 11 条用户修订）与
-> 1 次真实 `qwen-plus` 语义 judge，S8.5 完成 fixture vs 真机对比表。当前口径以
-> `docs/GOLDEN_LIVE.md`、`docs/LIVE_SCORE.md`、`docs/LIVE_REPORT.md` 为准；
+> 1 次真实 `qwen-plus` 语义 judge，S8.5 完成 fixture vs 真机对比表，
+> S8.6 完成 `docs/RESUME_EVIDENCE.md` 简历数字出处表。当前口径以
+> `docs/GOLDEN_LIVE.md`、`docs/LIVE_SCORE.md`、`docs/LIVE_REPORT.md`、
+> `docs/RESUME_EVIDENCE.md` 为准；
 > **真实准确率 / 幻觉率 / 引用可追溯率 / p95 / 成本单价仍为「未测」**。
 
 ## 1. 实际花了多少

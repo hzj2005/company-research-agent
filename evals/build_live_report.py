@@ -542,7 +542,8 @@ def render(data: dict[str, Any], blocked: int) -> str:
         f"累计 Tavily 仍 **{cumulative} / {ceiling}**。",
         f"- 真实准确率 / 幻觉率 / 引用可追溯率 / p95 / 成本单价：**{NOT_MEASURED}**；"
         f"上面的累计额度取自 `{FILES['live_run']}` → `credits.cumulative` / `user_ceiling`。",
-        "- 之后：S8.6 `docs/RESUME_EVIDENCE.md` 数字出处表 → S9 简历描述 + 面试追问清单。",
+        "- 后续进度（状态注记）：S8.6 `docs/RESUME_EVIDENCE.md` 简历数字出处表**已完成**，"
+        "本文引用的核心真机数字在那里都有逐条出处、commit 与复现命令；当前仅剩 S9 简历描述 + 面试追问清单。",
         "",
     ]
     return "\n".join(L)
