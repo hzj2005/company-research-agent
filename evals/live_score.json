@@ -1,0 +1,163 @@
+{
+  "purpose": "S8.4 语义批改：人工核验的中文标准答案 vs 系统生成的英文真实报告",
+  "status": "ok",
+  "error": null,
+  "method": "AI judge (qwen-plus structured output)，非人工判定",
+  "is_real_judge": true,
+  "is_human_adjudicated": false,
+  "usable_as_resume_metric": false,
+  "metric_boundary": {
+    "may_be_called": "5 条标准答案的 AI 判定明细（可复核、附逐字证据句）",
+    "must_not_be_called": "准确率 / 幻觉率 / 引用可追溯率 / p95 / 成本单价",
+    "reasons": [
+      "样本仅 1 家公司 5 条标准答案，其余 20 条没有真实报告可比",
+      "judge 是 AI 判定，未经人工抽检一致率校准；人出题、AI 批卷仍非人工评分",
+      "golden 的引用层（最终 URL 是否支撑事实）未核验，不能算引用类指标"
+    ]
+  },
+  "dataset": {
+    "golden_file": "evals/golden_live.jsonl",
+    "report_file": "evals/live_run.json",
+    "company": "Notion",
+    "total_claims_in_golden": 25,
+    "scored_claims": 5,
+    "skipped_claims": 20,
+    "skipped_reason": "其余公司没有真实报告可比，不得凭空生成卷子",
+    "report_chars": 4998,
+    "claim_fields_sent_to_judge": [
+      "claim_id",
+      "expected_text"
+    ],
+    "claim_fields_withheld_from_judge": [
+      "source_url",
+      "source_content",
+      "evidence_quote_from_ai_check",
+      "ai_check",
+      "ai_note",
+      "human_note",
+      "original_fact"
+    ]
+  },
+  "config": {
+    "provider": "dashscope",
+    "model": "qwen-plus",
+    "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "temperature": 0.0,
+    "max_retries_in_judge": 0,
+    "max_retries_in_production": 1,
+    "structured_output_method": "function_calling",
+    "role_slot_reused": "briefing"
+  },
+  "usage": {
+    "successful_requests": 1,
+    "total_tokens": 2776,
+    "prompt_tokens": 2334,
+    "completion_tokens": 442,
+    "total_cost_usd": null,
+    "cost_note": "get_openai_callback 的价目表只覆盖 OpenAI 官方模型；qwen-plus 单价不在此表内，故不套用、不编造成本数字"
+  },
+  "schema_check": {
+    "ok": true,
+    "missing_claim_ids": [],
+    "unknown_claim_ids": [],
+    "duplicate_claim_ids": [],
+    "verdict_values_allowed": [
+      "supported",
+      "refuted",
+      "not_mentioned"
+    ]
+  },
+  "judgements": [
+    {
+      "claim_id": "notion:company:0",
+      "expected_text": "Notion 于 2013 年创办",
+      "report_section": "Company Overview",
+      "verdict": "refuted",
+      "self_conflict": true,
+      "evidence_quotes": [
+        "Notion was founded in 2013. [6]",
+        "Notion was founded in 2014. [4]"
+      ],
+      "quotes_verified": true,
+      "unverified_quotes": [],
+      "reason": "Report contains two conflicting statements about Notion's founding year: '2013' and '2014', resulting in self-conflict.",
+      "quote_check_failed": false
+    },
+    {
+      "claim_id": "notion:company:1",
+      "expected_text": "Notion 总部位于旧金山",
+      "report_section": "Company Overview",
+      "verdict": "refuted",
+      "self_conflict": false,
+      "evidence_quotes": [
+        "Notion's headquarters is located at 51 Lloyd Baker Street, London, England, WC1X 9AA, United Kingdom. [4]"
+      ],
+      "quotes_verified": true,
+      "unverified_quotes": [],
+      "reason": "Report states Notion's headquarters is in London, UK, which contradicts the claim that it is in San Francisco.",
+      "quote_check_failed": false
+    },
+    {
+      "claim_id": "notion:company:2",
+      "expected_text": "CNBC 榜单列出的创始人为 Ivan Zhao（CEO）、Simon Last、Akshay Kothari",
+      "report_section": "Company Overview",
+      "verdict": "not_mentioned",
+      "self_conflict": false,
+      "evidence_quotes": [],
+      "quotes_verified": false,
+      "unverified_quotes": [],
+      "reason": "Report does not mention CNBC, Ivan Zhao as CEO, Simon Last, or Akshay Kothari as founders.",
+      "quote_check_failed": false
+    },
+    {
+      "claim_id": "notion:industry:0",
+      "expected_text": "Notion 是模块化协作工作区，把笔记、项目、wiki、数据库组合在一起",
+      "report_section": "Industry Overview",
+      "verdict": "not_mentioned",
+      "self_conflict": false,
+      "evidence_quotes": [],
+      "quotes_verified": false,
+      "unverified_quotes": [],
+      "reason": "Report describes Notion as an 'online work collaboration platform for task and project management' but does not state it is a 'modular collaboration workroom' that 'combines notes, projects, wiki, and databases'.",
+      "quote_check_failed": false
+    },
+    {
+      "claim_id": "notion:financial:0",
+      "expected_text": "2021 年 10 月，Notion 完成 2.75 亿美元融资，由红杉资本与 Coatue 领投，投后估值升至 100 亿美元（2021 年时点，历史数据）",
+      "report_section": "Financial Overview",
+      "verdict": "not_mentioned",
+      "self_conflict": false,
+      "evidence_quotes": [],
+      "quotes_verified": false,
+      "unverified_quotes": [],
+      "reason": "Report contains financial data for 'Notion VTec Berhad (0083.KL)', a Malaysian public company, but no information about Notion Labs, Inc.'s $275M Series C funding in October 2021 or its $10B valuation.",
+      "quote_check_failed": false
+    }
+  ],
+  "summary": {
+    "scored_claims": 5,
+    "supported": 0,
+    "refuted": 2,
+    "not_mentioned": 3,
+    "unjudged": 0,
+    "self_conflict": 1,
+    "quote_check_failed": 0
+  },
+  "verdict_note": "supported 表示报告有支持该事实的陈述，不代表该陈述的来源 URL 真的支持它；refuted 含报告自相矛盾的情形；not_mentioned 表示未写到，不等于系统答错。quote_check_failed=true 的条目证据句未能在报告中逐字核到，判定不可靠；quote_check_failed=null 表示 judge 未返回该条，单独计入 unjudged。",
+  "isolation": {
+    "llm_requests_cap": 1,
+    "llm_requests_cap_note": "max_retries=0，脚本不做任何重试；失败即 failed",
+    "tavily_client_search_calls": 0,
+    "document_tool_constructed": false,
+    "tavily_credits_used": 0
+  },
+  "elapsed_ms": 10850.3,
+  "elapsed_note": "本机墙钟，非确定性字段，不参与 CI 比对",
+  "credentials": {
+    "api_key_env_var": "DASHSCOPE_API_KEY",
+    "api_key_characters": 117,
+    "api_key_printed": 0,
+    "api_key_in_artifact": false,
+    "note": "key 仅存在于本进程内存；产物不写值、不写 .env、不进 git"
+  }
+}

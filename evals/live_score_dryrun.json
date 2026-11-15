@@ -1,0 +1,135 @@
+{
+  "purpose": "S8.4 语义批改：人工核验的中文标准答案 vs 系统生成的英文真实报告",
+  "status": "dry_run",
+  "error": null,
+  "method": "AI judge (qwen-plus structured output)，非人工判定",
+  "is_real_judge": false,
+  "is_human_adjudicated": false,
+  "usable_as_resume_metric": false,
+  "metric_boundary": {
+    "may_be_called": "5 条标准答案的 AI 判定明细（可复核、附逐字证据句）",
+    "must_not_be_called": "准确率 / 幻觉率 / 引用可追溯率 / p95 / 成本单价",
+    "reasons": [
+      "样本仅 1 家公司 5 条标准答案，其余 20 条没有真实报告可比",
+      "judge 是 AI 判定，未经人工抽检一致率校准；人出题、AI 批卷仍非人工评分",
+      "golden 的引用层（最终 URL 是否支撑事实）未核验，不能算引用类指标"
+    ]
+  },
+  "dataset": {
+    "golden_file": "evals/golden_live.jsonl",
+    "report_file": "evals/live_run.json",
+    "company": "Notion",
+    "total_claims_in_golden": 25,
+    "scored_claims": 5,
+    "skipped_claims": 20,
+    "skipped_reason": "其余公司没有真实报告可比，不得凭空生成卷子",
+    "report_chars": 4998,
+    "claim_fields_sent_to_judge": [
+      "claim_id",
+      "expected_text"
+    ],
+    "claim_fields_withheld_from_judge": [
+      "source_url",
+      "source_content",
+      "evidence_quote_from_ai_check",
+      "ai_check",
+      "ai_note",
+      "human_note",
+      "original_fact"
+    ]
+  },
+  "config": null,
+  "usage": null,
+  "schema_check": {
+    "ok": true,
+    "missing_claim_ids": [],
+    "unknown_claim_ids": [],
+    "duplicate_claim_ids": [],
+    "verdict_values_allowed": [
+      "supported",
+      "refuted",
+      "not_mentioned"
+    ]
+  },
+  "judgements": [
+    {
+      "claim_id": "notion:company:0",
+      "expected_text": "Notion 于 2013 年创办",
+      "report_section": "Company Overview",
+      "verdict": "not_mentioned",
+      "self_conflict": false,
+      "evidence_quotes": [],
+      "quotes_verified": false,
+      "unverified_quotes": [],
+      "reason": "dry-run 占位，不是模型判定",
+      "quote_check_failed": false
+    },
+    {
+      "claim_id": "notion:company:1",
+      "expected_text": "Notion 总部位于旧金山",
+      "report_section": "Company Overview",
+      "verdict": "not_mentioned",
+      "self_conflict": false,
+      "evidence_quotes": [],
+      "quotes_verified": false,
+      "unverified_quotes": [],
+      "reason": "dry-run 占位，不是模型判定",
+      "quote_check_failed": false
+    },
+    {
+      "claim_id": "notion:company:2",
+      "expected_text": "CNBC 榜单列出的创始人为 Ivan Zhao（CEO）、Simon Last、Akshay Kothari",
+      "report_section": "Company Overview",
+      "verdict": "not_mentioned",
+      "self_conflict": false,
+      "evidence_quotes": [],
+      "quotes_verified": false,
+      "unverified_quotes": [],
+      "reason": "dry-run 占位，不是模型判定",
+      "quote_check_failed": false
+    },
+    {
+      "claim_id": "notion:industry:0",
+      "expected_text": "Notion 是模块化协作工作区，把笔记、项目、wiki、数据库组合在一起",
+      "report_section": "Industry Overview",
+      "verdict": "not_mentioned",
+      "self_conflict": false,
+      "evidence_quotes": [],
+      "quotes_verified": false,
+      "unverified_quotes": [],
+      "reason": "dry-run 占位，不是模型判定",
+      "quote_check_failed": false
+    },
+    {
+      "claim_id": "notion:financial:0",
+      "expected_text": "2021 年 10 月，Notion 完成 2.75 亿美元融资，由红杉资本与 Coatue 领投，投后估值升至 100 亿美元（2021 年时点，历史数据）",
+      "report_section": "Financial Overview",
+      "verdict": "not_mentioned",
+      "self_conflict": false,
+      "evidence_quotes": [],
+      "quotes_verified": false,
+      "unverified_quotes": [],
+      "reason": "dry-run 占位，不是模型判定",
+      "quote_check_failed": false
+    }
+  ],
+  "summary": {
+    "scored_claims": 5,
+    "supported": 0,
+    "refuted": 0,
+    "not_mentioned": 5,
+    "unjudged": 0,
+    "self_conflict": 0,
+    "quote_check_failed": 0
+  },
+  "verdict_note": "supported 表示报告有支持该事实的陈述，不代表该陈述的来源 URL 真的支持它；refuted 含报告自相矛盾的情形；not_mentioned 表示未写到，不等于系统答错。quote_check_failed=true 的条目证据句未能在报告中逐字核到，判定不可靠；quote_check_failed=null 表示 judge 未返回该条，单独计入 unjudged。",
+  "isolation": {
+    "llm_requests": 0,
+    "tavily_client_search_calls": 0,
+    "document_tool_constructed": false
+  },
+  "elapsed_ms": 0.0,
+  "elapsed_note": "本机墙钟，非确定性字段，不参与 CI 比对",
+  "dry_run_note": "占位判定，全部为 not_mentioned；仅用于验证 0 调用链路，must_not_be_used_as_metric=true，不得写入简历或文档当作评测结果",
+  "must_not_be_used_as_metric": true
+}

@@ -654,7 +654,7 @@ uv run python -m evals.build_golden --check           # CI 同步校验
 | **S8.1** ✅ | dry-run 预演：`TAVILY_DRY_RUN=true` 跑一遍完整图，记录会发哪些 query、`CallBudget` 计数、sha256 cache key | `evals/live_dryrun.json`：12 条 query、预算计数、禁网与凭据探针全 0 | 0 |
 | **S8.2** ✅ | 最小真实调用：`TAVILY_MAX_CALLS=1` 单 query，核对 `AsyncTavilyClient.search()` **真实返回结构**，结果落盘缓存 | **已完成**：`evals/live_probe.py` + `evals/live_probe.json` + `tests/test_s8_live_probe.py`；`response["results"]` 假设成立、3 条结果契约齐全、缓存可离线复现；详见 `docs/LIVE_READINESS.md` 第 8 节与 12.7 节 | **1 次 / 2 credits** |
 | **S8.3** ✅ 首轮 | 端到端 live 小样本：先跑 **1 家**验证链路，记录 query 数、token、延迟、失败案例 | **已完成**：`evals/llm_probe.py`（模型兼容）+ `evals/live_run.py`（Notion 完整报告）+ `evals/live_quality.py`（0 调用词法检查）+ `docs/LIVE_FINDINGS.md`。3 次检索 / 6 credits / 4 次模型请求 / 62.9 s / 4998 字符；**自动抓到 1 处真实矛盾**（创立年份 2013 vs 2014）。未跑 3–5 家、未产出 p95 或成本单价（不编造） | **3 次 / 6 credits** |
-| **S8.4** | 真实 golden + judge：按 Q3 把人工核验事实写成同 schema jsonl；把 `citation_traceability` 从词法代理升级为「自动词法 + 人工抽检一致率」，明确区分自动与人工 | `evals/golden_live.jsonl`、标注口径说明；换 `EVAL_DATASET_PATH` 即可复用 S7 脚本 | 0 |
+| **S8.4** 🟡 前半完成 | 真实 golden + judge：按 Q3 把人工核验事实写成同 schema jsonl；把 `citation_traceability` 从词法代理升级为「自动词法 + 人工抽检一致率」，明确区分自动与人工 | 已产出 `evals/golden_live.jsonl` + `docs/GOLDEN_LIVE.md`；**「换 `EVAL_DATASET_PATH` 复用 S7」经实测不成立，见 12.9**，live 改走独立评分脚本；语义 judge 未做 | 0 |
 | **S8.5** | 前后对比：fixture 契约回归 vs live 真实指标；如实写「fixture 满分 ≠ live 准确率」，列出拒答 / 错引 / 超时案例 | `docs/LIVE_REPORT.md` 对比表 | 可复用缓存 |
 | **S8.6** | 简历数字出处表：每条数字 → 文件 + commit + 可复现命令 | `docs/RESUME_EVIDENCE.md`；无法当场复现的数字一律不写 | 0 |
 
@@ -831,5 +831,85 @@ Pydantic `model_fields` 改用类属性避免弃用告警。
 （`total_cost_usd=null`，qwen-plus 不在 OpenAI 价目表内，不套用不编造）；
 25 条 golden 仍 `human_verified_claims=0`，S7 逐字匹配对真实报告不适用（S8.4 需语义 judge）。
 剩余 **42 credits** 未动；是否扩到 3–5 家、是否再跑，均由用户决定。
+
+### 12.9 S8.4 前半执行记录（2026-11-15 00:13，0 调用 / 0 credits）
+
+用户拍板「25 条内容就是正确的，我查了」= 事实层人工核验通过，导出
+`evals/golden_live_review_filled.jsonl`（25 条全 `accept`、1 条文字备注）。
+
+**已产出**：`evals/build_golden_live.py` → `evals/golden_live.jsonl`（1 meta + 5 case + 25 claim）、
+`docs/GOLDEN_LIVE.md`（三层边界口径）、`tests/test_s8_golden_live.py`（9 条护栏）。
+如实标注三层：**事实层**用户已核验；**引用层**未核验（6 条 URL 打不开、10 条与 AI 核对结论冲突）；
+**覆盖层**只有 Notion 1 家 5 条有真实报告，其余 4 家 20 条无报告可比。AI 的核对结论原样保留供审计，
+不因与用户结论冲突就删除；用户备注也原样带进正式 golden。
+
+**修正原计划的一处错误**：12.2 写的「换 `EVAL_DATASET_PATH` 即可复用 S7 脚本」
+经 `uv run python` 只读探针实测不成立，三处硬冲突（详见 `docs/GOLDEN_LIVE.md` 第 3 节）：
+① live golden 无 abstain 样本，`evals/run_eval.py` L205-206 直接拒绝；
+② `config/eval.yaml` 的 `provenance` 写死 `synthetic-fixture-derived`，与 `human-verified` 冲突；
+③ `fixture.cases = sufficient/sparse/empty` 与 5 个公司 case 不匹配（L210-212）。
+→ S7 继续只跑 fixture golden；live 改走独立评分脚本，**不硬凑拒答样本**。
+
+> 注：以下是 12.9 写就时的历史快照；S8.4 语义 judge 的实际完成情况见 **12.11**。
+
+**仍未做（S8.4 后半 + S8.5/S8.6/S9）**：
+- 语义 judge：中文 golden vs 英文报告，逐字匹配必 0。方案 A = `qwen-plus` 批量判定
+  （约 1 次模型请求 / 0 Tavily credits，需用户放行）；方案 B = 0 调用锚点弱代理
+  （必须显式标 `is_semantic_judge=false`，不得写成语义准确率）。
+- `docs/LIVE_REPORT.md` fixture vs live 对比表；`docs/RESUME_EVIDENCE.md` 数字出处表；S9 简历。
+- 真实准确率 / 幻觉率 / p95 / 成本单价仍为「未测」，不得写进简历。
+
+### 12.10 用户二次复核：按 25 条最终答案重建 golden（2026-11-15 11:47，0 调用 / 0 credits）
+
+- 用户重新复核并把部分条目改成最终标准答案，重新导出 `evals/golden_live_review_filled.jsonl`：
+  **14 采纳原样 / 11 按建议修正 / 0 驳回**，25 条全部带备注；`accepted_but_conflicts_with_ai_check = 0`。
+- 用户还改了 `evals/build_review_page.py`：加 `PRESETS` 预填「修正后的事实 / URL / 备注」，
+  但**不预填 decision**，三个结论按钮仍由用户逐条点（脚本注释与页面说明均写明）。
+  这份改动保留，未被覆盖。
+- 11 条修正里，6 条打不开的原始 URL（Canva 5 条 Business Wire、`wikipedia.com` 镜像）
+  全部换成新 URL；Figma IPO 月份改官方口径、Airbnb「已上市」改「公告预计」、
+  `notion:financial:0` 由用户自行指定 SiliconANGLE 出处（AI 建议的 CNBC 2025 版未采用）。
+- 重写 `evals/build_golden_live.py` → 重建 `evals/golden_live.jsonl`：每条同时留
+  `expected_text/source_url`（最终版）与 `original_fact/original_source_url`（草稿），
+  换过 URL 的 `source_content=null`；`final_url_sources` 区分
+  original 16 / ai_suggested_and_read 7 / user_supplied 2。
+  **引用层仍标不可算指标**：新页面本项目没抓过（0 调用），不能把旧引文冒充新页面内容。
+- 同步更新 `docs/GOLDEN_LIVE.md`（三层边界、14/11 统计、最终 URL 来源）与
+  `tests/test_s8_golden_live.py`（把写死的 25/6/10 改成从输入动态推导，新增
+  「旧草稿不得覆盖用户最终措辞」「6 条原始 URL 全部替换」「换 URL 不得伪造页面内容」护栏）。
+  全量 **206 passed**。0 调用 0 credits，Tavily 仍 8/50。
+- 下一步不变：S8.4 语义 judge（中文答案 vs 英文报告，待用户放行 1 次 `qwen-plus` 或走 0 调用弱代理）
+  → S8.5 对比表 → S8.6 数字出处表 → S9 简历。仍无真实准确率 / 幻觉率 / p95 / 成本单价。
+
+### 12.11 S8.4 语义 judge 完成（2026-11-15，1 次模型请求 / 0 Tavily credits）
+
+本节更新 12.9 / 12.10 的待办状态。用户放行 **方案 A（1 次 `qwen-plus`）+ 只批 Notion**，
+不扩样本、不动 Tavily 额度。
+
+**产出**：
+- `evals/judge.py`：三重放行（`--live` + `JUDGE_LIVE=1` + `DASHSCOPE_API_KEY`）、
+  `max_retries=0` 锁定 1 次请求、Tavily 哨兵、prompt 只送 `claim_id`+`expected_text`
+  （不送出处/AI 备注）、证据句必须报告逐字可核、失败如实落盘不重试。
+- `evals/live_score.json`：唯一真实结果；`evals/live_score_dryrun.json`：0 调用占位，
+  标 `must_not_be_used_as_metric=true`。
+- `docs/LIVE_SCORE.md`、`tests/test_s8_judge.py`；同步 `docs/GOLDEN_LIVE.md` 第 4/5/6 节。
+
+**真实运行**：1 次请求、2776 tokens（2334/442）、0 Tavily 调用 / 0 credits、
+Tavily 累计仍 **8/50**；`total_cost_usd=null` 不编造单价。5 条全判定：
+`supported=0 / refuted=2 / not_mentioned=3 / self_conflict=1 / quote_check_failed=0`，
+20 条如实跳过。独立精确子串复核：3 条引文全部逐字命中报告原文。
+
+**真机报告被抓出 3 类硬伤**（fixture 满分测不出）：同栏目 2013/2014 自相矛盾；
+总部写成伦敦门牌 + 混入 `medium.com`；Financial 栏目 11 条全是马来西亚上市公司
+`Notion VTec Berhad (0083.KL)` 的股票指标（实体混淆）。记为已知问题，不阻塞 S8.5/S9。
+
+**如实记录的缺陷**：`notion:company:2` 的 judge reason 说「未提 Ivan Zhao as CEO」，
+但报告 Industry 栏目出现过一次 `CEO Ivan Zhao's 'Legos' analogy`。判定本身仍成立
+（未列创始人/未提另两人），但措辞不精确 —— 这正是 `is_human_adjudicated=false`、
+`usable_as_resume_metric=false` 的实证理由，不删结果、不重跑。
+
+**仍未做（S8.5 → S8.6 → S9）**：`docs/LIVE_REPORT.md` fixture `1.000` vs 真机判定对比表
+（0 调用）；`docs/RESUME_EVIDENCE.md` 数字出处表；3–4 条简历描述 + 面试追问清单。
+真实准确率 / 幻觉率 / 引用可追溯率 / p95 / 成本单价**仍为「未测」**，不得写进简历。
 
 
