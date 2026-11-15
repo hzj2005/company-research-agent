@@ -56,6 +56,9 @@ class _Strict(BaseModel):
 class AppConfig(_Strict):
     mode: Literal["fixture", "live"] = "fixture"
     log_level: str = "INFO"
+    # 任务台账后端：memory 是进程内字典（测试/离线默认），postgres 才真落库。
+    # 默认 memory 是刻意的——否则任何一次 pytest 都会去连数据库。
+    job_store: Literal["memory", "postgres"] = "memory"
 
 
 class EvidenceConfig(_Strict):
@@ -302,14 +305,31 @@ def apply_overrides(settings: Settings, overrides: Mapping[str, Any]) -> Setting
     return Settings.model_validate(data)
 
 
+def resolve_postgres_dsn(settings: Settings | None = None) -> str:
+    """Postgres 的 DSN。空值当错误处理，绝不静默退回 SQLite 冒充持久化。
+
+    示例：`postgresql://postgres:devpass@localhost:5432/research`
+    """
+    s = settings or get_settings()
+    dsn = s.graph.postgres_dsn.strip()
+    if not dsn:
+        raise ValueError(
+            "CHECKPOINTER=postgres（或 JOB_STORE=postgres）但 POSTGRES_DSN 为空；"
+            "在 .env 里补一行 POSTGRES_DSN=postgresql://用户:密码@主机:5432/库名"
+        )
+    if not dsn.startswith(("postgresql://", "postgres://")):
+        raise ValueError(f"POSTGRES_DSN 必须是 postgresql:// 开头，当前是 {dsn[:20]!r}")
+    return dsn
+
+
 def resolve_checkpoint_path(settings: Settings | None = None) -> Path:
     """把 `sqlite:///./data/checkpoints.db` 解析成真实文件路径，并确保父目录存在。"""
     s = settings or get_settings()
     if s.graph.checkpointer == "postgres":
-        raise NotImplementedError(
-            "PostgresSaver 未接入：本项目只在 SQLite 上验证过 checkpoint（跨进程恢复、"
-            "interrupt 续跑都是在这里测的）。要用 Postgres 需自行接 saver 并重跑 "
-            "tests/test_checkpointer.py；未接入前不静默退回 SQLite 冒充持久化。"
+        # 走 Postgres 时没有文件路径；这里明确指路，而不是返回一个没人用的路径
+        raise ValueError(
+            "checkpointer=postgres 没有文件路径，请改用 resolve_postgres_dsn()；"
+            "SQLite 与 Postgres 是二选一，不会同时写两份"
         )
     dsn = s.graph.dsn
     prefix = "sqlite:///"

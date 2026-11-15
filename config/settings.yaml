@@ -7,6 +7,8 @@
 app:
   mode: ${APP_MODE:-fixture}
   log_level: ${LOG_LEVEL:-INFO}
+  # memory = 进程内字典（测试默认）；postgres = 任务台账与报告落库，需要 POSTGRES_DSN
+  job_store: ${JOB_STORE:-memory}
 
 graph:
   # 循环终止：唯一依据是 retry_count，禁止让模型自行判断"够了"

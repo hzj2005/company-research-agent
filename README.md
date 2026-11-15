@@ -129,7 +129,9 @@ verified by socket-level guards in `tests/test_s5_offline.py`.
 - `TAVILY_API_KEY` — **optional, and deliberately hard to spend**: set it at OS user level, not in `.env`. Real calls additionally require `APP_MODE=live`, `TAVILY_LIVE_ENABLED=true` and `TAVILY_MAX_CALLS>0`; see `docs/ACTION_PLAN.md` §9.2. So far this project has made **4 live Tavily searches (8 credits) and 5 model requests** — see `docs/LIVE_FINDINGS.md`.
 - A model key — only for `live`. This fork supports OpenRouter / OpenAI / Gemini / **DashScope** (`LLM_PROVIDER=dashscope`, `LLM_MODEL=qwen-plus`); S8.3 uses the OS user-level `SYSTEM_ALIYUN_APIKEY` mapped in-process. Keys are never committed. With `APP_MODE=live` and no model key, `build_graph()` fails **at construction time** with `MissingLLMCredentials`; to exercise live retrieval alone, also set `FEATURES_STRUCTURED_OUTPUT=false`.
 - `TAVILY_MAX_CALLS` is a **per-run** budget: each `/research` request builds its own graph and `CallBudget`, while the Studio entry holds one process-wide instance. Real-call accounting must be read from `CallBudget.calls_made`, not inferred from the config value.
-- Google Maps / MongoDB — upstream UI features only; not used by the new graph.
+- Google Maps — upstream UI feature only; not used by the new graph.
+- MongoDB — **replaced** by a Postgres job/report store (`persistence/job_store.py`); the upstream
+  service file is kept for comparison but is no longer wired in. See `docs/POSTGRES.md`.
 
 ## Run locally
 
@@ -241,7 +243,10 @@ curl -X POST http://localhost:8000/research \
 | `OPENROUTER_MODEL` | No | Default OpenRouter model (`google/gemini-3.8-flash` if unset) |
 | `OPENAI_API_KEY` | No* | Research and editing when no OpenRouter key is available |
 | `GEMINI_API_KEY` | No | Briefing synthesis when no OpenRouter key is available (falls back to OpenAI) |
-| `MONGODB_URI` | No | Backend job/report persistence |
+| `CHECKPOINTER` | No | `sqlite` (default) or `postgres` for graph checkpoints |
+| `POSTGRES_DSN` | No* | Required when `CHECKPOINTER=postgres` or `JOB_STORE=postgres` |
+| `JOB_STORE` | No | `memory` (default) or `postgres` for job/report persistence |
+| `MONGODB_URI` | No | Upstream only; ignored by the reworked entry points |
 | `VITE_API_URL` | Yes | Frontend API connection |
 | `VITE_GOOGLE_MAPS_API_KEY` | No | Frontend location autocomplete |
 

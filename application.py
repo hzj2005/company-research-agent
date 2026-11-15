@@ -4,6 +4,7 @@ import logging
 import os
 import time
 import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 
@@ -20,18 +21,20 @@ from backend.llm import DEFAULT_OPENROUTER_MODEL, OPENROUTER_BASE_URL
 # S5-B 起：对外入口指向二次开发的新图（原版 backend/graph.py 保留作 upstream 对照）
 from capabilities.briefing import briefing_backend_scope
 from capabilities.retrieval import make_document_tool
-from config.loader import build_thread_id, get_settings
+from config.loader import build_thread_id, get_settings, resolve_postgres_dsn
 from graph.builder import build_graph
 from graph.state import initial_state
 from persistence.checkpointer import CheckpointSession
-from backend.services.mongodb import MongoDBService
+from persistence.job_store import PostgresJobStore
 from backend.services.pdf_service import PDFService
 from backend.classes.state import EventQueue, job_status
 
-# Load environment variables from .env file at startup
+# Load environment variables from .env file at startup.
+# override=False：**显式环境变量优先于 .env**。否则测试/CI 想临时指定
+# JOB_STORE=memory 会把 .env 里的 postgres 覆盖回来，测试直接写进真实库。
 env_path = Path(__file__).parent / '.env'
 if env_path.exists():
-    load_dotenv(dotenv_path=env_path, override=True)
+    load_dotenv(dotenv_path=env_path, override=False)
 
 # Configure logging
 logger = logging.getLogger()
@@ -39,7 +42,41 @@ logger.setLevel(logging.INFO)
 console_handler = logging.StreamHandler()
 logger.addHandler(console_handler)
 
-app = FastAPI(title="Tavily Company Research API")
+# S12.2：任务台账后端。None = 用进程内 job_status（测试/离线默认）。
+job_store: PostgresJobStore | None = None
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """按 JOB_STORE 决定台账落库还是落内存；退出时关池子，别把连接挂在那。"""
+    global job_store
+    settings = get_settings()
+    if settings.app.job_store == "postgres":
+        try:
+            job_store = await PostgresJobStore(resolve_postgres_dsn(settings)).open()
+            logger.info("任务台账：Postgres（重启后仍可查）")
+        except Exception as exc:  # 连不上 / 库没建 / DSN 空
+            if settings.app.mode == "live":
+                # 真实模式必须失败：宁可起不来，也不要假装存下来了
+                raise
+            logger.warning(
+                "JOB_STORE=postgres 但台账库不可用（%s）；fixture 模式退回进程内内存。"
+                " 排查：docker compose -f docker-compose.postgres.yml ps / "
+                "uv run python -m persistence.setup_postgres",
+                exc,
+            )
+            job_store = None
+    else:
+        logger.info("任务台账：进程内内存（默认；设 JOB_STORE=postgres 可落库）")
+    try:
+        yield
+    finally:
+        if job_store is not None:
+            await job_store.close()
+            job_store = None
+
+
+app = FastAPI(title="Tavily Company Research API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -50,13 +87,9 @@ app.add_middleware(
 )
 pdf_service = PDFService({"pdf_output_dir": "pdfs"})
 
-mongodb = None
-if mongo_uri := os.getenv("MONGODB_URI"):
-    try:
-        mongodb = MongoDBService(mongo_uri)
-        logger.info("MongoDB integration enabled")
-    except Exception as e:
-        logger.warning(f"Failed to initialize MongoDB: {e}. Continuing without persistence.")
+# 上游的 MongoDB 台账层已在 S12.2 换成 Postgres（见 persistence/job_store.py）。
+# backend/services/mongodb.py 保留作上游对照，但这里不再实例化：多一个可选依赖
+# 就多一条「本地能跑、换台机器跑不起来」的路。
 
 class ResearchRequest(BaseModel):
     company: str
@@ -93,6 +126,11 @@ async def research(data: ResearchRequest):
             "company": data.company,
             "last_update": datetime.now().isoformat(),
         })
+        if job_store is not None:
+            # 先落库再排队：前端立刻查 /research/{id} 就能看到 pending
+            await job_store.create_job(
+                job_id, data.model_dump(exclude={"tavily_api_key", "openrouter_api_key"})
+            )
         asyncio.create_task(process_research(job_id, data))
 
         response = JSONResponse(content={
@@ -120,9 +158,6 @@ async def process_research(job_id: str, data: ResearchRequest, db_path=None):
     环境变量解析（见 config/loader.py），不接收请求体传 key，避免密钥进日志。
     """
     try:
-        if mongodb:
-            mongodb.create_job(job_id, data.model_dump(exclude={"tavily_api_key", "openrouter_api_key"}))
-
         await asyncio.sleep(0.5)  # Brief delay (kept from upstream for SSE startup)
 
         logger.info(f"Starting research for {data.company}")
@@ -167,9 +202,9 @@ async def process_research(job_id: str, data: ResearchRequest, db_path=None):
                 "last_update": datetime.now().isoformat()
             })
             
-            if mongodb:
-                mongodb.update_job(job_id=job_id, status="completed")
-                mongodb.store_report(job_id=job_id, report_data={"report": report_content})
+            if job_store is not None:
+                await job_store.update_job(job_id, status="completed")
+                await job_store.store_report(job_id, report_content)
             
             logger.info(f"Research completed successfully for {data.company}")
         else:
@@ -179,6 +214,8 @@ async def process_research(job_id: str, data: ResearchRequest, db_path=None):
                 "error": "No report generated",
                 "last_update": datetime.now().isoformat()
             })
+            if job_store is not None:
+                await job_store.update_job(job_id, status="failed", error="No report generated")
 
     except Exception as e:
         logger.error(f"Research failed: {str(e)}", exc_info=True)
@@ -188,8 +225,8 @@ async def process_research(job_id: str, data: ResearchRequest, db_path=None):
             "last_update": datetime.now().isoformat()
         })
         
-        if mongodb:
-            mongodb.update_job(job_id=job_id, status="failed", error=str(e))
+        if job_store is not None:
+            await job_store.update_job(job_id, status="failed", error=str(e))
 
 @app.get("/")
 async def ping():
@@ -262,9 +299,15 @@ async def get_pdf(filename: str):
 
 @app.get("/research/{job_id}")
 async def get_research(job_id: str):
-    if not mongodb:
-        raise HTTPException(status_code=501, detail="Database persistence not configured")
-    job = mongodb.get_job(job_id)
+    """台账查询：配了 Postgres 就能跨重启查，否则退回进程内字典。
+
+    注意 SSE 那条流仍然只认内存（`job_status`），所以多 worker 部署时这里能查到、
+    流的进度可能对不上——这是 S12 明确留下的边界，没假装解决。
+    """
+    if job_store is not None:
+        job = await job_store.get_job(job_id)
+    else:
+        job = job_status.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Research job not found")
     return job
@@ -323,27 +366,29 @@ async def stream_research(job_id: str):
 
 @app.get("/research/{job_id}/report")
 async def get_research_report(job_id: str):
-    if not mongodb:
-        if job_id in job_status:
-            result = job_status[job_id]
-            if report := result.get("report"):
-                return {"report": report}
-            # Job exists but report not ready yet
-            return JSONResponse(
-                status_code=202,
-                content={"status": result.get("status", "pending"), "message": "Report not ready yet"}
-            )
-        raise HTTPException(status_code=404, detail="Job not found")
-    
-    report = mongodb.get_report(job_id)
-    if not report:
-        # Check if job exists
-        if job := mongodb.get_job(job_id):
+    """报告优先从台账拿（能跨重启），拿不到再看内存，最后才说 404。"""
+    if job_store is not None:
+        report = await job_store.get_report(job_id)
+        if report:
+            return report
+        job = await job_store.get_job(job_id)
+        if job:
             return JSONResponse(
                 status_code=202,
                 content={"status": job.get("status", "pending"), "message": "Report not ready yet"}
             )
         raise HTTPException(status_code=404, detail="Job not found")
+
+    if job_id in job_status:
+        result = job_status[job_id]
+        if report := result.get("report"):
+            return {"report": report}
+        # Job exists but report not ready yet
+        return JSONResponse(
+            status_code=202,
+            content={"status": result.get("status", "pending"), "message": "Report not ready yet"}
+        )
+    raise HTTPException(status_code=404, detail="Job not found")
     return report
 
 @app.post("/generate-pdf")

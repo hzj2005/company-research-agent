@@ -36,6 +36,7 @@
 | **S9** | #9 简历交付 | 3–4 条描述 + 面试追问清单 | `docs/RESUME.md` | 每条能指到具体文件与 commit | ✅ 完成（12.16 规划 / 12.18 执行）：4 条描述 + 18 条追问，数字全部由出处表插值，`tests/test_s9_resume.py` 17 条护栏 |
 | **S10** | #10 质量修复（S9 之后追加） | 同名实体消歧 + 同栏目冲突前置 | `capabilities/entity_guard.py`、`capabilities/conflict.py`、`graph/nodes/collect.py`、`graph/nodes/report.py` | 真机三类硬伤里的两类被堵住，且不误杀 | ✅ 完成（12.20）：真实缓存回放 12 篇 → 拒 2 篇，References 11 → 9；56 条新护栏 |
 | **S11** | #11 按岗位出多版措辞（S9 之后追加） | 同一批事实句按 Agent / RAG / 后端三种视角重排，不改写事实 | `evals/build_resume_variants.py`、`docs/RESUME_VARIANTS.md` | 三版排法必须真的不同，且粘贴行与 `docs/RESUME.md` 逐字一致 | ✅ 完成（12.22）：三个方向 × 三条，14 条新护栏；顺手补上 D 组漏渲染与一处归因不准 |
+| **S12** | #12 持久化换 Postgres（S11 之后追加） | checkpoint 与任务台账搬 Postgres，SSE 进度仍留内存 | `persistence/checkpointer.py`、`persistence/job_store.py`、`persistence/setup_postgres.py`、`persistence/migrate_sqlite_to_pg.py` | 重启后同一 job 与存档仍可查；无库时测试整组跳过而非误通过 | ✅ 完成（12.23）：**499 passed**、10 条 PG 用例、旧存档 11→11 状态一致；运行手册 `docs/POSTGRES.md` |
 
 **顺序约束**：S2 是 S3/S4/S5/S6 的前置（都要改 `graph.py` / `state.py`），必须串行；S6 依赖 S2 的 checkpointer；S8 依赖 S7 且需要 key。
 
@@ -1361,3 +1362,59 @@ VTec 股价变成 2 条真事实。
 | 产物 | `docs/RESUME_VARIANTS.md`、`evals/build_resume_variants.py` |
 | 额度 | **0** 次外部连接、**0** 次模型请求、**0** Tavily credits，累计仍 **42 / 50** |
 | 边界 | 三版都不写准确率 / 幻觉率 / p95 / 成本单价；仍是 Apache-2.0 二次开发 |
+
+---
+
+### 12.23 S12 执行结果：把存档与台账搬到 Postgres（2026-11-15，0 调用 / 0 credits）
+
+#### 12.23.1 范围：搬两层，留一层
+
+| 要搬的 | 结论 |
+|---|---|
+| 图的 checkpoint | ✅ 搬（官方 `AsyncPostgresSaver`） |
+| 任务台账 + 报告正文 | ✅ 搬（替代上游 Mongo 层，也替代进程内字典） |
+| SSE 实时进度 | ❌ 不搬（仍在内存，多 worker 会不一致，如实写进边界） |
+| 评测产物 / 检索缓存 / PDF | ❌ 不进库（它们是证据，要能 `git diff`、离线回放、被出处表引用） |
+
+一句话原则：**运行时状态进库，证据留在文件里。**
+
+#### 12.23.2 实现：一套接口，两个后端
+
+- `persistence/checkpointer.py`：`CheckpointSession` 按 `CHECKPOINTER` 选 saver，
+  `compile()` / `config_for()` 调用方一行不用改；显式传 `path` 时**强制 SQLite**（测试注入临时文件不被本机 .env 带走）。
+- `persistence/job_store.py`：`jobs` + `reports` 两张表，五条语句，连接池 + `dict_row`；
+  `update_job` 只认白名单字段，避免拼 SQL 时被注入。
+- `persistence/setup_postgres.py`：显式建表（幂等），拒绝「连接时自动建表」——那会把
+  「库没准备好」藏起来。
+- `persistence/migrate_sqlite_to_pg.py`：用 saver 接口复制，不手工解 msgpack；默认干跑，
+  `--apply` 才写，`--force` 才覆盖，逐线程校验三项一致。
+
+#### 12.23.3 三个真坑（都是实测撞出来的）
+
+1. **Windows 的 Proactor 事件循环**：psycopg 异步模式直接拒绝
+   `Psycopg cannot use the 'ProactorEventLoop'`。
+   uvicorn 0.38 自己传 loop factory（`Server.run()` → `asyncio_run(..., loop_factory=...)`），
+   改全局策略对它无效；没开 reload 时它在 Windows 上固定给 Proactor。
+   解法：`--loop persistence.pg_compat:selector_loop`，CLI 脚本则在 `asyncio.run()` 前切策略。
+2. **自定义 loop 的约定是「调用后返回实例」**：第一版返回 `asyncio.SelectorEventLoop` 类，
+   uvicorn 把它当实例用，报 `set_debug() missing 1 required positional argument`。
+3. **`.env` 的 `override=True` 让测试写进真实库**：`application.py` 与 `backend/__init__.py`
+   都这么写，导致测试里设的 `JOB_STORE=memory` 被覆盖，两次 `TestClient` 用例在真库留下 job 行。
+   改成 `override=False`（显式环境变量优先）+ `tests/conftest.py` 里 `setdefault` 两个后端变量，
+   复验：跑完两文件后 `select count(*) from jobs` 仍为 0。
+
+#### 12.23.4 验收
+
+| 项 | 结果 |
+|---|---|
+| 全量测试 | **499 passed**（新增 `tests/test_s12_postgres.py` 10 条） |
+| Postgres 用例覆盖 | 跨会话恢复 / 线程隔离与累加 / 7 节点业务图恢复 / `interrupt`→`resume` / 台账往返 / 白名单拒注入 / 迁移三口径一致 |
+| 实测（fixture，0 credits） | 提交 → 台账 `HTTP 200`（旧版 501）→ 报告 200 → **换进程重启**后同一 job 与报告仍可查 |
+| 迁移 | SQLite 11 个存档点 → PG 11 个，最新状态逐字段一致 |
+| 无库时行为 | 整组用例跳过（不是通过）；`live` 模式下台账连不上直接启动失败，不假装存下来了 |
+
+#### 12.23.5 边界
+
+- SSE 进度仍是单 worker；台账已可跨重启，进度流不行。
+- 测试默认 `JOB_STORE=memory` / `CHECKPOINTER=sqlite`，CI 不需要数据库。
+- 运行手册见 `docs/POSTGRES.md`；Windows 启动方式以那篇为准。

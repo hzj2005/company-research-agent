@@ -13,6 +13,7 @@ from config.loader import (
     load_eval_config,
     load_settings,
     resolve_checkpoint_path,
+    resolve_postgres_dsn,
 )
 
 
@@ -109,10 +110,25 @@ def test_eval_config_parses() -> None:
     assert {"dataset", "metrics", "ab_tests", "ci"} <= set(d.keys())
 
 
-def test_postgres_checkpointer_is_explicitly_unimplemented() -> None:
-    """没接入就明确抛错，不许悄悄退回 SQLite 冒充「生产级持久化」。"""
-    s = load_settings(environ={"APP_MODE": "fixture", "CHECKPOINTER": "postgres"})
-    with pytest.raises(NotImplementedError) as exc:
+def test_postgres_checkpointer_needs_a_dsn() -> None:
+    """选了 postgres 却没配 DSN：报错并指路，不许悄悄退回 SQLite。"""
+    s = load_settings(
+        environ={"APP_MODE": "fixture", "CHECKPOINTER": "postgres", "POSTGRES_DSN": ""}
+    )
+    with pytest.raises(ValueError) as exc:
+        resolve_postgres_dsn(s)
+    assert "POSTGRES_DSN" in str(exc.value)
+
+    # 走 Postgres 时没有「文件路径」这回事，问路径本身就该报错
+    with pytest.raises(ValueError) as exc2:
         resolve_checkpoint_path(s)
-    assert "未接入" in str(exc.value)
-    assert "SQLite" in str(exc.value)
+    assert "resolve_postgres_dsn" in str(exc2.value)
+
+
+def test_postgres_dsn_must_look_like_a_postgres_url() -> None:
+    s = load_settings(
+        environ={"APP_MODE": "fixture", "CHECKPOINTER": "postgres", "POSTGRES_DSN": "mysql://x/y"}
+    )
+    with pytest.raises(ValueError) as exc:
+        resolve_postgres_dsn(s)
+    assert "postgresql://" in str(exc.value)

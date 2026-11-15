@@ -15,7 +15,9 @@ logger = logging.getLogger(__name__)
 env_path = Path(__file__).parent.parent / '.env'
 if env_path.exists():
     logger.info(f"Loading environment variables from {env_path}")
-    load_dotenv(dotenv_path=env_path, override=True)
+    # override=False：显式环境变量优先。原来是 True，导致测试里设的
+    # JOB_STORE=memory 被 .env 的 postgres 盖回去，测试直接写进真实库。
+    load_dotenv(dotenv_path=env_path, override=False)
 else:
     logger.warning(f".env file not found at {env_path}. Using system environment variables.")
 
