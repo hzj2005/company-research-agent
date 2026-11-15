@@ -1,7 +1,8 @@
 """S8.6：生成「简历数字出处表」docs/RESUME_EVIDENCE.md。
 
-    uv run python -m evals.build_resume_evidence            # 重新生成本文（0 调用）
-    uv run python -m evals.build_resume_evidence --verify   # 逐条执行复现命令并比对（0 调用）
+    uv run python -m evals.build_resume_evidence                  # 重新生成本文（0 调用）
+    uv run python -m evals.build_resume_evidence --verify         # 逐条执行复现命令并比对（0 调用）
+    uv run python -m evals.build_resume_evidence --record-commits # 刷新 commit 台账（0 调用）
 
 设计红线（对应 ACTION_PLAN 任务表 S8.6 行与 12.3 硬约束）：
 
@@ -10,11 +11,18 @@
 2. **每条数字四要素齐全**：值 / 出处文件 + 字段 / 该文件最后一次修改的 commit /
    一条能当场执行的复现命令。复现命令由 (文件, 字段路径) **自动生成**，
    不手写，因此出处与命令不可能脱节。
-3. **模板不写死任何数字或 commit**：数值从产物插值，commit 现场问 git。
+3. **模板不写死任何数字或 commit**：数值从产物插值，commit 从台账
+   `evals/resume_evidence_commits.json` 读（见 `commit_note()`）。
 4. **如实区分可写与禁写**：fixture 合成语料的分、单次墙钟、AI judge 判定、
    null 成本一律不得当真实效果；归因红线（Apache-2.0 二次开发）单列。
 5. 产物是「出处表」，不是新指标：真实准确率 / 幻觉率 / 引用可追溯率 /
    p95 / 成本单价一律写「未测」。
+6. **commit 列必须冻结**（S8.6 复查修复）：早期版本每次渲染都现场跑
+   `git log -1`，导致「提交前生成、提交后失效」——任何一次新提交改到被引用
+   的文件，文档里的 hash 就与 `render()` 不一致，测试必红。改为首次渲染时
+   把「录入时该文件的最后修改提交」写进台账并提交，之后只读台账；
+   `tests/test_s8_resume_evidence.py` 用 `git show <commit>:<file>` 校验
+   该值在那个 commit 里确实存在，比「最后一次提交」更接近简历要的语义。
 """
 
 from __future__ import annotations
@@ -29,6 +37,15 @@ from typing import Any, Callable
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "docs" / "RESUME_EVIDENCE.md"
+COMMITS_PATH = ROOT / "evals" / "resume_evidence_commits.json"
+
+# 除产物外，文档里还点名了这些文件（禁写清单、归因、对比表）
+DOC_REFS: tuple[str, ...] = (
+    "docs/UPSTREAM.md",
+    "docs/ACTION_PLAN.md",
+    "docs/LIVE_REPORT.md",
+    "LICENSE",
+)
 
 FILES: dict[str, str] = {
     "scorecard": "evals/scorecard.json",
@@ -279,15 +296,51 @@ def facts() -> list[Fact]:
 
 @lru_cache(maxsize=None)
 def file_commit(rel: str) -> str:
-    """该产物文件最后一次被修改的 commit（现场问 git，不写死）。"""
+    """该出处文件**录入时**的最后一次修改 commit，从台账读，不现场问 git。
+
+    台账由 `--record-commits` 写入并入库；渲染只读它，因此新提交即使改到这些
+    文件，文档里的 hash 也不会漂移（早期版本正是在这里每提交一次就必红）。
+    """
+    commits = recorded_commits()
+    if rel not in commits:
+        raise RuntimeError(
+            f"{rel} 未登记 commit；先运行 "
+            "`uv run python -m evals.build_resume_evidence --record-commits`"
+        )
+    return commits[rel]
+
+
+@lru_cache(maxsize=None)
+def recorded_commits() -> dict[str, str]:
+    if not COMMITS_PATH.exists():
+        raise RuntimeError(
+            f"commit 台账不存在：{COMMITS_PATH.relative_to(ROOT).as_posix()}；"
+            "先运行 `uv run python -m evals.build_resume_evidence --record-commits`"
+        )
+    raw = json.loads(COMMITS_PATH.read_text(encoding="utf-8"))
+    return {str(k): str(v) for k, v in raw.items()}
+
+
+def live_commit(rel: str) -> str:
+    """现场问 git：该文件当前（HEAD/工作区）的最后一次修改提交。"""
     r = subprocess.run(
         ["git", "log", "-1", "--format=%h", "--", rel],
         cwd=ROOT, capture_output=True, text=True, check=True,
     )
     commit = r.stdout.strip()
     if not commit:
-        raise RuntimeError(f"产物未纳入 git，无法给出 commit：{rel}")
+        raise RuntimeError(f"文件未纳入 git，无法给出 commit：{rel}")
     return commit
+
+
+def referenced_files() -> list[str]:
+    """台账必须覆盖的路径：全部产物 + 文档里点名的其他文件。"""
+    return sorted(set(FILES.values()) | set(DOC_REFS))
+
+
+def record_commits() -> dict[str, str]:
+    """把当前 HEAD 下各文件的最后修改提交写进台账（唯一会写台账的入口）。"""
+    return {rel: live_commit(rel) for rel in referenced_files()}
 
 
 def run_verification(data: dict[str, Any]) -> list[dict[str, Any]]:
@@ -411,8 +464,11 @@ def render(data: dict[str, Any], blocked: int) -> str:
     add("")
     add("- 只有在 §2 表里的数字才允许进入简历措辞，且必须带上其口径限定"
         "（例如 F11 只能写「单次墙钟」，不能写 p95）。")
-    add("- `commit` 列是**该出处文件最后一次被修改的提交**，由 `git log -1 --format=%h -- <文件>` 现场取得；"
-        "不是本文的提交，也不代表该数字首次出现的版本。")
+    add("- `commit` 列是**录入时**该文件的最后一次修改提交，冻结在 "
+        "`evals/resume_evidence_commits.json`，不随之后的新提交漂移；"
+        "刷新台账用 `--record-commits`。它不是本文的提交，也不代表该数字首次出现的版本。")
+    add("- 护栏会用 `git show <commit>:<文件>` 复核：**该数值在那个 commit 里确实存在**，"
+        "比「最后一次修改」更接近简历要的语义；文档文件则只校验存在性。")
     add("- 复现命令从 (文件, 字段路径) 自动生成，代码里只 `json.load` / `open`，"
         "**不 import 本脚本、不联网**，因此可独立核验，不构成自证循环。")
     add("- 所有 credits 数字均为「按 Tavily 官方计费规则推算」，不是账单；本项目从未查询或记录真实扣费。")
@@ -473,8 +529,9 @@ def render(data: dict[str, Any], blocked: int) -> str:
         "`expr_from_path()` 把同一路径翻译成 `d[\"a\"][\"b\"]`，拼成独立的 `python -c` 命令。")
     add("2. `--verify` 对每条数字**真的起一个进程执行该命令**，"
         "把 stdout 与产物取值逐字比对（两边都用 `json.dumps`，bool/null 不会走样）。")
-    add("3. `tests/test_s8_resume_evidence.py` 再做一遍同样的事，并校验 commit 能被 git 解析、"
-        "文档与 `render()` 一致、生成脚本里没有硬编码的真实数字。")
+    add("3. `tests/test_s8_resume_evidence.py` 再做一遍同样的事，并逐条用 "
+        "`git show <commit>:<文件>` 回到台账标注的版本重算该字段——"
+        "「这个数字在那个 commit 里就有」能被机器验证，而不只是写着一行 hash。")
     add(f"4. 当前共 **{len(f)}** 条可复现数字、**{len(banned_rows())}** 条禁写规则；"
         "这两个计数也由列表长度生成，不是手填。")
     add("")
@@ -490,8 +547,19 @@ def render(data: dict[str, Any], blocked: int) -> str:
 def main() -> int:
     from evals.run_eval import eval_offline_guard
 
-    verify_only = "--verify" in sys.argv[1:]
+    args = sys.argv[1:]
+    verify_only = "--verify" in args
+    record_only = "--record-commits" in args
     with eval_offline_guard("S8.6 出处表生成") as attempts:
+        if record_only:
+            commits = record_commits()
+            COMMITS_PATH.write_text(
+                json.dumps(commits, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            print(f"[S8.6] 已登记 {len(commits)} 个文件的 commit -> "
+                  f"{COMMITS_PATH.relative_to(ROOT).as_posix()}")
+            return 0
         data = load_inputs()
         if verify_only:
             rows = run_verification(data)

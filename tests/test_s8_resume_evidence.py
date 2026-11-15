@@ -1,7 +1,8 @@
 """S8.6 护栏：简历数字出处表里的每条数字都必须能当场复现。
 
 与 S8.5 的区别：S8.5 只按字段路径重算；这里**真的执行文档里印出来的
-复现命令**（独立 python -c 子进程），并校验 commit 能被 git 解析。
+复现命令**（独立 python -c 子进程），并用 `git show <commit>:<文件>`
+回到 commit 台账标注的版本重算该字段——「这个数字在那个版本里就存在」可验证。
 """
 
 from __future__ import annotations
@@ -10,6 +11,7 @@ import json
 import re
 import subprocess
 import sys
+from functools import lru_cache
 from pathlib import Path
 
 import pytest
@@ -18,6 +20,18 @@ from evals import build_resume_evidence as m
 
 DOC = m.ROOT / "docs" / "RESUME_EVIDENCE.md"
 ALL_FACTS = m.facts()
+
+
+@lru_cache(maxsize=None)
+def _load_at(commit: str, rel: str):
+    """用 git show 取某个 commit 下的产物版本（不碰工作区、不联网）。"""
+    blob = subprocess.run(
+        ["git", "show", f"{commit}:{rel}"],
+        cwd=m.ROOT, capture_output=True, text=True, check=True,
+    ).stdout
+    if rel.endswith(".jsonl"):
+        return [json.loads(line) for line in blob.splitlines() if line.strip()]
+    return json.loads(blob)
 
 
 @pytest.fixture(scope="module")
@@ -83,21 +97,68 @@ def test_verify_cli_is_runnable_without_network() -> None:
     assert "条复现命令通过" in r.stdout
 
 
-def test_commits_are_real_git_objects_and_match_file_history() -> None:
-    seen = {m.FILES[key] for key in {f.key for f in ALL_FACTS}}
-    for rel in seen:
-        commit = m.file_commit(rel)
-        assert re.fullmatch(r"[0-9a-f]{7}", commit), f"{rel} 的 commit 格式不对：{commit}"
+def test_ledger_covers_every_referenced_file() -> None:
+    """台账必须覆盖产物与文档里点名的文件，缺一个就渲染不出来。"""
+    recorded = m.recorded_commits()
+    for rel in m.referenced_files():
+        assert rel in recorded, f"台账漏了 {rel}"
+        assert re.fullmatch(r"[0-9a-f]{7}", recorded[rel]), recorded[rel]
+
+
+def test_recorded_commits_resolve_and_carry_the_file() -> None:
+    for rel, commit in m.recorded_commits().items():
         r = subprocess.run(
             ["git", "cat-file", "-e", f"{commit}^{{commit}}"],
             cwd=m.ROOT, capture_output=True, text=True,
         )
         assert r.returncode == 0, f"{rel} 的 commit {commit} 无法解析"
-        history = subprocess.run(
-            ["git", "log", "-1", "--format=%h", "--", rel],
-            cwd=m.ROOT, capture_output=True, text=True, check=True,
-        ).stdout.strip()
-        assert commit == history
+        # 文件在该 commit 里必须存在（文档类只校验存在性）
+        r = subprocess.run(
+            ["git", "cat-file", "-e", f"{commit}:{rel}"],
+            cwd=m.ROOT, capture_output=True, text=True,
+        )
+        assert r.returncode == 0, f"{commit} 里没有 {rel}"
+        # 不能指向「未来的提交」：必须已是 HEAD 的祖先
+        r = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", commit, "HEAD"],
+            cwd=m.ROOT, capture_output=True, text=True,
+        )
+        assert r.returncode == 0, f"{rel} 的 commit {commit} 不在 HEAD 历史里"
+
+
+@pytest.mark.parametrize("fact", ALL_FACTS, ids=lambda f: f.fid)
+def test_fact_value_exists_at_its_recorded_commit(fact: m.Fact, data: dict) -> None:
+    """台账里的 hash 不是装饰：回到那个版本，同一条路径必须算出同一个值。
+
+    这比「文件最后一次修改的提交」更接近简历要的语义，也顺带证明
+    这些产物当时确实已入库（而不是事后补造的 JSON）。
+    """
+    historical = {
+        key: _load_at(m.file_commit(m.FILES[key]), m.FILES[key])
+        for key in fact.source_keys()
+    }
+    assert fact.value(historical) == fact.value(data)
+
+
+def test_render_never_asks_live_git(monkeypatch: pytest.MonkeyPatch) -> None:
+    """回归 S8.6 的真 bug：每提交一次，现场问 git 就会让文档与 render 不一致。
+
+    把 live_commit 打成必炸，render 仍须成功——说明渲染只读台账。
+    """
+    def boom(_rel: str) -> str:
+        raise AssertionError("渲染不应现场问 git；commit 只能来自台账")
+
+    monkeypatch.setattr(m, "live_commit", boom)
+    m.file_commit.cache_clear()
+    try:
+        text = m.render(m.load_inputs(), blocked=0)
+    finally:
+        m.file_commit.cache_clear()
+        m.recorded_commits.cache_clear()
+    for fact in ALL_FACTS:
+        for commit in fact.commits():
+            assert f"`{commit}`" in text, f"{fact.fid} 的 commit 没能从台账渲染出来"
+
 
 
 def test_upstream_attribution_is_read_from_file_and_real(doc: str) -> None:

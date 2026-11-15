@@ -14,7 +14,8 @@ uv run pytest -q tests/test_s8_resume_evidence.py      # 护栏：命令、commi
 ## 1. 使用规则
 
 - 只有在 §2 表里的数字才允许进入简历措辞，且必须带上其口径限定（例如 F11 只能写「单次墙钟」，不能写 p95）。
-- `commit` 列是**该出处文件最后一次被修改的提交**，由 `git log -1 --format=%h -- <文件>` 现场取得；不是本文的提交，也不代表该数字首次出现的版本。
+- `commit` 列是**录入时**该文件的最后一次修改提交，冻结在 `evals/resume_evidence_commits.json`，不随之后的新提交漂移；刷新台账用 `--record-commits`。它不是本文的提交，也不代表该数字首次出现的版本。
+- 护栏会用 `git show <commit>:<文件>` 复核：**该数值在那个 commit 里确实存在**，比「最后一次修改」更接近简历要的语义；文档文件则只校验存在性。
 - 复现命令从 (文件, 字段路径) 自动生成，代码里只 `json.load` / `open`，**不 import 本脚本、不联网**，因此可独立核验，不构成自证循环。
 - 所有 credits 数字均为「按 Tavily 官方计费规则推算」，不是账单；本项目从未查询或记录真实扣费。
 
@@ -151,7 +152,7 @@ uv run pytest -q tests/test_s8_resume_evidence.py      # 护栏：命令、commi
 | ❌「准确率 0%（因为 supported=0）」 | AI judge 的 supported 计数是极少量样本的判定分布 | `evals/live_score.json` → `summary.supported` 〔`3e16906`〕 | `usable_as_resume_metric=false`、`is_human_adjudicated=false` |
 | ❌ 把 judge 结果写成人工评测指标 | judge 是 AI 判定，未经人工抽检一致率校准 | `evals/live_score.json` → `is_human_adjudicated` 〔`3e16906`〕 | 样本见 F17 / F18，另有措辞瑕疵记录 |
 | ❌「独立开发 / 从零自研」 | 本项目基于上游仓库二次开发（Apache-2.0） | `docs/UPSTREAM.md` → 落地 commit 〔`6e7ce22`〕；根目录 `LICENSE` 〔`23fe92d`〕 | 必须保留 LICENSE 与上游 commit 归因 |
-| ❌「上线 / 甲方 / 用户量 / 效果提升 X%」 | 本项目是本地个人工程复现，无这些事实 | `docs/ACTION_PLAN.md` → 12.3 硬约束 〔`6fb301e`〕 | 简历只写「本地实测」 |
+| ❌「上线 / 甲方 / 用户量 / 效果提升 X%」 | 本项目是本地个人工程复现，无这些事实 | `docs/ACTION_PLAN.md` → 12.3 硬约束 〔`076a992`〕 | 简历只写「本地实测」 |
 | ❌「引用可追溯率 X%」 | 最终 URL 多数未在本项目内重新抓取核验 | `evals/golden_live.jsonl` → `0.citation_layer_usable_as_metric` 〔`3e16906`〕 | 引用层指标明确不可用 |
 
 ## 5. 未测清单（一律不得写进简历）
@@ -165,7 +166,7 @@ uv run pytest -q tests/test_s8_resume_evidence.py      # 护栏：命令、commi
 
 1. `evals/build_resume_evidence.py` 的 `Fact` 持有 `key/path`；`expr_from_path()` 把同一路径翻译成 `d["a"]["b"]`，拼成独立的 `python -c` 命令。
 2. `--verify` 对每条数字**真的起一个进程执行该命令**，把 stdout 与产物取值逐字比对（两边都用 `json.dumps`，bool/null 不会走样）。
-3. `tests/test_s8_resume_evidence.py` 再做一遍同样的事，并校验 commit 能被 git 解析、文档与 `render()` 一致、生成脚本里没有硬编码的真实数字。
+3. `tests/test_s8_resume_evidence.py` 再做一遍同样的事，并逐条用 `git show <commit>:<文件>` 回到台账标注的版本重算该字段——「这个数字在那个 commit 里就有」能被机器验证，而不只是写着一行 hash。
 4. 当前共 **30** 条可复现数字、**9** 条禁写规则；这两个计数也由列表长度生成，不是手填。
 
 ## 7. 状态
