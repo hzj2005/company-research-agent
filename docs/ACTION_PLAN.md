@@ -37,6 +37,7 @@
 | **S10** | #10 质量修复（S9 之后追加） | 同名实体消歧 + 同栏目冲突前置 | `capabilities/entity_guard.py`、`capabilities/conflict.py`、`graph/nodes/collect.py`、`graph/nodes/report.py` | 真机三类硬伤里的两类被堵住，且不误杀 | ✅ 完成（12.20）：真实缓存回放 12 篇 → 拒 2 篇，References 11 → 9；56 条新护栏 |
 | **S11** | #11 按岗位出多版措辞（S9 之后追加） | 同一批事实句按 Agent / RAG / 后端三种视角重排，不改写事实 | `evals/build_resume_variants.py`、`docs/RESUME_VARIANTS.md` | 三版排法必须真的不同，且粘贴行与 `docs/RESUME.md` 逐字一致 | ✅ 完成（12.22）：三个方向 × 三条，14 条新护栏；顺手补上 D 组漏渲染与一处归因不准 |
 | **S12** | #12 持久化换 Postgres（S11 之后追加） | checkpoint 与任务台账搬 Postgres，SSE 进度仍留内存 | `persistence/checkpointer.py`、`persistence/job_store.py`、`persistence/setup_postgres.py`、`persistence/migrate_sqlite_to_pg.py` | 重启后同一 job 与存档仍可查；无库时测试整组跳过而非误通过 | ✅ 完成（12.23 / 复查 12.24）：**502 passed**、13 条 PG 用例、旧存档 11→11 状态一致；运行手册 `docs/POSTGRES.md` |
+| **S13** | #13 前端瘦身（S12 之后追加） | 按「后端会不会发这个事件」删无用面板与表单，界面改中文，加模式标签 | `ui/src/App.tsx`、`ui/src/components/`、`ui/src/index.css` | 构建通过 **且**真点一遍能出报告；删掉的每个组件都要能指出「它永远不会显示」 | ✅ 完成（12.33）：13 组件 → **5 个**、源码 3300 → **560 行**、JS 532 → **306 kB**；CDP 实测出 5622 字报告，**0 credits** |
 
 **顺序约束**：S2 是 S3/S4/S5/S6 的前置（都要改 `graph.py` / `state.py`），必须串行；S6 依赖 S2 的 checkpointer；S8 依赖 S7 且需要 key。
 
@@ -1791,3 +1792,94 @@ tests/test_config_loader.py 断言它等于 2                              # 只
 **私企的财务栏天生偏薄**（7 条），因为没有公开财报——这是检索现实，不是 bug。
 
 **回归**：全量 **512 passed**（新增 `test_queries_per_analyst_is_actually_honoured`）。
+
+---
+
+### 12.33 前端瘦身：13 个组件砍到 5 个（2026-11-15，0 调用 / 0 credits）
+
+#### 12.33.1 砍的依据不是「看着乱」，是「后端不会发生」
+
+把三张清单对齐：**后端 SSE 实际发什么事件** × **前端监听了什么事件** × **请求体里哪个字段真被消费**。
+
+后端 `event_generator()` 只发三种：
+
+```
+{"type": "progress", "step": "<node>"}
+{"type": "complete", "report": "..."}
+{"type": "error",    "error": "..."}
+```
+
+前端却写了 13 种事件的处理器：`query_generating`、`query_generated`、`research_init`、
+`crawl_start`、`curation`、`enrichment`、`briefing_start`、`briefing_complete`、
+`report_compilation`、`report_chunk`……这些**新图一个都不会发**。所以三个面板永远不显示：
+
+| 组件 | 行数 | 只在哪些事件里渲染 |
+|---|---|---|
+| `ResearchQueries` | 86 | `query_generating` / `query_generated` |
+| `CurationExtraction` | 86 | `curation` / `enrichment` |
+| `ResearchBriefings` | 92 | `briefing_start` / `briefing_complete` |
+
+同理 `process_research` 的 docstring 早就写明「只消费 `company`」，但界面上还有
+Tavily key（必填！）、Company URL、HQ、Industry 四栏，以及一个模型选择器。
+
+#### 12.33.2 删掉的东西
+
+| 删的 | 行数 | 为什么 |
+|---|---|---|
+| Tavily API Key 输入框（**必填**） | ~40 | 后端只从环境变量读 key；不填它按钮就禁用，填了也没人读 |
+| Company URL / HQ / Industry | ~80 | 同上，请求体里这三个字段从未被消费 |
+| `LocationInput`（地图自动补全） | 248 | 只服务于被删的 HQ 栏；连带 `@types/google.maps`、`VITE_GOOGLE_MAPS_API_KEY` |
+| `SettingsPanel`+`ModelSelector`+`ModelLogo`+`models.ts`+`settings.ts` | 191+189+23+95+50 | 模型选择不生效（后端用 `LLM_MODEL=qwen-plus`），`/models` 拉的是 OpenRouter 目录，两套配置对不上 |
+| `ResearchQueries`/`CurationExtraction`/`ResearchBriefings` | 86+86+92 | 事件永远不会发出 |
+| `useSmoothText`（打字机） | 98 | 报告整篇一次到达，没有 chunk 可「平滑」 |
+| App.tsx 里 13 条事件分支 + 6 个状态字段 | ~300 | 同上 |
+| footer 的「Search API docs」 | 5 | 上游品牌链接，与本项目无关 |
+
+顺手把 `rehype-raw` 去掉了（报告是 Markdown，不需要解析原始 HTML，少一个 XSS 面）。
+
+#### 12.33.3 留下的（用户点名要保留）
+
+- **背景图**（`tavily-landscape.webp` + 上下渐隐）原样保留；
+- **首页那排默认公司**（24 个 chip）原样保留，点一下直接开跑。
+
+#### 12.33.4 换来的数字
+
+| | 之前 | 之后 |
+|---|---|---|
+| 前端源码 | 约 **3300 行**（13 组件 + 3 模块 + 1 hook） | **560 行**（App + 5 组件 + types） |
+| `index.css` | 278 行 | 145 行 |
+| 生产 JS | 532.91 kB | **305.99 kB** |
+| 生产 CSS | 35.91 kB | **15.99 kB** |
+| 页面区块 | 标题 + key + 4 字段 + 按钮 + chips + queries + curation + briefings + 报告 + footer | 标题 + 1 字段 + 按钮 + chips + 状态 + 报告 |
+
+另外两处产品决定：
+
+1. **界面文案改中文**。报告从 12.29 起就是中文，界面原来还是英文壳；顺手把
+   `index.html` 的 `lang` 也从 `en` 改成 `zh-CN`。
+2. **右上角加一个只读模式标签**：`真实调研` / `演示数据`。这直接解决 12.28 那次
+   「我搜别的公司为什么没结果」——现在一眼能看到自己是不是在演示模式。
+
+#### 12.33.5 实测（不是只看构建通过）
+
+用 Edge headless + CDP 真点了一遍（脚本临时写在 `.tmp_probe/`，用完删除）：
+
+| 步骤 | 结果 |
+|---|---|
+| 首屏 | 标题「公司调研助手」、**24 个 chip**、页面高 1103px |
+| 填「字节跳动」 | 按钮从 disabled → 可点 |
+| 点击 | SSE 跑通，报告出现 |
+| 报告结构 | **5622 字符 / 5 个 h2（公司概况·行业概况·财务概况·新闻动态·References）/ 39 条 bullet / 16 个链接** |
+| 页面高度 | 3635px |
+| 控制台 | `console.error` 与 `exceptionThrown` **全程为空** |
+| 花费 | **0 credits**：台账仍 90/200，最近 30 分钟新增缓存文件 **0** 个（同一家公司全部命中磁盘缓存） |
+
+`static/app-screenshot.png` 也换成了新界面截图——README 里那张一直是旧 UI。
+
+#### 12.33.6 顺手纠正的 README 失真
+
+1. 「Runs on any model … pick it from the in-app Settings」→ 界面已经没有模型选择；
+2. 「`GET /models` … when the UI opens the model picker」→ UI 不再调用，路由保留但没人用；
+3. 「Google Maps — upstream UI feature only」→ 已随 HQ 栏删除。
+
+**回归**：前端 `npm run build` 通过（1708 modules，tsc 无错）；后端 `pytest` **512 passed**（与改造前一致）。
+`npm run lint` 跑不起来——`eslint.config.js` 依赖未安装的 `typescript-eslint`，属上游遗留，本轮未修（`tsc` 已经是真正的类型闸门）。

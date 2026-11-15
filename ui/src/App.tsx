@@ -1,547 +1,171 @@
 import { useState, useEffect, useRef } from "react";
-import {
-  Header,
-  ResearchStatus,
-  ResearchReport,
-  ResearchForm,
-  ResearchQueries,
-  CurationExtraction,
-  ResearchBriefings,
-  SettingsPanel
-} from './components';
-import type { ResearchOutput, ResearchStatusType } from './types';
-import { useLLMSettings, type ServerConfig } from './settings';
-import { fallbackModelName, providerOf, type ModelInfo } from './models';
-import { glassStyle, fadeInAnimation } from './styles';
+import { Header, ResearchStatus, ResearchReport, ResearchForm } from "./components";
+import type { ResearchStatusType, ServerInfo } from "./types";
+import { glassStyle } from "./styles";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-function App() {
+/**
+ * 后端 SSE 只推三种事件：progress（带节点名）/ complete（整篇报告）/ error。
+ * 上游那套 query_generating、curation、briefing_start、report_chunk 等
+ * 在新图里从来不会发出，对应面板已一并删除。
+ */
+const NODE_LABELS: Record<string, string> = {
+  grounding: "检索公开资料",
+  research: "补搜证据不足的栏目",
+  curate: "清洗与去重",
+  evidence_check: "核对每个栏目的证据量",
+  rewrite_query: "换措辞重试",
+  degrade: "证据不足，按规则拒答",
+  human_review: "等待人工复核",
+  briefing: "生成报告",
+};
 
+function App() {
+  const [company, setCompany] = useState("");
   const [isResearching, setIsResearching] = useState(false);
   const [status, setStatus] = useState<ResearchStatusType | null>(null);
-  const [output, setOutput] = useState<ResearchOutput | null>(null);
+  const [report, setReport] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isComplete, setIsComplete] = useState(false);
-  const eventSourceRef = useRef<EventSource | null>(null);
-  const [originalCompanyName, setOriginalCompanyName] = useState<string>("");
-  const [currentPhase, setCurrentPhase] = useState<'search' | 'enrichment' | 'briefing' | 'complete' | null>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
-  const [isResetting, setIsResetting] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
-  const statusRef = useRef<HTMLDivElement>(null);
-  const [queries, setQueries] = useState<Array<{ text: string; number: number; category: string }>>([]);
-  const [streamingQueries, setStreamingQueries] = useState<Record<string, { text: string; number: number; category: string; isComplete: boolean }>>({});
-  const [isQueriesExpanded, setIsQueriesExpanded] = useState(true);
-  const [enrichmentCounts, setEnrichmentCounts] = useState<{
-    company: { total: number; enriched: number };
-    industry: { total: number; enriched: number };
-    financial: { total: number; enriched: number };
-    news: { total: number; enriched: number };
-  } | undefined>(undefined);
-  const [briefingStatus, setBriefingStatus] = useState({
-    company: false,
-    industry: false,
-    financial: false,
-    news: false
-  });
-  const [isEnrichmentExpanded, setIsEnrichmentExpanded] = useState(true);
-  const [isBriefingExpanded, setIsBriefingExpanded] = useState(true);
-  const [hasScrolledToStatus, setHasScrolledToStatus] = useState(false);
-  const [isReportStreaming, setIsReportStreaming] = useState(false);
-
-  // LLM settings (OpenRouter key + model), server capabilities, and the OpenRouter model catalog
-  const [llmSettings, updateLlmSettings] = useLLMSettings();
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [serverConfig, setServerConfig] = useState<ServerConfig | null>(null);
-  const [models, setModels] = useState<ModelInfo[]>([]);
-  const [modelsLoading, setModelsLoading] = useState(true);
-  const [modelsError, setModelsError] = useState<string | null>(null);
+  const [server, setServer] = useState<ServerInfo | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
     fetch(`${API_URL}/config`)
       .then((response) => (response.ok ? response.json() : null))
-      .then(setServerConfig)
-      .catch(() => setServerConfig(null));
+      .then(setServer)
+      .catch(() => setServer(null));
 
-    fetch(`${API_URL}/models`)
-      .then((response) => {
-        if (!response.ok) throw new Error();
-        return response.json();
-      })
-      .then((data) => setModels(data.models ?? []))
-      .catch(() => setModelsError('Could not load models from OpenRouter. Check that the backend is running.'))
-      .finally(() => setModelsLoading(false));
-  }, []);
-
-  const selectedModel = llmSettings.model || serverConfig?.default_model || 'google/gemini-3.8-flash';
-  const selectedModelInfo = models.find((model) => model.id === selectedModel);
-  const hasLlmProvider = !!llmSettings.openrouterApiKey.trim()
-    || !!serverConfig?.openrouter_configured
-    || !!serverConfig?.openai_configured
-    // 本项目实际走的是阿里云百炼 DashScope（qwen-plus），只认 OpenRouter/OpenAI
-    // 会让「服务端明明有 key」也被判成没配
-    || !!serverConfig?.dashscope_configured;
-  // Only nag when the server actually needs a key. 后端在 fixture 模式下
-  // 用本地固定语料 + 确定性 stub，一个 key 都不需要；上游这里只认「有没有 key」，
-  // 导致演示模式下点按钮永远弹设置框、任务根本发不出去。
-  const needsLlmSetup = serverConfig?.requires_llm_key === true && !hasLlmProvider;
-
-  // Add new state for color cycling
-  const [loaderColor, setLoaderColor] = useState("#2677FF");
-  
-  // Scroll helper function
-  const scrollToStatus = () => {
-    if (!hasScrolledToStatus && statusRef.current) {
-      const yOffset = -20;
-      const y = statusRef.current.getBoundingClientRect().top + window.pageYOffset + yOffset;
-      window.scrollTo({ top: y, behavior: 'smooth' });
-      setHasScrolledToStatus(true);
-    }
-  };
-
-  // Add useEffect for color cycling
-  useEffect(() => {
-    if (!isResearching) return;
-    
-    const colors = [
-      "#2677FF", // Blue
-      "#8FBCFA", // Light Blue
-      "#FE363B", // Red
-      "#FF9A9D", // Light Red
-      "#FDBB11", // Yellow
-      "#F6D785", // Light Yellow
-    ];
-    
-    let currentIndex = 0;
-    
-    const interval = setInterval(() => {
-      currentIndex = (currentIndex + 1) % colors.length;
-      setLoaderColor(colors[currentIndex]);
-    }, 1000);
-    
-    return () => clearInterval(interval);
-  }, [isResearching]);
-
-  const resetResearch = () => {
-    setIsResetting(true);
-    
-    // Use setTimeout to create a smooth transition
-    setTimeout(() => {
-      setStatus(null);
-      setOutput(null);
-      setError(null);
-      setIsComplete(false);
-      setCurrentPhase(null);
-      setQueries([]);
-      setStreamingQueries({});
-      setEnrichmentCounts(undefined);
-      setBriefingStatus({
-        company: false,
-        industry: false,
-        financial: false,
-        news: false
-      });
-      setIsQueriesExpanded(true);
-      setIsEnrichmentExpanded(true);
-      setIsBriefingExpanded(true);
-      setHasScrolledToStatus(false);
-      setIsReportStreaming(false);
-      setIsResetting(false);
-    }, 300);
-  };
-
-  // Stream research results via SSE
-  const streamResults = (jobId: string) => {
-    const eventSource = new EventSource(`${API_URL}/research/${jobId}/stream`);
-    eventSourceRef.current = eventSource;
-
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        
-        // Helper function to map node names to user-friendly step names.
-        // S5-B 起后端换成了新图（grounding / research / curate / evidence_check /
-        // rewrite_query / degrade / human_review / briefing），上游那份旧节点名
-        // （financial_analyst、curator、editor…）已经不会再出现，这里按新图重写。
-        const getStepName = (nodeName: string): string => {
-          const stepMap: Record<string, string> = {
-            'grounding': 'Search',
-            'research': 'Search',
-            'curate': 'Enriching',
-            'evidence_check': 'Checking evidence',
-            'rewrite_query': 'Retrying',
-            'degrade': 'Refusing',
-            'human_review': 'Awaiting review',
-            'briefing': 'Briefing'
-          };
-          return stepMap[nodeName] || nodeName;
-        };
-
-        // Handle progress events from backend (node transitions)
-        if (data.type === 'progress' && data.step) {
-          const stepName = getStepName(data.step);
-          setStatus({
-            step: stepName,
-            message: `Processing ${stepName}...`
-          });
-          
-          // Update phase based on step（新图的节点名）
-          if (['grounding', 'research'].includes(data.step)) {
-            setCurrentPhase('search');
-          } else if (['curate', 'evidence_check', 'rewrite_query', 'degrade', 'human_review'].includes(data.step)) {
-            setCurrentPhase('enrichment');
-          } else if (data.step === 'briefing') {
-            setCurrentPhase('briefing');
-          }
-          
-          scrollToStatus();
-        }
-        
-        // Direct event-to-phase mapping
-        if (data.type === 'query_generating') {
-          // Show query being generated and update streaming queries
-          setCurrentPhase('search');
-          setStatus({
-            step: 'Search',
-            message: `Query ${data.query_number}: ${data.query}`
-          });
-          // Update streaming queries with current partial query
-          const key = `${data.category}_${data.query_number}`;
-          setStreamingQueries(prev => ({
-            ...prev,
-            [key]: {
-              text: data.query,
-              number: data.query_number,
-              category: data.category,
-              isComplete: false
-            }
-          }));
-        } else if (data.type === 'query_generated') {
-          // Show completed query and move to queries list
-          setCurrentPhase('search');
-          setStatus({
-            step: 'Search',
-            message: `Generated: ${data.query}`
-          });
-          // Add to completed queries
-          setQueries(prev => [...prev, {
-            text: data.query,
-            number: data.query_number,
-            category: data.category
-          }]);
-          // Remove from streaming queries
-          const key = `${data.category}_${data.query_number}`;
-          setStreamingQueries(prev => {
-            const updated = { ...prev };
-            delete updated[key];
-            return updated;
-          });
-          scrollToStatus();
-        } else if (data.type === 'research_init') {
-          // Show research initialization
-          setCurrentPhase('search');
-          setStatus({
-            step: 'Initializing',
-            message: data.message || `Initiating research for ${data.company}`
-          });
-        } else if (data.type === 'crawl_start') {
-          // Show website crawl starting
-          setCurrentPhase('search');
-          setStatus({
-            step: 'Website Crawl',
-            message: data.message || 'Crawling company website'
-          });
-        } else if (data.type === 'curation') {
-          // Show curation progress - transition to enrichment phase
-          setCurrentPhase('enrichment');
-          setStatus({
-            step: 'Curating data',
-            message: data.message || `Curating ${data.category} documents`
-          });
-          // Initialize enrichment counts when curation starts for a category
-          if (data.category) {
-            setEnrichmentCounts(prev => ({
-              ...prev,
-              [data.category]: {
-                total: data.total || 0,
-                enriched: 0
-              }
-            } as typeof enrichmentCounts));
-          }
-          // Collapse queries section when moving to enrichment
-          setTimeout(() => {
-            setIsQueriesExpanded(false);
-          }, 1000);
-          scrollToStatus();
-        } else if (data.type === 'enrichment') {
-          // Show enrichment progress
-          setCurrentPhase('enrichment');
-          setStatus({
-            step: 'Enriching',
-            message: data.message || 'Enriching documents with additional content'
-          });
-          // Update enriched count if provided
-          if (data.category && data.enriched !== undefined) {
-            const category = data.category as 'company' | 'industry' | 'financial' | 'news';
-            setEnrichmentCounts(prev => {
-              if (!prev) return prev;
-              return {
-                ...prev,
-                [category]: {
-                  total: prev[category]?.total || data.total || 0,
-                  enriched: data.enriched
-                }
-              } as typeof enrichmentCounts;
-            });
-          }
-        } else if (data.type === 'briefing_start') {
-          // Show briefing generation starting
-          setCurrentPhase('briefing');
-          setStatus({
-            step: 'Generating briefings',
-            message: `Creating ${data.category} briefing from ${data.total_docs} documents`
-          });
-          // Collapse enrichment section when moving to briefing
-          setTimeout(() => {
-            setIsEnrichmentExpanded(false);
-          }, 1000);
-          scrollToStatus();
-        } else if (data.type === 'briefing_complete') {
-          // Show briefing completion and mark category as complete
-          setCurrentPhase('briefing');
-          setStatus({
-            step: 'Briefing complete',
-            message: `${data.category} briefing generated (${data.content_length} characters)`
-          });
-          // Mark briefing as complete for this category
-          if (data.category) {
-            setBriefingStatus(prev => {
-              const newBriefingStatus = {
-                ...prev,
-                [data.category]: true
-              };
-              
-              // Check if all briefings are complete
-              const allBriefingsComplete = Object.values(newBriefingStatus).every(status => status);
-              
-              // Collapse briefing section when all briefings are complete
-              if (allBriefingsComplete) {
-                setTimeout(() => {
-                  setIsBriefingExpanded(false);
-                }, 2000);
-              }
-              
-              return newBriefingStatus;
-            });
-          }
-        } else if (data.type === 'report_compilation') {
-          // Show report compilation
-          setCurrentPhase('briefing');
-          setStatus({
-            step: 'Finalizing report',
-            message: data.message || 'Compiling final report'
-          });
-        } else if (data.type === 'report_chunk' && data.chunk) {
-          // Stream report chunks as they arrive
-          setIsReportStreaming(true);
-          setOutput((prev) => {
-            const currentReport = prev?.details?.report || '';
-            return {
-              summary: "",
-              details: { report: currentReport + data.chunk },
-            };
-          });
-          setStatus({
-            step: 'Finalizing report',
-            message: 'Generating final report...'
-          });
-        } else if (data.type === 'complete' && data.report) {
-          setIsReportStreaming(false);
-          setOutput({
-            summary: "",
-            details: { report: data.report },
-          });
-          setStatus({ step: "Complete", message: "Research completed successfully" });
-          setIsComplete(true);
-          setIsResearching(false);
-          // 必须把阶段推到 complete：拒答/降级的运行走不到 briefing，
-          // 不推的话报告面板（只在 briefing|complete 显示）永远不出现。
-          setCurrentPhase('complete');
-          eventSource.close();
-        } else if (data.type === 'error') {
-          setError(data.error);
-          setIsResearching(false);
-          eventSource.close();
-        }
-      } catch (err) {
-        console.error('Error parsing SSE data:', err);
-      }
-    };
-
-    eventSource.onerror = () => {
-      setError('Connection lost or server error');
-      setIsResearching(false);
-      eventSource.close();
-    };
-  };
-
-  // Cleanup SSE on unmount
-  useEffect(() => {
     return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
-      }
+      eventSourceRef.current?.close();
+      eventSourceRef.current = null;
     };
   }, []);
 
-  // Create a custom handler for the form that receives form data
-  const handleFormSubmit = async (formData: {
-    companyName: string;
-    companyUrl: string;
-    companyHq: string;
-    companyIndustry: string;
-    tavilyApiKey: string;
-  }) => {
+  const mode = server?.app_mode ?? null;
+  const isLive = mode === "live";
 
-    // Clear any existing errors first
+  // 服务端缺 key 时提前说清楚：之前界面上那两个 key 输入框是摆设，后端只读环境变量
+  const missing: string[] = [];
+  if (isLive && server?.requires_llm_key && !server.dashscope_configured
+      && !server.openrouter_configured && !server.openai_configured) {
+    missing.push("模型 key（DASHSCOPE_API_KEY）");
+  }
+  if (isLive && server?.tavily_configured === false) {
+    missing.push("检索 key（TAVILY_API_KEY）");
+  }
+  const blocked = missing.length > 0;
+
+  const streamResults = (jobId: string) => {
+    const source = new EventSource(`${API_URL}/research/${jobId}/stream`);
+    eventSourceRef.current = source;
+
+    source.onmessage = (event) => {
+      let data: {
+        type?: string;
+        step?: string;
+        report?: string;
+        error?: string;
+      };
+      try {
+        data = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+
+      if (data.type === "progress" && data.step) {
+        setStatus({
+          step: NODE_LABELS[data.step] ?? data.step,
+          message: `当前节点：${data.step}`,
+        });
+      } else if (data.type === "complete" && data.report) {
+        setReport(data.report);
+        setStatus({ step: "完成", message: "报告已生成" });
+        setIsComplete(true);
+        setIsResearching(false);
+        source.close();
+      } else if (data.type === "error") {
+        setError(data.error || "调研失败");
+        setIsResearching(false);
+        source.close();
+      }
+    };
+
+    source.onerror = () => {
+      setError("与后端的连接中断；任务可能仍在后台运行");
+      setIsResearching(false);
+      source.close();
+    };
+  };
+
+  const handleSubmit = async (name: string) => {
     setError(null);
-
-    if (needsLlmSetup) {
-      setIsSettingsOpen(true);
-      return;
-    }
-
-    // If research is complete, reset the UI first
-    if (isComplete) {
-      resetResearch();
-      await new Promise(resolve => setTimeout(resolve, 300)); // Wait for reset animation
-    }
-
-    // Clear any existing SSE connection
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-    }
-
+    setReport("");
+    setIsComplete(false);
     setIsResearching(true);
-    setOriginalCompanyName(formData.companyName);
-    setStatus({
-      step: "Processing",
-      message: "Starting research..."
-    });
+    setCompany(name);
+    setStatus({ step: "准备中", message: "正在创建调研任务…" });
+
+    eventSourceRef.current?.close();
+    eventSourceRef.current = null;
 
     try {
-      const url = `${API_URL}/research`;
-
-      // Format the company URL if provided
-      const formattedCompanyUrl = formData.companyUrl
-        ? formData.companyUrl.startsWith('http://') || formData.companyUrl.startsWith('https://')
-          ? formData.companyUrl
-          : `https://${formData.companyUrl}`
-        : undefined;
-
-      const requestData = {
-        company: formData.companyName,
-        company_url: formattedCompanyUrl,
-        industry: formData.companyIndustry || undefined,
-        hq_location: formData.companyHq || undefined,
-        tavily_api_key: formData.tavilyApiKey.trim(),
-        openrouter_api_key: llmSettings.openrouterApiKey.trim() || undefined,
-        model: selectedModel,
-      };
-
-      const response = await fetch(url, {
+      const response = await fetch(`${API_URL}/research`, {
         method: "POST",
-        mode: "cors",
-        credentials: "omit",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(requestData),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ company: name }),
       });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`创建任务失败（HTTP ${response.status}）`);
 
       const data = await response.json();
-
-      if (data.job_id) {
-        streamResults(data.job_id);
-      } else {
-        throw new Error("No job ID received");
-      }
+      if (!data.job_id) throw new Error("后端没有返回 job_id");
+      streamResults(data.job_id);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to start research");
+      setError(err instanceof Error ? err.message : "无法发起调研");
+      setStatus(null);
       setIsResearching(false);
     }
   };
 
-  // Add new function to handle PDF generation
+  const handleCopy = async () => {
+    if (!report) return;
+    try {
+      await navigator.clipboard.writeText(report);
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+    } catch {
+      setError("复制失败，可手动选中报告文本");
+    }
+  };
+
   const handleGeneratePdf = async () => {
-    if (!output || isGeneratingPdf) return;
-    
+    if (!report || isGeneratingPdf) return;
     setIsGeneratingPdf(true);
     try {
       const response = await fetch(`${API_URL}/generate-pdf`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          report_content: output.details.report,
-          company_name: originalCompanyName || output.details.report
-        }),
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ report_content: report, company_name: company || "research_report" }),
       });
-      
-      if (!response.ok) {
-        throw new Error('Failed to generate PDF');
-      }
-      
-      // Get the blob from the response
-      const blob = await response.blob();
-      
-      // Create a URL for the blob
-      const url = window.URL.createObjectURL(blob);
-      
-      // Create a temporary link element
-      const link = document.createElement('a');
+      if (!response.ok) throw new Error(`导出失败（HTTP ${response.status}）`);
+
+      const url = window.URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
       link.href = url;
-      link.download = `${originalCompanyName || 'research_report'}.pdf`;
-      
-      // Append to body, click, and remove
+      link.download = `${company || "research_report"}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
-      // Clean up the URL
       window.URL.revokeObjectURL(url);
-      
-    } catch (error) {
-      console.error('Error generating PDF:', error);
-      setError(error instanceof Error ? error.message : 'Failed to generate PDF');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "导出 PDF 失败");
     } finally {
       setIsGeneratingPdf(false);
     }
   };
-
-  // Add new function to handle copying to clipboard
-  const handleCopyToClipboard = async () => {
-    if (!output?.details?.report) return;
-    
-    try {
-      await navigator.clipboard.writeText(output.details.report);
-      setIsCopied(true);
-      setTimeout(() => setIsCopied(false), 2000); // Reset after 2 seconds
-    } catch (err) {
-      console.error('Failed to copy text: ', err);
-      setError('Failed to copy to clipboard');
-    }
-  };
-
 
   return (
     <div className="app-shell">
@@ -550,114 +174,32 @@ function App() {
         <div className="landscape-fade-top" />
         <div className="landscape-fade-bottom" />
       </div>
+
       <div className="research-workspace">
-        {/* Header Component */}
-        <Header
-          modelName={selectedModelInfo?.name ?? fallbackModelName(selectedModel)}
-          modelProvider={selectedModelInfo?.provider ?? providerOf(selectedModel)}
-          needsSetup={needsLlmSetup}
-          onOpenSettings={() => setIsSettingsOpen(true)}
-        />
+        <Header mode={mode} />
 
-        {/* Form Section */}
-        <ResearchForm 
-          onSubmit={handleFormSubmit}
-          isResearching={isResearching}
-          glassStyle={glassStyle}
-          loaderColor={loaderColor}
-        />
-
-        {/* Error Message */}
-        {error && (
-          <div 
-            className={`${glassStyle.card} border-[#FE363B]/30 bg-[#FE363B]/10 ${fadeInAnimation.fadeIn} ${isResetting ? 'opacity-0 transform -translate-y-4' : 'opacity-100 transform translate-y-0'} font-sans`}
-          >
-            <p className="text-[#FE363B]">{error}</p>
+        {blocked && (
+          <div className={`${glassStyle.card} notice-card`}>
+            服务端缺少 {missing.join(" 和 ")}，现在点下去必然失败。启动后端前先设好环境变量，
+            或直接用 <code>uv run python run_server.py</code> 启动（它会自动读取系统变量）。
           </div>
         )}
 
-        {/* Status Box */}
-        <ResearchStatus
-          status={status}
-          error={error}
-          isComplete={isComplete}
-          currentPhase={currentPhase}
-          isResetting={isResetting}
-          glassStyle={glassStyle}
-          loaderColor={loaderColor}
-          statusRef={statusRef}
-        />
+        <ResearchForm onSubmit={handleSubmit} isResearching={isResearching} blocked={blocked} />
 
-        {/* Research Report - always at the top when available */}
-        {output && output.details && (
+        <ResearchStatus status={status} error={error} isComplete={isComplete} />
+
+        {report && (
           <ResearchReport
-            output={{
-              summary: output.summary,
-              details: {
-                report: output.details.report || ''
-              }
-            }}
-            isResetting={isResetting}
-            isStreaming={isReportStreaming}
-            glassStyle={glassStyle}
-            fadeInAnimation={fadeInAnimation}
-            loaderColor={loaderColor}
+            report={report}
+            companyName={company}
             isGeneratingPdf={isGeneratingPdf}
             isCopied={isCopied}
-            onCopyToClipboard={handleCopyToClipboard}
+            onCopyToClipboard={handleCopy}
             onGeneratePdf={handleGeneratePdf}
           />
         )}
-
-        {/* Research Briefings - show once briefing starts and keep visible */}
-        {(currentPhase === 'briefing' || currentPhase === 'complete') && (
-          <ResearchBriefings
-            briefingStatus={briefingStatus}
-            isExpanded={isBriefingExpanded}
-            onToggleExpand={() => setIsBriefingExpanded(!isBriefingExpanded)}
-            isResetting={isResetting}
-          />
-        )}
-
-        {/* Curation and Extraction - show once enrichment starts and keep visible */}
-        {(currentPhase === 'enrichment' || currentPhase === 'briefing' || currentPhase === 'complete') && enrichmentCounts && (
-          <CurationExtraction
-            enrichmentCounts={enrichmentCounts}
-            isExpanded={isEnrichmentExpanded}
-            onToggleExpand={() => setIsEnrichmentExpanded(!isEnrichmentExpanded)}
-            isResetting={isResetting}
-            loaderColor={loaderColor}
-          />
-        )}
-
-        {/* Research Queries - always at the bottom when visible */}
-        {(queries.length > 0 || Object.keys(streamingQueries).length > 0) && (
-          <ResearchQueries
-            queries={queries}
-            streamingQueries={streamingQueries}
-            isExpanded={isQueriesExpanded}
-            onToggleExpand={() => setIsQueriesExpanded(!isQueriesExpanded)}
-            isResetting={isResetting}
-            glassStyle={glassStyle.card}
-          />
-        )}
-        <footer className="demo-footer">
-          <a className="search-api-link" href="https://docs.tavily.com/documentation/api-reference/endpoint/search" target="_blank" rel="noopener noreferrer">
-            Search API docs <span aria-hidden="true">↗</span>
-          </a>
-        </footer>
       </div>
-      <SettingsPanel
-        open={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        settings={llmSettings}
-        onChange={updateLlmSettings}
-        serverConfig={serverConfig}
-        models={models}
-        modelsLoading={modelsLoading}
-        modelsError={modelsError}
-        selectedModel={selectedModel}
-      />
     </div>
   );
 }

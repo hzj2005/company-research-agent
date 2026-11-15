@@ -1,45 +1,31 @@
-import { Settings2 } from 'lucide-react';
-import ModelLogo from './ModelLogo';
-
 interface HeaderProps {
-  modelName: string;
-  modelProvider: string;
-  needsSetup: boolean;
-  onOpenSettings: () => void;
+  /** 后端 /config 报的运行模式：live 会花 Tavily 额度，fixture 用本地语料 */
+  mode: 'fixture' | 'live' | null;
 }
 
-const Header = ({ modelName, modelProvider, needsSetup, onOpenSettings }: HeaderProps) => (
+const Header = ({ mode }: HeaderProps) => (
   <header>
-    <nav className="site-nav" aria-label="Main navigation">
-      <a href="https://tavily.com" target="_blank" rel="noopener noreferrer" className="brand-link" aria-label="Tavily website">
+    <nav className="site-nav" aria-label="主导航">
+      <a href="https://tavily.com" target="_blank" rel="noopener noreferrer" className="brand-link" aria-label="Tavily 官网">
         <img src="/tavily-by-nebius.svg" alt="Tavily by Nebius" className="brand-logo" width="362" height="109" />
       </a>
-      <div className="nav-actions">
-        <button
-          type="button"
-          className={`model-pill${needsSetup ? ' model-pill--attention' : ''}`}
-          onClick={onOpenSettings}
-          aria-label={`Settings — current model: ${modelName}`}
+      {mode && (
+        <span
+          className={`mode-pill${mode === 'live' ? ' mode-pill--live' : ' mode-pill--fixture'}`}
+          title={mode === 'live'
+            ? '真实联网检索：每次调研会消耗 Tavily 额度'
+            : '演示模式：使用本地固定语料，不联网、不花钱'}
         >
-          {needsSetup ? (
-            <span className="model-pill-label">Add OpenRouter key</span>
-          ) : (
-            <>
-              <ModelLogo provider={modelProvider} size={24} />
-              <span className="model-pill-label">{modelName}</span>
-            </>
-          )}
-          <Settings2 size={16} className="model-pill-icon" aria-hidden="true" />
-          {needsSetup && <span className="model-pill-dot" aria-hidden="true" />}
-        </button>
-        <a href="https://github.com/guy-hartstein/company-research-agent" target="_blank" rel="noopener noreferrer" className="nav-link" aria-label="View on GitHub" title="View on GitHub">
-          <img src="/github-icon.png" alt="" className="github-logo" width="28" height="28" />
-        </a>
-      </div>
+          {mode === 'live' ? '真实调研' : '演示数据'}
+        </span>
+      )}
     </nav>
     <div className="hero">
-      <h1>Company Intelligence &amp; Research</h1>
-      <p className="hero-description">Research a company's business, industry, financial context, and recent news, then explore a detailed briefing with linked sources and PDF export.</p>
+      <h1>公司调研助手</h1>
+      <p className="hero-description">
+        输入一个公司名，自动检索公开网页，产出一份分四栏、每条都带引用编号的简报。
+        证据不够时会明确写「未找到公开依据」，而不是硬编。
+      </p>
     </div>
   </header>
 );

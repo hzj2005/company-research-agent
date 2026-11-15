@@ -10,13 +10,6 @@ export type ResearchOutput = {
   };
 };
 
-export type EnrichmentCounts = {
-  company: { total: number; enriched: number };
-  industry: { total: number; enriched: number };
-  financial: { total: number; enriched: number };
-  news: { total: number; enriched: number };
-};
-
 export type GlassStyle = {
   base: string;
   card: string;
@@ -28,33 +21,12 @@ export type AnimationStyle = {
   writing: string;
 };
 
-export type ResearchStatusProps = {
-  status: ResearchStatusType | null;
-  error: string | null;
-  isComplete: boolean;
-  currentPhase: 'search' | 'enrichment' | 'briefing' | 'complete' | null;
-  isResetting: boolean;
-  glassStyle: GlassStyle;
-  loaderColor: string;
-  statusRef: React.RefObject<HTMLDivElement>;
+/** 后端 /config 暴露的少量状态：只用来决定「显示哪个模式标签」和「要不要提示缺 key」 */
+export type ServerInfo = {
+  app_mode?: 'fixture' | 'live';
+  requires_llm_key?: boolean;
+  dashscope_configured?: boolean;
+  openrouter_configured?: boolean;
+  openai_configured?: boolean;
+  tavily_configured?: boolean;
 };
-
-export type ResearchQueriesProps = {
-  queries: Array<{
-    text: string;
-    number: number;
-    category: string;
-  }>;
-  streamingQueries: {
-    [key: string]: {
-      text: string;
-      number: number;
-      category: string;
-      isComplete: boolean;
-    };
-  };
-  isExpanded: boolean;
-  onToggleExpand: () => void;
-  isResetting: boolean;
-  glassStyle: string;
-}; 

@@ -15,7 +15,9 @@ An agentic research tool that turns a company name into a structured, source-bac
 
 - Researches a company’s business, industry, financial context, and recent news.
 - Uses Tavily search and relevance scoring to find and curate source material.
-- Runs on any model available through [OpenRouter](https://openrouter.ai) — pick it from the in-app Settings — or on direct OpenAI/Gemini keys.
+- The frontend is now a single-field form (company name + a row of example chips). The model is
+  chosen **on the server** with `LLM_PROVIDER` / `LLM_MODEL`; there is no in-browser model picker or
+  key input, because `/research` only reads `company` from the request body.
 - Streams research progress to the browser and supports PDF export.
 - Optionally persists jobs and reports in MongoDB.
 - **This fork also adds** a LangGraph workflow (`graph/`) with evidence-sufficiency checks, a bounded self-correction loop, per-section abstention instead of fabrication, structured output with URL-level traceability, and SQLite checkpointing. It runs today from the CLI, `/research` and LangGraph Studio in `fixture` mode with no API key and zero external calls.
@@ -115,12 +117,14 @@ Model provider for live mode is Alibaba Cloud DashScope via its OpenAI-compatibl
 ## Prerequisites
 
 The reworked graph and all entry points need **no API key** in `fixture` mode.
-The React UI / OpenRouter / Google Maps / MongoDB items below are **upstream leftovers**;
-`/research` now runs the new graph and does not consume a request-body API key.
+The UI no longer asks for one either: the Tavily-key box, the URL / HQ / industry fields and the
+model picker were removed in **S13**, because `/research` reads credentials from the environment
+and consumes exactly one field (`company`). What is left is: company name → run → report.
 
-**Upstream endpoints are left untouched** (plan §9.4): `GET /models` still fetches OpenRouter's
-public model list over the network when the UI opens the model picker, and `GET /config` reads
-process environment variables. Neither is part of this fork's graph or quota guard. The claim
+`GET /config` reads process environment variables; the UI uses it only to show which mode the
+server is in (**真实调研** vs **演示数据**) and to warn when a live server has no key.
+**`GET /models` still proxies OpenRouter's public model list** and nothing in the UI calls it any
+more — the route is kept because upstream endpoints are left untouched (plan §9.4). The claim
 "zero external calls" applies to the reworked graph, `/research` and the Studio entry only —
 verified by socket-level guards in `tests/test_s5_offline.py`.
 
@@ -129,7 +133,6 @@ verified by socket-level guards in `tests/test_s5_offline.py`.
 - `TAVILY_API_KEY` — **optional, and deliberately hard to spend**: set it at OS user level, not in `.env`. Real calls additionally require `APP_MODE=live`, `TAVILY_LIVE_ENABLED=true` and `TAVILY_MAX_CALLS>0`; see `docs/ACTION_PLAN.md` §9.2. So far this project has made **4 live Tavily searches (8 credits) and 5 model requests** — see `docs/LIVE_FINDINGS.md`.
 - A model key — only for `live`. This fork supports OpenRouter / OpenAI / Gemini / **DashScope** (`LLM_PROVIDER=dashscope`, `LLM_MODEL=qwen-plus`); S8.3 uses the OS user-level `SYSTEM_ALIYUN_APIKEY` mapped in-process. Keys are never committed. With `APP_MODE=live` and no model key, `build_graph()` fails **at construction time** with `MissingLLMCredentials`; to exercise live retrieval alone, also set `FEATURES_STRUCTURED_OUTPUT=false`.
 - `TAVILY_MAX_CALLS` is a **per-run** budget: each `/research` request builds its own graph and `CallBudget`, while the Studio entry holds one process-wide instance. Real-call accounting must be read from `CallBudget.calls_made`, not inferred from the config value.
-- Google Maps — upstream UI feature only; not used by the new graph.
 - MongoDB — **replaced** by a Postgres job/report store (`persistence/job_store.py`); the upstream
   service file is kept for comparison but is no longer wired in. See `docs/POSTGRES.md`.
 
@@ -154,14 +157,14 @@ verified by socket-level guards in `tests/test_s5_offline.py`.
    ```
 
    ```env
-   # Recommended: one key for every model (or paste a key in the app's Settings instead)
-   OPENROUTER_API_KEY=your_openrouter_key
-   # Optional default model; users can still pick another in Settings
-   # OPENROUTER_MODEL=anthropic/claude-sonnet-5.5
-   # Alternative to OpenRouter: direct provider keys
+   # 模型：本项目跑 live 时用的是 DashScope（qwen-plus）。
+   # run_server.py 会把系统变量 SYSTEM_ALIYUN_APIKEY 映射成 DASHSCOPE_API_KEY，通常不用手写。
+   # DASHSCOPE_API_KEY=your_dashscope_key
+   # 备选：直连厂商 key
+   # OPENROUTER_API_KEY=your_openrouter_key
    # OPENAI_API_KEY=your_openai_key
    # GEMINI_API_KEY=your_gemini_key
-   # Optional fallback when no per-session Tavily key is supplied
+   # 检索 key 只在 live 模式需要；界面上已经没有输入框了，后端只读环境变量
    TAVILY_API_KEY=your_tavily_key
    # MONGODB_URI=optional_mongodb_connection_string
    ```
@@ -173,7 +176,8 @@ verified by socket-level guards in `tests/test_s5_offline.py`.
    cd ui && npm install && cd ..
    ```
 
-   Set `VITE_API_URL=http://localhost:8000` in `ui/.env.development.local`. Add `VITE_GOOGLE_MAPS_API_KEY` only when location autocomplete is needed.
+   Set `VITE_API_URL=http://localhost:8000` in `ui/.env.development.local`. Location autocomplete
+   (and its `VITE_GOOGLE_MAPS_API_KEY`) was removed with the HQ field in S13.
 
 4. Start the API in one terminal:
 
