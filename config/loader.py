@@ -307,7 +307,9 @@ def resolve_checkpoint_path(settings: Settings | None = None) -> Path:
     s = settings or get_settings()
     if s.graph.checkpointer == "postgres":
         raise NotImplementedError(
-            "PostgresSaver 留到 S8 真实实测阶段；当前请设 CHECKPOINTER=sqlite"
+            "PostgresSaver 未接入：本项目只在 SQLite 上验证过 checkpoint（跨进程恢复、"
+            "interrupt 续跑都是在这里测的）。要用 Postgres 需自行接 saver 并重跑 "
+            "tests/test_checkpointer.py；未接入前不静默退回 SQLite 冒充持久化。"
         )
     dsn = s.graph.dsn
     prefix = "sqlite:///"

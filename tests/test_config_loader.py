@@ -107,3 +107,12 @@ def test_resolve_checkpoint_path_and_thread_id() -> None:
 def test_eval_config_parses() -> None:
     d = load_eval_config()
     assert {"dataset", "metrics", "ab_tests", "ci"} <= set(d.keys())
+
+
+def test_postgres_checkpointer_is_explicitly_unimplemented() -> None:
+    """没接入就明确抛错，不许悄悄退回 SQLite 冒充「生产级持久化」。"""
+    s = load_settings(environ={"APP_MODE": "fixture", "CHECKPOINTER": "postgres"})
+    with pytest.raises(NotImplementedError) as exc:
+        resolve_checkpoint_path(s)
+    assert "未接入" in str(exc.value)
+    assert "SQLite" in str(exc.value)
