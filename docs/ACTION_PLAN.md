@@ -32,7 +32,7 @@
 | **S5** | #5 LangChain 深化 | Tavily 封 `BaseRetriever`；`with_structured_output` + 字段置信度 + 校验重试；行内引用 | `capabilities/`、Pydantic schema | 每条 Fact 能对回 source_url；抽取失败自动重试不静默丢字段 | ✅ 完成（8.1–8.5，见 8.7 / 9.6；**仅 fixture，live 实测归 S8**） |
 | **S6** | #6 HITL | 成稿前 `interrupt()` 复核 + `Command(resume=...)`；复核留痕导出标注 | `graph/nodes/human_review.py` | 中断→恢复后 State 一致；依赖真实 checkpointer | ✅ 完成（10.1–10.4，见 10.5；仅 fixture） |
 | **S7** | #7 评测台 | ~~30–50 真实公司~~ → fixture 派生 golden（3 场景 / 23 claim / 1 拒答）、8 项指标、4 组 A/B、scorecard、CI | `evals/`、`.github/workflows/eval.yml` | 一条命令出分，能定位退化用例 | ✅ 完成（11.1–11.9，仅 fixture；**真实 golden 归 S8**） |
-| **S8** | #8 真实实测 | 切 `APP_MODE=live`，真实模型 + 真实 Tavily + 真实 DB 跑全量 | 对比表、失败案例、成本/延迟取舍 | 每个数字能由脚本与日志当场复现 | 🟢 S8.0–S8.4 完成（累计 8/50 credits、6 次模型请求、1 份真实报告、25 条人工核验 golden + 1 次真实语义 judge，见 `docs/LIVE_FINDINGS.md` / `docs/LIVE_SCORE.md`）；S8.5 对比表起待执行 |
+| **S8** | #8 真实实测 | 切 `APP_MODE=live`，真实模型 + 真实 Tavily + 真实 DB 跑全量 | 对比表、失败案例、成本/延迟取舍 | 每个数字能由脚本与日志当场复现 | 🟢 S8.0–S8.5 完成（累计 8/50 credits、6 次模型请求、1 份真实报告、25 条人工核验 golden、1 次真实语义 judge、fixture vs 真机对比表，见 `docs/LIVE_REPORT.md`）；S8.6 起待执行 |
 | **S9** | #9 简历交付 | 3–4 条描述 + 面试追问清单 | `docs/RESUME.md` | 每条能指到具体文件与 commit | ⏳ |
 
 **顺序约束**：S2 是 S3/S4/S5/S6 的前置（都要改 `graph.py` / `state.py`），必须串行；S6 依赖 S2 的 checkpointer；S8 依赖 S7 且需要 key。
@@ -939,7 +939,7 @@ Tavily 累计仍 **8/50**；`total_cost_usd=null` 不编造单价。5 条全判�
 `judge_py_at_run_commit_sha256` 取自 git `3e16906`，如实说明是事后补记、
 不等价于运行时采集。详见 `docs/LIVE_SCORE.md` §7。全量 **236 passed**，Tavily 仍 8/50。
 
-### 12.13 下一阶段规划：S8.5 fixture vs 真机对比表（待用户放行执行）
+### 12.13 S8.5 fixture vs 真机对比表（规划；已执行，结果见 12.14）
 
 **目标**：一份能当场复现的 `docs/LIVE_REPORT.md`，把「假数据满分」与「真机表现」
 并排讲清楚，作为 S8.6 简历数字出处表的事实底座。
@@ -968,5 +968,34 @@ Tavily 累计仍 **8/50**；`total_cost_usd=null` 不编造单价。5 条全判�
 
 **之后**：S8.6 `docs/RESUME_EVIDENCE.md` 数字出处表 → S9 三条简历描述 + 面试追问清单。
 真实准确率 / 幻觉率 / 引用可追溯率 / p95 / 成本单价仍为未测，全程不得写进简历。
+
+### 12.14 S8.5 执行结果：fixture vs 真机对比表（2026-11-15，0 调用 / 0 credits）
+
+**产出**：`evals/build_live_report.py`（生成脚本）、`docs/LIVE_REPORT.md`（对比表）、
+`tests/test_s8_live_report.py`（15 条护栏）。另给 `docs/LIVE_FINDINGS.md` 加**状态注记**：
+其 §4–§6 描述的是 S8.3 当时的未完成项，原文保留不改以维持时间线真实，
+当前口径指向 `GOLDEN_LIVE.md` / `LIVE_SCORE.md` / `LIVE_REPORT.md`。
+
+**做法**：只读 6 份既有产物，装 `eval_offline_guard`（实测拦截 **0** 次外部连接）；
+模板里不写死任何数字，71 个表格单元格里 55 个数值由 `Cell(key, path, value)` 携带出处，
+测试按「文件 → 字段」逐项重算。**变异探针验证**：把 `fact_accuracy` 改成 `0.42`
+或把 `credits.cumulative` 改成 `99`，生成结果都跟着变 —— 文档确实绑定产物，不是碰巧对上。
+
+**文档结构**：§1 口径差异（fixture 合成语料 + 0 外部调用 vs 真机真实网页 + 4 次模型 / 3 次检索）；
+§2 八个指标逐项写「fixture 侧有值、真机侧未测」，特别隔离
+`p95_latency_ms=2379.819` 与 `cost_per_report=0.0` 这两个最易被误用的 fixture 数；
+§3 真机实测事实逐项标出处；§4 用 A/B 三组证明 `1.0` 是流程契约分
+（关行内引用 → traceability 掉到 0、hallucination 升到 1，事实准确率纹丝不动）；
+§5 三类硬伤 + judge 措辞瑕疵；§6 七条红线；§7 简历可写的工程事实；§8 产物索引；§9 状态。
+
+**验收**：全量 **251 passed**、`uv pip check` 103 包兼容、Tavily 仍 **8 / 50**、
+本轮 0 次模型请求 / 0 credits、密钥零泄漏（历史文档里仅有 `sk-` 正则说明文字）。
+S8.5 只做记录与对比，**不修硬伤、不复测**（复测需另花额度，单独规划）。
+
+**阅读提示**：12.0–12.13 各节末尾的「仍未做 / 下一步」是**当时的快照**，
+保留不改以维持决策时间线；当前状态以**总表 S8 行**与本节为准。
+
+**下一步 S8.6**：`docs/RESUME_EVIDENCE.md` 简历数字出处表 → S9 三条简历描述 + 面试追问清单。
+真实准确率 / 幻觉率 / 引用可追溯率 / p95 / 成本单价仍为「未测」，不得写进简历。
 
 
