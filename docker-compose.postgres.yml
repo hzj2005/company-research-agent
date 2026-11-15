@@ -1,0 +1,41 @@
+# 本地开发用的 PostgreSQL —— 只给 LangGraph checkpoint 用，不启动应用本身。
+#
+#   docker compose -f docker-compose.postgres.yml up -d       # 起
+#   docker compose -f docker-compose.postgres.yml ps          # 看状态 / 等 healthy
+#   docker compose -f docker-compose.postgres.yml logs -f     # 看日志
+#   docker compose -f docker-compose.postgres.yml down        # 停（保留数据）
+#   docker compose -f docker-compose.postgres.yml down -v     # 停并删数据（存档全没）
+#
+# 起完在 `.env` 里加两行就能让图改用它：
+#   CHECKPOINTER=postgres
+#   POSTGRES_DSN=postgresql://postgres:devpass@localhost:5432/research
+#
+# 注意：这里的账号密码是**本地开发专用**，不要带到任何能被公网访问的环境。
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: pj-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: devpass
+      POSTGRES_DB: research
+      # 本地开发：加快初始化，顺便开数据校验和
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    ports:
+      # 5432 被占时改左边：`"5433:5432"`，DSN 里的端口也要跟着改
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # 用 pg_isready 判活，比 `sleep 5` 靠谱：容器「起来」和「能连」是两件事
+      test: ["CMD-SHELL", "pg_isready -U postgres -d research"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  pgdata:
+    name: pj-pg-data
