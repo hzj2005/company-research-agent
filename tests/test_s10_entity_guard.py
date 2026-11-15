@@ -23,6 +23,8 @@ from capabilities.entity_guard import (
     profile_of,
     ticker_binding,
 )
+from capabilities.retrieval import build_live_query
+from capabilities.tavily_retriever import cache_key
 from config.loader import apply_overrides, get_settings
 from graph.nodes.collect import make_curate_node
 from graph.state import initial_state
@@ -205,9 +207,32 @@ def test_partial_rejection_does_not_trigger_fallback() -> None:
 CACHE_DIR = Path(__file__).resolve().parents[1] / "evals" / "cache" / "tavily"
 
 
+def notion_cache_files() -> list[Path]:
+    """精确定位 Notion 那 4 条 query 对应的缓存文件。
+
+    不能直接 `glob("*.json")` —— 后续跑 Figma / Stripe / Airbnb 会往同一个目录写文件，
+    把它们一起读进来就变成了「拿别的公司的语料回放 Notion」。缓存 key 由 query + 参数
+    决定，这里用同一套 `cache_key()` 重算，找到的就是当时那 4 个。
+    """
+    settings = get_settings()
+    files: list[Path] = []
+    for section in settings.graph.sections:
+        key = cache_key(
+            build_live_query(COMPANY, section, 0),
+            section=section,
+            max_results=settings.retrieval.max_results_per_query,
+            search_depth=settings.retrieval.search_depth,
+            topic=settings.retrieval.topics.get(f"{section}_analyzer", "general"),
+        )
+        path = CACHE_DIR / f"{key}.json"
+        if path.exists():
+            files.append(path)
+    return files
+
+
 @pytest.mark.skipif(
-    not glob.glob(str(CACHE_DIR / "*.json")),
-    reason="真实检索缓存不在本地（evals/cache/ 被 gitignore），跳过全量回放",
+    len(notion_cache_files()) < 4,
+    reason="Notion 的真实检索缓存不在本地（evals/cache/ 被 gitignore），跳过全量回放",
 )
 def test_replay_real_tavily_cache_rejects_exactly_two() -> None:
     """用那次真实返回的 12 篇原文回放：恰好拒 2 篇，且就是真机报告里的两处硬伤。
@@ -220,7 +245,7 @@ def test_replay_real_tavily_cache_rejects_exactly_two() -> None:
     guard = EntityGuard(COMPANY)
     kept: list[dict[str, Any]] = []
     rejected: list[dict[str, Any]] = []
-    for path in sorted(CACHE_DIR.glob("*.json")):
+    for path in notion_cache_files():
         raw = json.loads(path.read_text(encoding="utf-8"))
         docs = [
             {
@@ -418,7 +443,7 @@ FIELD_BY_SECTION = {
 
 def _replay_state() -> dict[str, Any]:
     state = initial_state(COMPANY)
-    for path in sorted(CACHE_DIR.glob("*.json")):
+    for path in notion_cache_files():
         for d in json.loads(path.read_text(encoding="utf-8")):
             meta = d["metadata"]
             state[FIELD_BY_SECTION[meta["section"]]][meta["url"]] = {
@@ -434,8 +459,8 @@ def _replay_state() -> dict[str, Any]:
 
 
 @pytest.mark.skipif(
-    not glob.glob(str(CACHE_DIR / "*.json")),
-    reason="真实检索缓存不在本地（evals/cache/ 被 gitignore），跳过端到端回放",
+    len(notion_cache_files()) < 4,
+    reason="Notion 的真实检索缓存不在本地（evals/cache/ 被 gitignore），跳过端到端回放",
 )
 def test_replay_reference_list_shrinks_from_11_to_9() -> None:
     """同一批真实检索原文，开关前后 References 从 11 条变 9 条，多的那两条正是硬伤。

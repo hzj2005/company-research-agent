@@ -1,0 +1,422 @@
+{
+  "purpose": "S10-B 批量真实调研：用已人工核验的 golden 攒可批改样本",
+  "status": "ok",
+  "companies": [
+    "Notion",
+    "Figma",
+    "Stripe",
+    "Airbnb"
+  ],
+  "config": {
+    "app_mode": "live",
+    "provider": "dashscope",
+    "model": "qwen-plus",
+    "search_depth": "advanced",
+    "structured_output": true,
+    "entity_guard": true,
+    "conflict_annotation": true,
+    "sections": [
+      "company",
+      "industry",
+      "financial",
+      "news"
+    ],
+    "max_retry": 2
+  },
+  "budget": {
+    "global_max_calls": 9,
+    "calls_made": 5,
+    "cache_hits": 12,
+    "remaining": 4,
+    "executed_queries": [
+      {
+        "query": "Notion company overview background products",
+        "section": "company",
+        "cache_hit": true,
+        "executed": false
+      },
+      {
+        "query": "Notion industry market landscape competitors",
+        "section": "industry",
+        "cache_hit": true,
+        "executed": false
+      },
+      {
+        "query": "Notion financial results revenue funding valuation",
+        "section": "financial",
+        "cache_hit": true,
+        "executed": false
+      },
+      {
+        "query": "Notion recent news announcements partnerships",
+        "section": "news",
+        "cache_hit": true,
+        "executed": false
+      },
+      {
+        "query": "Notion company overview background products refined round 1",
+        "section": "company",
+        "cache_hit": false,
+        "executed": true
+      },
+      {
+        "query": "Figma company overview background products",
+        "section": "company",
+        "cache_hit": true,
+        "executed": false
+      },
+      {
+        "query": "Figma industry market landscape competitors",
+        "section": "industry",
+        "cache_hit": true,
+        "executed": false
+      },
+      {
+        "query": "Figma financial results revenue funding valuation",
+        "section": "financial",
+        "cache_hit": true,
+        "executed": false
+      },
+      {
+        "query": "Figma recent news announcements partnerships",
+        "section": "news",
+        "cache_hit": true,
+        "executed": false
+      },
+      {
+        "query": "Stripe company overview background products",
+        "section": "company",
+        "cache_hit": false,
+        "executed": true
+      },
+      {
+        "query": "Stripe industry market landscape competitors",
+        "section": "industry",
+        "cache_hit": false,
+        "executed": true
+      },
+      {
+        "query": "Stripe financial results revenue funding valuation",
+        "section": "financial",
+        "cache_hit": false,
+        "executed": true
+      },
+      {
+        "query": "Stripe recent news announcements partnerships",
+        "section": "news",
+        "cache_hit": false,
+        "executed": true
+      },
+      {
+        "query": "Airbnb company overview background products",
+        "section": "company",
+        "cache_hit": true,
+        "executed": false
+      },
+      {
+        "query": "Airbnb industry market landscape competitors",
+        "section": "industry",
+        "cache_hit": true,
+        "executed": false
+      },
+      {
+        "query": "Airbnb financial results revenue funding valuation",
+        "section": "financial",
+        "cache_hit": true,
+        "executed": false
+      },
+      {
+        "query": "Airbnb recent news announcements partnerships",
+        "section": "news",
+        "cache_hit": true,
+        "executed": false
+      }
+    ]
+  },
+  "credits": {
+    "credits_per_search": 2,
+    "spent_this_run": 10,
+    "spent_before": 32,
+    "cumulative": 42,
+    "user_ceiling": 50,
+    "within_ceiling": true,
+    "note": "advanced=2 credits/次；缓存命中不扣，以 calls_made 为准"
+  },
+  "summary": {
+    "runs": 4,
+    "ok": 4,
+    "failed": 0,
+    "entity_guard_rejections": 4
+  },
+  "runs": [
+    {
+      "company": "Notion",
+      "status": "ok",
+      "error": null,
+      "report": "# Notion Research Report\n\n## Company Overview\n\n- Notion was founded in 2013. [4]\n- Notion is a privately held, venture capital-backed company. [4]\n- Notion's founders include Ivan Zhao, Simon Last, and Akshay Kothari. [9]\n- Notion Labs, Inc. was founded in San Francisco, California. [11]\n- Notion's platform is an all-in-one workspace for writing, planning, collaborating, and organizing workflow. [4]\n- Notion had 1,200 employees as of the latest data in the PitchBook profile. [4]\n- Notion was formerly known as Canopy Technologies. [4]\n- Notion's website is www.notion.com. [4]\n\n## Industry Overview\n\n- Notion operates in the collaborative workspace and productivity software industry, competing with companies like Microsoft, Atlassian, Airtable, Slack, ClickUp, monday.com, Asana, Coda, Obsidian, and Roam Research. [1]\n- Notion views its competitors broadly — not as single-point solutions but as parts of a fragmented landscape it aims to unify, stating 'Our competitor is the entire industry.' [2]\n- Microsoft launched Loop in November 2021 as a direct competitor to Notion, integrated into Microsoft 365. [3]\n- Legacy note-taking tools like Evernote have declined (e.g., acquired for a fraction of former valuation by 2022), creating space for Notion’s rise amid shifting user expectations for integration and continuous improvement. [2]\n- Enterprise incumbents such as Microsoft and Atlassian pose key competitive risks to Notion due to their existing distribution, embedded workflows, and offensive product launches like Microsoft Loop. [3]\n\n## Financial Overview\n\n- Notion reached a $2 billion valuation in 2020. [8]\n- Notion raised $275 million in funding at a $10 billion valuation. [6]\n\n## News\n\n- Notion Labs, Inc. entered into a strategic collaboration with Keio University on February 25, 2026, to support Keio’s vision of becoming a 'Top Global AI-Native University' through integration of Notion AI tools for faculty and staff. [5]\n- Notion AI integrated with ZoomInfo via GTM.AI’s Model Context Protocol (MCP) to enable go-to-market teams to query account and buying committee data directly in Notion AI chat. [7]\n- Sia Partners acquired Notion Consulting — a US-based organizational change consulting firm founded in 2015 — to expand its Change Management & Organization capabilities in the US East region. [10]\n\n## References\n\n[1] Notion Competitors: Complete List & Market Landscape — https://www.distillintelligence.com/competitors/notion\n[2] Notion: From Near Collapse to a $10B All‑In‑One Workspace Unicorn | by Xiayi Sun | Medium — https://medium.com/@sherrysun/notion-from-near-collapse-to-a-10b-all-in-one-workspace-unicorn-6113f7e1dc4c\n[3] Report: Notion Business Breakdown & Founding Story | Contrary Research — https://research.contrary.com/report/notion\n[4] Notion 2026 Company Profile: Valuation, Funding & Investors | PitchBook — https://pitchbook.com/profiles/company/168506-47\n[5] Keio and Notion Launch Strategic Collaboration to Realize a Top Global AI-Native University | Keio University — https://www.keio.ac.jp/en/news/20260227-172922\n[6] Notion Reaches $10 Billion Valuation, Boosted By Remote Work — https://www.forbes.com/sites/alexkonrad/2021/10/08/notion-raises-at-10-billion-valuation-boosted-by-remote-work-tiktok\n[7] ZoomInfo Launches MCP Integration With Notion Through GTM.AI — https://www.businesswire.com/news/home/20261103978960/en/ZoomInfo-Launches-MCP-Integration-With-Notion-Through-GTM.AI\n[8] Buzzy Work App Notion Hits $2 Billion Valuation In New Raise — https://www.forbes.com/sites/davidjeans/2020/04/01/buzzy-work-app-notion-hits-2-billion-valuation\n[9] Notion | First Round — https://www.firstround.com/companies/notion\n[10] Sia Partners buys organizational change expert Notion Consulting — https://www.consulting.us/news/10182/sia-partners-buys-organizational-change-expert-notion-consulting\n[11] Notion (productivity software) - Wikipedia — https://en.wikipedia.org/wiki/Notion_(productivity_software)\n",
+      "report_checks": {
+        "chars": 3971,
+        "headings": [
+          "Company Overview",
+          "Industry Overview",
+          "Financial Overview",
+          "News",
+          "References"
+        ],
+        "inline_citation_markers": 18,
+        "reference_lines": 11,
+        "has_four_sections": true,
+        "has_references_section": true,
+        "abstain_markers": 0
+      },
+      "graph": {
+        "degraded": false,
+        "degraded_sections": [],
+        "retry_count": {
+          "company": 1
+        },
+        "company": "Notion",
+        "node_trace": [
+          "grounding",
+          "research",
+          "curate",
+          "evidence_check",
+          "rewrite_query",
+          "research",
+          "curate",
+          "evidence_check",
+          "briefing"
+        ]
+      },
+      "entity_guard": [
+        {
+          "node": "entity_guard",
+          "section": "company",
+          "candidates": 3,
+          "kept": 2,
+          "rejected": [
+            {
+              "url": "https://www.cbinsights.com/company/notion",
+              "title": "Notion - Products, Competitors, Financials, Employees, Headquarters Locations",
+              "code": "incoherent_profile",
+              "reason": "官网域名 notion.online 与同栏目其它来源不一致，且成立年份 2014 与栏目多数 2013 不同",
+              "domains": [
+                "notion.online"
+              ],
+              "founded_year": "2014",
+              "majority_year": "2013",
+              "conflicting_urls": [
+                "https://pitchbook.com/profiles/company/168506-47"
+              ]
+            }
+          ],
+          "all_rejected_fallback": false
+        },
+        {
+          "node": "entity_guard",
+          "section": "financial",
+          "candidates": 3,
+          "kept": 2,
+          "rejected": [
+            {
+              "url": "https://finance.yahoo.com/quote/0083.KL/key-statistics",
+              "title": "Notion VTec Berhad (0083.KL) Valuation Measures & Financial Statistics",
+              "code": "ticker_binding",
+              "reason": "标题把公司名扩张成「Notion VTec Berhad」并绑定了交易所代码 0083.KL",
+              "expansion": "VTec Berhad",
+              "ticker": "0083.KL",
+              "suffix": "berhad"
+            }
+          ],
+          "all_rejected_fallback": false
+        },
+        {
+          "node": "entity_guard",
+          "section": "company",
+          "candidates": 5,
+          "kept": 4,
+          "rejected": [
+            {
+              "url": "https://www.cbinsights.com/company/notion",
+              "title": "Notion - Products, Competitors, Financials, Employees, Headquarters Locations",
+              "code": "incoherent_profile",
+              "reason": "官网域名 notion.online 与同栏目其它来源不一致，且成立年份 2014 与栏目多数 2013 不同",
+              "domains": [
+                "notion.online"
+              ],
+              "founded_year": "2014",
+              "majority_year": "2013",
+              "conflicting_urls": [
+                "https://pitchbook.com/profiles/company/168506-47"
+              ]
+            }
+          ],
+          "all_rejected_fallback": false
+        },
+        {
+          "node": "entity_guard",
+          "section": "financial",
+          "candidates": 3,
+          "kept": 2,
+          "rejected": [
+            {
+              "url": "https://finance.yahoo.com/quote/0083.KL/key-statistics",
+              "title": "Notion VTec Berhad (0083.KL) Valuation Measures & Financial Statistics",
+              "code": "ticker_binding",
+              "reason": "标题把公司名扩张成「Notion VTec Berhad」并绑定了交易所代码 0083.KL",
+              "expansion": "VTec Berhad",
+              "ticker": "0083.KL",
+              "suffix": "berhad"
+            }
+          ],
+          "all_rejected_fallback": false
+        }
+      ],
+      "llm_usage": {
+        "successful_requests": 4,
+        "total_tokens": 7439,
+        "prompt_tokens": 6146,
+        "completion_tokens": 1293
+      },
+      "elapsed_ms": 44894.5
+    },
+    {
+      "company": "Figma",
+      "status": "ok",
+      "error": null,
+      "report": "# Figma Research Report\n\n## Company Overview\n\n- Figma, Inc. develops and sells a collaborative, browser-based platform for designing, prototyping, building digital experiences, and subscriptions for access to its platform. [8]\n- Figma Design was launched in 2015 using WebGL technology to bring design into the browser for the first time. [9]\n- FigJam was launched in 2021. [9]\n- Dev Mode was launched in 2023. [9]\n- Figma Slides was introduced in 2024. [9]\n- Figma was incorporated in 2012. [8]\n- Figma is headquartered in San Francisco, California. [8]\n- Figma completed its IPO in July 2025. [11]\n- Figma has 1,886 employees. [11]\n- Figma's stock symbol is FIG. [11]\n\n## Industry Overview\n\n- Figma operates in the Collaborative Design And Prototyping category. [2]\n- Figma's primary competitors in UI/UX design and prototyping include Sketch, InVision, and Adobe XD. [3]\n- Figma's top competitors in the Collaborative Design And Prototyping category are Adobe Discover (18.96% market share), Adobe Premiere Pro CC (16.33%), and Adobe XD (9.33%). [2]\n- Figma is a collaborative design platform. [5]\n- Figma competes with Adobe, Canva, Framer, Lucidspark, Miro, Mural, Penpot, Sketch, UxPin, Axure, and InVision. [5]\n\n## Financial Overview\n\n- Figma's revenue for the third quarter of 2025 was $274.2 million, representing a 38% year-over-year increase. [1]\n- Figma reported a GAAP net loss of $(1.1) billion for the third quarter of 2025, largely due to a one-time stock-based compensation expense of $975.7 million related to its IPO. [1]\n- Figma's non-GAAP net income for the third quarter of 2025 was $62.4 million. [1]\n- Figma's Net Dollar Retention Rate for customers with ARR of $10,000 or more was 131% as of September 30, 2025. [1]\n- Figma raised $200 million at a $10 billion valuation. [10]\n\n## News\n\n- Figma announced a partnership with Anthropic on February 17, 2026, to launch a feature called \"Code to Canvas\" that converts code generated by AI tools like Claude Code into editable designs in Figma. [6]\n- Figma works with OpenAI through a ChatGPT and FigJam integration. [4]\n- Figma added an AI assistant to its collaborative canvas that responds to natural language prompts to generate or edit designs and automate tasks, powered by design-fine-tuned AI models. [7]\n\n## References\n\n[1] Figma Announces Third Quarter 2025 Financial Results — https://finance.yahoo.com/news/figma-announces-third-quarter-2025-210500296.html\n[2] Figma - Market Share, Competitor Insights in Collaborative Design And Prototyping — https://www.6sense.com/tech/collaborative-design-and-prototyping/figma-market-share\n[3] Understanding Figma — https://hhhypergrowth.com/understanding-figma\n[4] Figma Q4 earnings show revenue topped $300 million amid AI spending | Fortune — https://fortune.com/2026/02/18/fig-stock-q4-earnings\n[5] Figma Competitors: Complete List & Market Landscape — https://www.distillintelligence.com/competitors/figma\n[6] Figma partners with Anthropic on AI feature integrating Claude Code — https://www.cnbc.com/2026/02/17/figma-anthropic-ai-code-designs.html\n[7] Figma adds an AI assistant to its collaborative canvas | TechCrunch — https://techcrunch.com/2026/05/20/figma-adds-an-ai-assistant-to-its-collaborative-canvas\n[8] Figma, Inc. (FIG) Stock Price, News, Quote & History - Yahoo Finance — https://finance.yahoo.com/quote/FIG\n[9] fig-20251231 — https://www.sec.gov/Archives/edgar/data/1579878/000162828026009228/fig-20251231.htm\n[10] Software Company Figma Raises $200M At $10B Valuation: Bloomberg — https://finance.yahoo.com/news/software-company-figma-raises-200m-145310997.html\n[11] Figma 2026 Company Profile: Stock Performance & Earnings | PitchBook — https://pitchbook.com/profiles/company/57686-86\n[12] Figma, Inc. (FIG) Valuation Measures & Financial Statistics — https://finance.yahoo.com/quote/FIG/key-statistics\n",
+      "report_checks": {
+        "chars": 3847,
+        "headings": [
+          "Company Overview",
+          "Industry Overview",
+          "Financial Overview",
+          "News",
+          "References"
+        ],
+        "inline_citation_markers": 23,
+        "reference_lines": 12,
+        "has_four_sections": true,
+        "has_references_section": true,
+        "abstain_markers": 0
+      },
+      "graph": {
+        "degraded": false,
+        "degraded_sections": [],
+        "retry_count": {},
+        "company": "Figma",
+        "node_trace": [
+          "grounding",
+          "research",
+          "curate",
+          "evidence_check",
+          "briefing"
+        ]
+      },
+      "entity_guard": [],
+      "llm_usage": {
+        "successful_requests": 4,
+        "total_tokens": 8509,
+        "prompt_tokens": 6875,
+        "completion_tokens": 1634
+      },
+      "elapsed_ms": 37544.5
+    },
+    {
+      "company": "Stripe",
+      "status": "ok",
+      "error": null,
+      "report": "# Stripe Research Report\n\n## Company Overview\n\n- Stripe Inc is a fintech company that provides payment software services and solutions for online merchants. [2]\n- Stripe was founded in 2009 by Irish brothers Patrick and John Collison. [7]\n- Stripe is headquartered in San Francisco, California, US. [2]\n- Stripe operates offices in the US, the UK, Ireland, and Tokyo. [2]\n- Stripe's customers include Amazon, Google, and Shopify. [7]\n- Stripe raised $2.2 billion in funding from investors including Sequoia, General Catalyst, Founders Fund, and Thrive. [7]\n- Stripe's latest valuation is $107 billion, based on a share sale to employees in September 2025. [7]\n- In the four days from Black Friday to Cyber Monday in 2025, Stripe processed over $40 billion in transactions. [7]\n\n## Industry Overview\n\n- Stripe's top competitors in the payment management category are PayPal (29.98% market share), Venmo (8.70%), and Adyen (8.59%). [4]\n- Stripe holds a 34.51% market share in the payment-management market. [4]\n- Stripe has 645,495 companies using it as a payment management tool globally as of 2026, with 53.66% (291,721) based in the United States. [4]\n- Stripe leads among high-growth technology companies and developers who value sophisticated APIs and rapid innovation, while PayPal dominates among established marketplaces and consumer-facing businesses. [3]\n- 45% of U.S. ecommerce businesses use Stripe as their primary payment processor. [3]\n- 62% of Fortune 500 companies use Stripe for payment processing. [3]\n- Stripe’s competitors include PayPal (Braintree), Square, Adyen, Checkout.com, FIS, Razorpay (India), and Xendit (Indonesia). [1]\n\n## Financial Overview\n\n- Stripe's valuation was $95 billion following a funding round in which it raised $600 million. [9]\n- Stripe was valued at $159 billion in a tender offer for employees and shareholders, representing a more than 70% increase from a similar share sale a year earlier. [10]\n- Stripe's valuation was $9.2 billion in a funding round completed around 2016 (as inferred from the article's timestamp of 2016-11-24, though the URL shows 2026 erroneously). [11]\n\n## News\n\n- Stripe announced 288 new products and features at its annual Stripe Sessions conference while building economic infrastructure for AI. [5]\n- Stripe partnered with Google to enable product purchases within Google’s Gemini AI search and app as part of its agentic commerce initiative. [8]\n- Stripe partnered with Hong Kong–based fintech PhotonPay to widen payment method offerings, reinforce uptime, and simplify technical adoption for merchants. [6]\n- Stripe expanded its Agentic Commerce Suite to include integrations with OpenAI, Microsoft, Meta, and now Google — enabling in-app purchases inside AI agents across these platforms. [8]\n- Stripe opened its Link consumer digital wallet to AI agents, allowing users to authorize agents to make payments on their behalf. [8]\n\n## References\n\n[1] Report: Stripe Business Breakdown & Founding Story | Contrary Research — https://research.contrary.com/company/stripe\n[2] Stripe Inc Company Profile - Overview - GlobalData — https://www.globaldata.com/company-profile/stripe-inc\n[3] Stripe Market Share 2026: Global vs U.S. Breakdown — https://redstagfulfillment.com/what-is-the-market-share-of-stripe\n[4] Stripe - Market Share, Competitor Insights in Payment Management — https://www.6sense.com/tech/payment-management/stripe-market-share\n[5] Stripe presses ahead with building economic infrastructure for AI, unveils 288 new products and features - FX News Group — https://fxnewsgroup.com/forex-news/payments/stripe-presses-ahead-with-building-economic-infrastructure-for-ai-unveils-288-new-products-and-features\n[6] Stripe’s Latest Venture Is a Partnership With Hong Kong’s PhotonPay – Digital Transactions — https://www.digitaltransactions.net/stripes-latest-venture-is-a-partnership-with-hong-kongs-photonpay\n[7] Stripe | Company Overview & News — https://www.forbes.com/companies/stripe\n[8] Stripe, Google partner on agentic commerce | Payments Dive — https://www.paymentsdive.com/news/stripe-google-partner-on-agentic-commerce/818915\n[9] Stripe’s Value Jumps to $95 Billion, Becomes Top U.S. Startup — https://finance.yahoo.com/news/stripe-value-jumps-95-billion-025854265.html\n[10] Stripe valuation jumps to $159 billion in latest employee share sale — https://finance.yahoo.com/news/stripe-valuation-jumps-159-billion-131258707.html\n[11] Stripe’s Valuation Nearly Doubles to $9.2 Billion - WSJ — https://www.wsj.com/articles/stripes-valuation-nearly-doubles-to-9-2-billion-1480075201\n",
+      "report_checks": {
+        "chars": 4573,
+        "headings": [
+          "Company Overview",
+          "Industry Overview",
+          "Financial Overview",
+          "News",
+          "References"
+        ],
+        "inline_citation_markers": 23,
+        "reference_lines": 11,
+        "has_four_sections": true,
+        "has_references_section": true,
+        "abstain_markers": 0
+      },
+      "graph": {
+        "degraded": false,
+        "degraded_sections": [],
+        "retry_count": {},
+        "company": "Stripe",
+        "node_trace": [
+          "grounding",
+          "research",
+          "curate",
+          "evidence_check",
+          "briefing"
+        ]
+      },
+      "entity_guard": [],
+      "llm_usage": {
+        "successful_requests": 4,
+        "total_tokens": 7835,
+        "prompt_tokens": 6310,
+        "completion_tokens": 1525
+      },
+      "elapsed_ms": 40009.6
+    },
+    {
+      "company": "Airbnb",
+      "status": "ok",
+      "error": null,
+      "report": "# Airbnb Research Report\n\n## Company Overview\n\n- Airbnb, Inc. operates a global platform for stays and experiences. [7]\n- Airbnb Inc operates a global marketplace that connects guests with hosts offering stays, experiences, and services. [9]\n- Airbnb's legal name is Airbnb, Inc. [11]\n- Airbnb is headquartered in San Francisco, CA, United States. [11]\n- Airbnb was founded in 2007. [11]\n- Airbnb has a presence in over 220 countries and regions worldwide. [11]\n- Airbnb's business model is B2C. [11]\n- Airbnb's industry is Software Development. [11]\n\n## Industry Overview\n\n- Airbnb's biggest competitor by market share among major online travel agencies is Booking.com, which holds around 18% of the short-term rental market compared to Airbnb's 44%, according to Skift’s 2026 short-term rental report. [3]\n- Airbnb, Booking.com, and HomeAway lead the paid peer-to-peer accommodation market with seven, five, and two million listings respectively, operating in 190, 227, and 160 countries. [2]\n- Other major competitors to Airbnb include Vrbo, Expedia Group, HomesToGo/Tripping.com, Furnished Finder, Plum Guide, and HipCamp. [1]\n- In the US tourist accommodation market, Airbnb held 19% market share in 2018, up from a negligible share in 2013, while hotel market share dropped from 94% to 70% over the same period. [2]\n- Vrbo holds roughly 9% of the short-term rental market, according to Skift’s 2026 short-term rental market report. [3]\n\n## Financial Overview\n\n- Airbnb reported revenue of $859 million for the fourth quarter of 2020, representing a 22% year-over-year decline. [4]\n- Airbnb lost $3.9 billion in the fourth quarter of 2020. [4]\n- Airbnb's gross booking value was $5.9 billion in the fourth quarter of 2020, down 31% year-over-year. [4]\n- Airbnb's revenue fell 67% in the quarter ending June 30, 2020. [4]\n- Airbnb's total revenue is $11,943,000,064. [5]\n- Airbnb's EBITDA is $2,760,999,936. [5]\n- Airbnb's total debt is $2,278,000,128. [5]\n- Airbnb's net income to common is $2,631,000,064. [5]\n- Airbnb's price to book is 1.46. [5]\n- Airbnb's enterprise to revenue is 0.39. [5]\n- Airbnb's enterprise to EBITDA is 1.67. [5]\n\n## News\n\n- American Express and Airbnb launched an exclusive partnership, bringing over one million Airbnb listings to Amex Travel. [6]\n- Airbnb.org announced partnerships with Fisher House Foundation and Operation Healing Forces to provide free stays for service members, veterans, and their families traveling for medical treatment. [8]\n- Airbnb partnered with Tripadvisor to bring a selection of Tripadvisor experiences to the Airbnb platform, with certain tours, activities, and attractions available to book on Airbnb later in 2026. [10]\n\n## References\n\n[1] Airbnb Competitors: an Overview of the Rental Market | Hospitable — https://hospitable.com/competitors-for-airbnb\n[2] The evolution of Airbnb’s competitive landscape – Airbnb Before, During and After COVID-19 — https://uq.pressbooks.pub/airbnb-978-1-74272-321-1/chapter/the-evolution-of-airbnbs-competitive-landscape\n[3] Airbnb Competitor Platforms: The Full 2026 Host Guide - Boostly 🚀 — https://boostly.co.uk/airbnb-competitor\n[4] Airbnb financial results blow past revenue expectations — https://finance.yahoo.com/news/airbnb-reports-q-4-2020-first-earnings-results-ipo-190849653.html\n[5] Airbnb, Inc. (ABNB.NE) Valuation Measures & Financial Statistics — https://finance.yahoo.com/quote/ABNB.NE/key-statistics\n[6] American Express and Airbnb Launch Exclusive Partnership, Bringing Over 1 Million Listings to American Express Travel® — https://www.americanexpress.com/en-us/newsroom/travel-dining-experiences/amex-travel-airbnb-partnership\n[7] Airbnb Inc - Detailed Introduction, Company Background, Business Scope, Financial Data, and Market Performance | TradingKey — https://www.tradingkey.com/markets/stocks/nasdaq-abnb/company\n[8] Brian Chesky Links Airbnb Stays to $500M Housing Plan | Observer — https://observer.com/2026/11/brian-chesky-airbnb-crisis-housing-commitment\n[9] Airbnb Inc Company Profile - Airbnb Inc Overview - GlobalData — https://www.globaldata.com/company-profile/airbnb-inc\n[10] airbnb partners tripadvisor scale experiences — https://www.phocuswire.com/news/distribution/airbnb-partners-tripadvisor-scale-experiences\n[11] Airbnb — https://tavily.com/knowledge/company/Uq6QHwDcwhCL\n[12] Airbnb, Inc. (ABNB) Valuation Measures & Financial Statistics — https://finance.yahoo.com/quote/ABNB/key-statistics\n",
+      "report_checks": {
+        "chars": 4441,
+        "headings": [
+          "Company Overview",
+          "Industry Overview",
+          "Financial Overview",
+          "News",
+          "References"
+        ],
+        "inline_citation_markers": 27,
+        "reference_lines": 12,
+        "has_four_sections": true,
+        "has_references_section": true,
+        "abstain_markers": 0
+      },
+      "graph": {
+        "degraded": false,
+        "degraded_sections": [],
+        "retry_count": {},
+        "company": "Airbnb",
+        "node_trace": [
+          "grounding",
+          "research",
+          "curate",
+          "evidence_check",
+          "briefing"
+        ]
+      },
+      "entity_guard": [],
+      "llm_usage": {
+        "successful_requests": 4,
+        "total_tokens": 8152,
+        "prompt_tokens": 6339,
+        "completion_tokens": 1813
+      },
+      "elapsed_ms": 41606.4
+    }
+  ],
+  "timing": {
+    "elapsed_ms": 164068.4,
+    "note": "本机墙钟，含网络往返，非确定性字段，不代表 p95"
+  },
+  "credentials": {
+    "keys_read": [
+      "TAVILY_API_KEY",
+      "DASHSCOPE_API_KEY"
+    ],
+    "keys_printed": 0,
+    "keys_in_artifact": false
+  }
+}

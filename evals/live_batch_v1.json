@@ -1,0 +1,231 @@
+{
+  "purpose": "S10-B 批量真实调研：用已人工核验的 golden 攒可批改样本",
+  "status": "ok",
+  "companies": [
+    "Figma",
+    "Stripe",
+    "Airbnb"
+  ],
+  "config": {
+    "app_mode": "live",
+    "provider": "dashscope",
+    "model": "qwen-plus",
+    "search_depth": "advanced",
+    "structured_output": true,
+    "entity_guard": true,
+    "conflict_annotation": true,
+    "sections": [
+      "company",
+      "industry",
+      "financial",
+      "news"
+    ],
+    "max_retry": 2
+  },
+  "budget": {
+    "global_max_calls": 16,
+    "calls_made": 12,
+    "cache_hits": 0,
+    "remaining": 4,
+    "executed_queries": [
+      {
+        "query": "Figma company overview background products",
+        "section": "company",
+        "cache_hit": false,
+        "executed": true
+      },
+      {
+        "query": "Figma industry market landscape competitors",
+        "section": "industry",
+        "cache_hit": false,
+        "executed": true
+      },
+      {
+        "query": "Figma financial results revenue funding valuation",
+        "section": "financial",
+        "cache_hit": false,
+        "executed": true
+      },
+      {
+        "query": "Figma recent news announcements partnerships",
+        "section": "news",
+        "cache_hit": false,
+        "executed": true
+      },
+      {
+        "query": "Stripe company overview background products",
+        "section": "company",
+        "cache_hit": false,
+        "executed": true
+      },
+      {
+        "query": "Stripe industry market landscape competitors",
+        "section": "industry",
+        "cache_hit": false,
+        "executed": true
+      },
+      {
+        "query": "Stripe financial results revenue funding valuation",
+        "section": "financial",
+        "cache_hit": false,
+        "executed": true
+      },
+      {
+        "query": "Stripe recent news announcements partnerships",
+        "section": "news",
+        "cache_hit": false,
+        "executed": true
+      },
+      {
+        "query": "Airbnb company overview background products",
+        "section": "company",
+        "cache_hit": false,
+        "executed": true
+      },
+      {
+        "query": "Airbnb industry market landscape competitors",
+        "section": "industry",
+        "cache_hit": false,
+        "executed": true
+      },
+      {
+        "query": "Airbnb financial results revenue funding valuation",
+        "section": "financial",
+        "cache_hit": false,
+        "executed": true
+      },
+      {
+        "query": "Airbnb recent news announcements partnerships",
+        "section": "news",
+        "cache_hit": false,
+        "executed": true
+      }
+    ]
+  },
+  "credits": {
+    "credits_per_search": 2,
+    "spent_this_run": 24,
+    "spent_before": 8,
+    "cumulative": 32,
+    "user_ceiling": 50,
+    "within_ceiling": true,
+    "note": "advanced=2 credits/次；缓存命中不扣，以 calls_made 为准"
+  },
+  "summary": {
+    "runs": 3,
+    "ok": 2,
+    "failed": 1,
+    "entity_guard_rejections": 0
+  },
+  "runs": [
+    {
+      "company": "Figma",
+      "status": "ok",
+      "error": null,
+      "report": "# Figma Research Report\n\n## Company Overview\n\n- Figma, Inc. develops and sells a collaborative, browser-based platform for designing, prototyping, building digital experiences, and subscriptions for access to its platform. [8]\n- Figma Design was launched in 2015 using WebGL technology to bring design into the browser for the first time. [9]\n- FigJam, an online whiteboarding tool, was launched in 2021. [9]\n- Dev Mode, a product tailored for developers, was launched in 2023. [9]\n- Figma Slides was introduced in 2024. [9]\n- Figma was incorporated in 2012 and is headquartered in San Francisco, California. [8]\n- Figma completed its IPO in July 2025. [11]\n- Figma has 1,886 employees. [11]\n- Figma's stock symbol is FIG. [11]\n\n## Industry Overview\n\n- Figma operates in the Collaborative Design And Prototyping category. [2]\n- Figma's top competitors in the Collaborative Design And Prototyping category include Adobe Discover (18.96% market share), Adobe Premiere Pro CC (16.33%), and Adobe XD (9.33%). [2]\n- Figma is a collaborative interface design tool. [2]\n- Figma's primary competition in UI/UX design and prototyping included Sketch, InVision, and Adobe XD. [3]\n- Figma competes with Adobe, Canva, Framer, Lucidspark, Miro, Mural, Penpot, Sketch, UxPin, Axure, and InVision. [5]\n\n## Financial Overview\n\n- Figma's revenue for the third quarter of 2025 was $274.2 million, an increase of 38% year-over-year. [1]\n- Figma's GAAP loss from operations for the third quarter of 2025 was $(1.1) billion, with a GAAP operating margin of (415)%. [1]\n- Figma's GAAP net loss for the third quarter of 2025 was $(1.1) billion, while its non-GAAP net income was $62.4 million. [1]\n- Figma's Net Dollar Retention Rate for customers with ARR of $10,000 or more was 131% as of September 30, 2025. [1]\n- Figma raised $200 million at a $10 billion valuation. [10]\n\n## News\n\n- Figma announced a partnership with Anthropic on February 17, 2026, to launch a feature called \"Code to Canvas\" that converts code generated by AI tools like Claude Code into editable designs inside Figma. [6]\n- Figma works with OpenAI through a ChatGPT and FigJam integration. [4]\n- Figma has struck partnerships with Anthropic and OpenAI to integrate AI CLI tools like Claude Code and Codex into its design software. [7]\n- Figma launched its own AI assistant within its collaborative canvas that responds to natural language prompts to generate or edit designs and automate tasks. [7]\n\n## References\n\n[1] Figma Announces Third Quarter 2025 Financial Results — https://finance.yahoo.com/news/figma-announces-third-quarter-2025-210500296.html\n[2] Figma - Market Share, Competitor Insights in Collaborative Design And Prototyping — https://www.6sense.com/tech/collaborative-design-and-prototyping/figma-market-share\n[3] Understanding Figma — https://hhhypergrowth.com/understanding-figma\n[4] Figma Q4 earnings show revenue topped $300 million amid AI spending | Fortune — https://fortune.com/2026/02/18/fig-stock-q4-earnings\n[5] Figma Competitors: Complete List & Market Landscape — https://www.distillintelligence.com/competitors/figma\n[6] Figma partners with Anthropic on AI feature integrating Claude Code — https://www.cnbc.com/2026/02/17/figma-anthropic-ai-code-designs.html\n[7] Figma adds an AI assistant to its collaborative canvas | TechCrunch — https://techcrunch.com/2026/05/20/figma-adds-an-ai-assistant-to-its-collaborative-canvas\n[8] Figma, Inc. (FIG) Stock Price, News, Quote & History - Yahoo Finance — https://finance.yahoo.com/quote/FIG\n[9] fig-20251231 — https://www.sec.gov/Archives/edgar/data/1579878/000162828026009228/fig-20251231.htm\n[10] Software Company Figma Raises $200M At $10B Valuation: Bloomberg — https://finance.yahoo.com/news/software-company-figma-raises-200m-145310997.html\n[11] Figma 2026 Company Profile: Stock Performance & Earnings | PitchBook — https://pitchbook.com/profiles/company/57686-86\n[12] Figma, Inc. (FIG) Valuation Measures & Financial Statistics — https://finance.yahoo.com/quote/FIG/key-statistics\n",
+      "report_checks": {
+        "chars": 4015,
+        "headings": [
+          "Company Overview",
+          "Industry Overview",
+          "Financial Overview",
+          "News",
+          "References"
+        ],
+        "inline_citation_markers": 23,
+        "reference_lines": 12,
+        "has_four_sections": true,
+        "has_references_section": true,
+        "abstain_markers": 0
+      },
+      "graph": {
+        "degraded": false,
+        "degraded_sections": [],
+        "retry_count": {},
+        "company": "Figma",
+        "node_trace": [
+          "grounding",
+          "research",
+          "curate",
+          "evidence_check",
+          "briefing"
+        ]
+      },
+      "entity_guard": [],
+      "llm_usage": {
+        "successful_requests": 4,
+        "total_tokens": 8582,
+        "prompt_tokens": 6875,
+        "completion_tokens": 1707
+      },
+      "elapsed_ms": 46961.8
+    },
+    {
+      "company": "Stripe",
+      "status": "failed",
+      "error": "RuntimeError: Event loop is closed",
+      "report": "",
+      "report_checks": null,
+      "graph": {
+        "node_trace": []
+      },
+      "entity_guard": [],
+      "llm_usage": {},
+      "elapsed_ms": 149.4
+    },
+    {
+      "company": "Airbnb",
+      "status": "ok",
+      "error": null,
+      "report": "# Airbnb Research Report\n\n## Company Overview\n\n- Airbnb, Inc. operates a global platform for stays and experiences. [7]\n- Airbnb Inc operates a global marketplace that connects guests with hosts offering stays, experiences, and services. [9]\n- Airbnb's main activities include facilitating short-term lodging and unique travel experiences through its online platform. [9]\n- Airbnb is headquartered in San Francisco, CA, United States. [11]\n- Airbnb was founded in 2007. [11]\n- Airbnb has a presence in over 220 countries and regions worldwide. [11]\n- Airbnb's major services encompass accommodations, curated experiences, and various travel-related services. [9]\n- Airbnb utilizes a digital platform to connect users, providing tools for hosts to manage listings and for guests to book accommodations and experiences. [9]\n\n## Industry Overview\n\n- Airbnb operates in the short-term rental industry and competes with platforms including Booking.com, Vrbo, Expedia Group, HomesToGo/Tripping.com, Furnished Finder, Plum Guide, HipCamp, and Agoda. [1]\n- Airbnb, Booking.com, and HomeAway are leading players in the paid peer-to-peer accommodation market, with Airbnb having seven million listings, Booking.com five million, and HomeAway two million. [2]\n- Airbnb holds 44% of the short-term rental market share as of 2026, while Booking.com holds ~18% and Vrbo holds ~9%, according to Skift’s 2026 short-term rental report. [3]\n- The short-term rental industry includes both traditional accommodation providers (e.g., Marriott, Accor) and peer-to-peer platforms (e.g., Airbnb, Couchsurfing), with an emerging 'new market' where they intersect — exemplified by Marriott Home & Villas, Accor onefinestay, and Airbnb Urbandoor. [2]\n\n## Financial Overview\n\n- Airbnb reported revenue of $859 million for the fourth quarter of 2020, representing a 22% year-over-year decline. [4]\n- Airbnb lost $3.9 billion in the fourth quarter of 2020. [4]\n- Airbnb's gross booking value was $5.9 billion in the fourth quarter of 2020, down 31% year-over-year. [4]\n- Airbnb's revenue fell 67% in the quarter ending June 30, 2020. [4]\n- Airbnb's total revenue is $11,943,000,064. [5]\n- Airbnb's EBITDA is $2,760,999,936. [5]\n- Airbnb's total debt is $2,278,000,128. [5]\n- Airbnb's net income to common is $2,631,000,064. [5]\n- Airbnb's price to book is 1.46. [5]\n- Airbnb's enterprise to revenue is 0.39. [5]\n- Airbnb's enterprise to EBITDA is 1.67. [5]\n\n## News\n\n- Airbnb and American Express launched an exclusive partnership, bringing over one million Airbnb listings to Amex Travel. [6]\n- Airbnb.org announced partnerships with Fisher House Foundation and Operation Healing Forces to provide free stays for service members, veterans, and their families traveling for medical treatment. [8]\n- Airbnb partnered with Tripadvisor to bring a selection of Tripadvisor experiences to the Airbnb platform, with certain tours, activities, and attractions available to book on Airbnb later in 2026. [10]\n\n## References\n\n[1] Airbnb Competitors: an Overview of the Rental Market | Hospitable — https://hospitable.com/competitors-for-airbnb\n[2] The evolution of Airbnb’s competitive landscape – Airbnb Before, During and After COVID-19 — https://uq.pressbooks.pub/airbnb-978-1-74272-321-1/chapter/the-evolution-of-airbnbs-competitive-landscape\n[3] Airbnb Competitor Platforms: The Full 2026 Host Guide - Boostly 🚀 — https://boostly.co.uk/airbnb-competitor\n[4] Airbnb financial results blow past revenue expectations — https://finance.yahoo.com/news/airbnb-reports-q-4-2020-first-earnings-results-ipo-190849653.html\n[5] Airbnb, Inc. (ABNB.NE) Valuation Measures & Financial Statistics — https://finance.yahoo.com/quote/ABNB.NE/key-statistics\n[6] American Express and Airbnb Launch Exclusive Partnership, Bringing Over 1 Million Listings to American Express Travel® — https://www.americanexpress.com/en-us/newsroom/travel-dining-experiences/amex-travel-airbnb-partnership\n[7] Airbnb Inc - Detailed Introduction, Company Background, Business Scope, Financial Data, and Market Performance | TradingKey — https://www.tradingkey.com/markets/stocks/nasdaq-abnb/company\n[8] Brian Chesky Links Airbnb Stays to $500M Housing Plan | Observer — https://observer.com/2026/11/brian-chesky-airbnb-crisis-housing-commitment\n[9] Airbnb Inc Company Profile - Airbnb Inc Overview - GlobalData — https://www.globaldata.com/company-profile/airbnb-inc\n[10] airbnb partners tripadvisor scale experiences — https://www.phocuswire.com/news/distribution/airbnb-partners-tripadvisor-scale-experiences\n[11] Airbnb — https://tavily.com/knowledge/company/Uq6QHwDcwhCL\n[12] Airbnb, Inc. (ABNB) Valuation Measures & Financial Statistics — https://finance.yahoo.com/quote/ABNB/key-statistics\n",
+      "report_checks": {
+        "chars": 4723,
+        "headings": [
+          "Company Overview",
+          "Industry Overview",
+          "Financial Overview",
+          "News",
+          "References"
+        ],
+        "inline_citation_markers": 26,
+        "reference_lines": 12,
+        "has_four_sections": true,
+        "has_references_section": true,
+        "abstain_markers": 0
+      },
+      "graph": {
+        "degraded": false,
+        "degraded_sections": [],
+        "retry_count": {},
+        "company": "Airbnb",
+        "node_trace": [
+          "grounding",
+          "research",
+          "curate",
+          "evidence_check",
+          "briefing"
+        ]
+      },
+      "entity_guard": [],
+      "llm_usage": {
+        "successful_requests": 4,
+        "total_tokens": 8121,
+        "prompt_tokens": 6339,
+        "completion_tokens": 1782
+      },
+      "elapsed_ms": 47303.7
+    }
+  ],
+  "timing": {
+    "elapsed_ms": 94437.0,
+    "note": "本机墙钟，含网络往返，非确定性字段，不代表 p95"
+  },
+  "credentials": {
+    "keys_read": [
+      "TAVILY_API_KEY",
+      "DASHSCOPE_API_KEY"
+    ],
+    "keys_printed": 0,
+    "keys_in_artifact": false
+  }
+}

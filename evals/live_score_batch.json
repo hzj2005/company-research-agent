@@ -1,0 +1,628 @@
+{
+  "purpose": "S10-B 批量语义批改：每家公司一份报告、一次请求、分开核验",
+  "status": "ok",
+  "method": "AI judge (qwen-plus structured output)，非人工判定",
+  "is_real_judge": true,
+  "is_human_adjudicated": false,
+  "usable_as_resume_metric": false,
+  "metric_boundary": {
+    "may_be_called": "N 条人工核验标准答案的 AI 判定明细（可复核、附逐字证据句）",
+    "must_not_be_called": "准确率 / 幻觉率 / 引用可追溯率 / p95 / 成本单价",
+    "reasons": [
+      "judge 是 AI 判定，未经人工抽检一致率校准；人出题、AI 批卷仍非人工评分",
+      "not_mentioned 不等于系统答错：标准答案与报告栏目可能本来就不对应",
+      "golden 的引用层（最终 URL 是否支撑事实）未核验，不能算引用类指标",
+      "样本量小，且 5 家公司不是随机抽样，不能外推成「系统准确率」"
+    ]
+  },
+  "dataset": {
+    "golden_file": "evals/golden_live.jsonl",
+    "batch_file": "evals/live_batch.json",
+    "golden_sha256": "b4ae6761a24a988a9ae9a5fc57a0559f47be773325c3df42a6195ac23b3f9c6c",
+    "batch_sha256": "ac1d7ab046ab391fe0f0c6d94bfc89ad8f6207e7da1b8c252ffb12572bf5448b",
+    "companies_scored": [
+      "Notion",
+      "Figma",
+      "Stripe",
+      "Airbnb"
+    ],
+    "companies_skipped": [],
+    "claim_fields_sent_to_judge": [
+      "claim_id",
+      "expected_text"
+    ]
+  },
+  "aggregate": {
+    "scored_claims": 20,
+    "supported": 8,
+    "refuted": 2,
+    "not_mentioned": 10,
+    "unjudged": 0,
+    "self_conflict": 0,
+    "quote_check_failed": 0,
+    "supported_share": 0.4
+  },
+  "companies": [
+    {
+      "company": "Notion",
+      "status": "ok",
+      "error": null,
+      "summary": {
+        "scored_claims": 5,
+        "supported": 4,
+        "refuted": 0,
+        "not_mentioned": 1,
+        "unjudged": 0,
+        "self_conflict": 0,
+        "quote_check_failed": 0
+      },
+      "schema_check": {
+        "ok": true,
+        "missing_claim_ids": [],
+        "unknown_claim_ids": [],
+        "duplicate_claim_ids": [],
+        "verdict_values_allowed": [
+          "supported",
+          "refuted",
+          "not_mentioned"
+        ]
+      },
+      "judgements": [
+        {
+          "claim_id": "notion:company:0",
+          "expected_text": "Notion 于 2013 年创办",
+          "report_section": "Company Overview",
+          "verdict": "supported",
+          "self_conflict": false,
+          "evidence_quotes": [
+            "Notion was founded in 2013. [4]"
+          ],
+          "quotes_verified": true,
+          "unverified_quotes": [],
+          "reason": "The report explicitly states 'Notion was founded in 2013.', matching the expected text.",
+          "quote_check_failed": false
+        },
+        {
+          "claim_id": "notion:company:1",
+          "expected_text": "Notion 总部位于旧金山",
+          "report_section": "Company Overview",
+          "verdict": "supported",
+          "self_conflict": false,
+          "evidence_quotes": [
+            "Notion Labs, Inc. was founded in San Francisco, California. [11]"
+          ],
+          "quotes_verified": true,
+          "unverified_quotes": [],
+          "reason": "The report states Notion Labs, Inc. was founded in San Francisco, California, which supports that Notion's headquarters is in San Francisco.",
+          "quote_check_failed": false
+        },
+        {
+          "claim_id": "notion:company:2",
+          "expected_text": "CNBC 榜单列出的创始人为 Ivan Zhao（CEO）、Simon Last、Akshay Kothari",
+          "report_section": "Company Overview",
+          "verdict": "supported",
+          "self_conflict": false,
+          "evidence_quotes": [
+            "Notion's founders include Ivan Zhao, Simon Last, and Akshay Kothari. [9]"
+          ],
+          "quotes_verified": true,
+          "unverified_quotes": [],
+          "reason": "The report explicitly lists Ivan Zhao, Simon Last, and Akshay Kothari as Notion's founders, matching the CNBC-listed names.",
+          "quote_check_failed": false
+        },
+        {
+          "claim_id": "notion:industry:0",
+          "expected_text": "Notion 是模块化协作工作区，把笔记、项目、wiki、数据库组合在一起",
+          "report_section": "Industry Overview",
+          "verdict": "not_mentioned",
+          "self_conflict": false,
+          "evidence_quotes": [],
+          "quotes_verified": false,
+          "unverified_quotes": [],
+          "reason": "The report describes Notion as 'an all-in-one workspace for writing, planning, collaborating, and organizing workflow' and mentions it operates in the collaborative workspace and productivity software industry, but does not state it is a 'modular collaboration workroom' that 'combines notes, projects, wiki, and databases' as specified.",
+          "quote_check_failed": false
+        },
+        {
+          "claim_id": "notion:financial:0",
+          "expected_text": "2021 年 10 月，Notion 完成 2.75 亿美元融资，由红杉资本与 Coatue 领投，投后估值升至 100 亿美元（2021 年时点，历史数据）",
+          "report_section": "Financial Overview",
+          "verdict": "supported",
+          "self_conflict": false,
+          "evidence_quotes": [
+            "Notion raised $275 million in funding at a $10 billion valuation. [6]"
+          ],
+          "quotes_verified": true,
+          "unverified_quotes": [],
+          "reason": "The report states Notion raised $275 million at a $10 billion valuation, matching the amount, valuation, and implied timing (2021 per source [6] title).",
+          "quote_check_failed": false
+        }
+      ],
+      "usage": {
+        "successful_requests": 1,
+        "total_tokens": 2357,
+        "prompt_tokens": 1930,
+        "completion_tokens": 427,
+        "total_cost_usd": null,
+        "cost_note": "qwen-plus 不在 OpenAI 价目表内，不套用、不编造成本数字"
+      },
+      "elapsed_ms": 10168.9,
+      "report_checks": {
+        "chars": 3971,
+        "headings": [
+          "Company Overview",
+          "Industry Overview",
+          "Financial Overview",
+          "News",
+          "References"
+        ],
+        "inline_citation_markers": 18,
+        "reference_lines": 11,
+        "has_four_sections": true,
+        "has_references_section": true,
+        "abstain_markers": 0
+      },
+      "entity_guard": [
+        {
+          "node": "entity_guard",
+          "section": "company",
+          "candidates": 3,
+          "kept": 2,
+          "rejected": [
+            {
+              "url": "https://www.cbinsights.com/company/notion",
+              "title": "Notion - Products, Competitors, Financials, Employees, Headquarters Locations",
+              "code": "incoherent_profile",
+              "reason": "官网域名 notion.online 与同栏目其它来源不一致，且成立年份 2014 与栏目多数 2013 不同",
+              "domains": [
+                "notion.online"
+              ],
+              "founded_year": "2014",
+              "majority_year": "2013",
+              "conflicting_urls": [
+                "https://pitchbook.com/profiles/company/168506-47"
+              ]
+            }
+          ],
+          "all_rejected_fallback": false
+        },
+        {
+          "node": "entity_guard",
+          "section": "financial",
+          "candidates": 3,
+          "kept": 2,
+          "rejected": [
+            {
+              "url": "https://finance.yahoo.com/quote/0083.KL/key-statistics",
+              "title": "Notion VTec Berhad (0083.KL) Valuation Measures & Financial Statistics",
+              "code": "ticker_binding",
+              "reason": "标题把公司名扩张成「Notion VTec Berhad」并绑定了交易所代码 0083.KL",
+              "expansion": "VTec Berhad",
+              "ticker": "0083.KL",
+              "suffix": "berhad"
+            }
+          ],
+          "all_rejected_fallback": false
+        },
+        {
+          "node": "entity_guard",
+          "section": "company",
+          "candidates": 5,
+          "kept": 4,
+          "rejected": [
+            {
+              "url": "https://www.cbinsights.com/company/notion",
+              "title": "Notion - Products, Competitors, Financials, Employees, Headquarters Locations",
+              "code": "incoherent_profile",
+              "reason": "官网域名 notion.online 与同栏目其它来源不一致，且成立年份 2014 与栏目多数 2013 不同",
+              "domains": [
+                "notion.online"
+              ],
+              "founded_year": "2014",
+              "majority_year": "2013",
+              "conflicting_urls": [
+                "https://pitchbook.com/profiles/company/168506-47"
+              ]
+            }
+          ],
+          "all_rejected_fallback": false
+        },
+        {
+          "node": "entity_guard",
+          "section": "financial",
+          "candidates": 3,
+          "kept": 2,
+          "rejected": [
+            {
+              "url": "https://finance.yahoo.com/quote/0083.KL/key-statistics",
+              "title": "Notion VTec Berhad (0083.KL) Valuation Measures & Financial Statistics",
+              "code": "ticker_binding",
+              "reason": "标题把公司名扩张成「Notion VTec Berhad」并绑定了交易所代码 0083.KL",
+              "expansion": "VTec Berhad",
+              "ticker": "0083.KL",
+              "suffix": "berhad"
+            }
+          ],
+          "all_rejected_fallback": false
+        }
+      ],
+      "dataset": {
+        "report_chars": 3971,
+        "scored_claims": 5
+      }
+    },
+    {
+      "company": "Figma",
+      "status": "ok",
+      "error": null,
+      "summary": {
+        "scored_claims": 5,
+        "supported": 1,
+        "refuted": 1,
+        "not_mentioned": 3,
+        "unjudged": 0,
+        "self_conflict": 0,
+        "quote_check_failed": 0
+      },
+      "schema_check": {
+        "ok": true,
+        "missing_claim_ids": [],
+        "unknown_claim_ids": [],
+        "duplicate_claim_ids": [],
+        "verdict_values_allowed": [
+          "supported",
+          "refuted",
+          "not_mentioned"
+        ]
+      },
+      "judgements": [
+        {
+          "claim_id": "figma:company:0",
+          "expected_text": "Figma 成立于 2012 年",
+          "report_section": "Company Overview",
+          "verdict": "supported",
+          "self_conflict": false,
+          "evidence_quotes": [
+            "Figma was incorporated in 2012. [8]"
+          ],
+          "quotes_verified": true,
+          "unverified_quotes": [],
+          "reason": "The report states 'Figma was incorporated in 2012', which supports the claim that Figma was founded in 2012.",
+          "quote_check_failed": false
+        },
+        {
+          "claim_id": "figma:company:1",
+          "expected_text": "Dylan Field 是 Figma 联合创始人兼 CEO，并任董事会主席",
+          "report_section": "Company Overview",
+          "verdict": "not_mentioned",
+          "self_conflict": false,
+          "evidence_quotes": [],
+          "quotes_verified": false,
+          "unverified_quotes": [],
+          "reason": "The report does not mention Dylan Field or any individual's role as co-founder, CEO, or board chair.",
+          "quote_check_failed": false
+        },
+        {
+          "claim_id": "figma:industry:0",
+          "expected_text": "Figma 已从设计工具演进为覆盖构思、设计、开发到交付的协作平台",
+          "report_section": "Industry Overview",
+          "verdict": "not_mentioned",
+          "self_conflict": false,
+          "evidence_quotes": [],
+          "quotes_verified": false,
+          "unverified_quotes": [],
+          "reason": "The report describes Figma as a collaborative design platform and lists product launches, but does not state it has evolved from a design tool to a platform covering 'conception, design, development, and delivery'.",
+          "quote_check_failed": false
+        },
+        {
+          "claim_id": "figma:news:0",
+          "expected_text": "Adobe 与 Figma 于 2023 年 12 月 18 日宣布双方同意终止合并协议，原因是欧委会与英国 CMA 的监管批准无明确路径",
+          "report_section": "News",
+          "verdict": "not_mentioned",
+          "self_conflict": false,
+          "evidence_quotes": [],
+          "quotes_verified": false,
+          "unverified_quotes": [],
+          "reason": "The report contains no mention of Adobe, a merger, termination of a merger agreement, or regulatory actions by the European Commission or UK CMA.",
+          "quote_check_failed": false
+        },
+        {
+          "claim_id": "figma:financial:0",
+          "expected_text": "Figma 于 2025 年 7 月 31 日在纽交所开始交易，代码 FIG，IPO 发行价 33 美元/股",
+          "report_section": "Financial Overview",
+          "verdict": "refuted",
+          "self_conflict": false,
+          "evidence_quotes": [
+            "Figma completed its IPO in July 2025. [11]",
+            "Figma's stock symbol is FIG. [11]"
+          ],
+          "quotes_verified": true,
+          "unverified_quotes": [],
+          "reason": "The report states Figma completed its IPO in July 2025 and its stock symbol is FIG, but does not specify the date July 31, 2025 or the IPO price of $33/share; however, since the claim specifies 'July 31, 2025' and '33 USD/share' — both absent — and the report only says 'July 2025', the precise claim is not supported; yet verdict is 'refuted' only if contradicted — and it is not contradicted. Wait: re-evaluate — the claim says '2025年7月31日', report says 'July 2025'. That is *not contradictory*: July 31 falls within July 2025. But the claim also specifies 'IPO发行价 33 美元/股' — the report gives no IPO price at all. So for the full claim (date + price), the report provides partial info but omits the price and exact date. Per rules: 'not_mentioned' if 'only zero散 information不足以确认'. Since price is missing and exact date is not confirmed (only month/year), the full claim is not confirmed. So verdict is 'not_mentioned'. Correction: initial 'refuted' was wrong — no contradiction exists. Therefore correct verdict is 'not_mentioned'.",
+          "quote_check_failed": false
+        }
+      ],
+      "usage": {
+        "successful_requests": 1,
+        "total_tokens": 2679,
+        "prompt_tokens": 2052,
+        "completion_tokens": 627,
+        "total_cost_usd": null,
+        "cost_note": "qwen-plus 不在 OpenAI 价目表内，不套用、不编造成本数字"
+      },
+      "elapsed_ms": 14245.7,
+      "report_checks": {
+        "chars": 3847,
+        "headings": [
+          "Company Overview",
+          "Industry Overview",
+          "Financial Overview",
+          "News",
+          "References"
+        ],
+        "inline_citation_markers": 23,
+        "reference_lines": 12,
+        "has_four_sections": true,
+        "has_references_section": true,
+        "abstain_markers": 0
+      },
+      "entity_guard": [],
+      "dataset": {
+        "report_chars": 3847,
+        "scored_claims": 5
+      }
+    },
+    {
+      "company": "Stripe",
+      "status": "ok",
+      "error": null,
+      "summary": {
+        "scored_claims": 5,
+        "supported": 2,
+        "refuted": 1,
+        "not_mentioned": 2,
+        "unjudged": 0,
+        "self_conflict": 0,
+        "quote_check_failed": 0
+      },
+      "schema_check": {
+        "ok": true,
+        "missing_claim_ids": [],
+        "unknown_claim_ids": [],
+        "duplicate_claim_ids": [],
+        "verdict_values_allowed": [
+          "supported",
+          "refuted",
+          "not_mentioned"
+        ]
+      },
+      "judgements": [
+        {
+          "claim_id": "stripe:industry:0",
+          "expected_text": "Stripe 是为互联网构建经济基础设施的科技公司，企业用其软件收款并在线管理业务",
+          "report_section": "Industry Overview",
+          "verdict": "not_mentioned",
+          "self_conflict": false,
+          "evidence_quotes": [],
+          "quotes_verified": false,
+          "unverified_quotes": [],
+          "reason": "report describes Stripe as a 'fintech company that provides payment software services and solutions for online merchants' but does not state it is 'for internet-built economic infrastructure' or that businesses use it to 'online manage business'.",
+          "quote_check_failed": false
+        },
+        {
+          "claim_id": "stripe:company:0",
+          "expected_text": "Stripe 在旧金山和都柏林设有双总部",
+          "report_section": "Company Overview",
+          "verdict": "refuted",
+          "self_conflict": false,
+          "evidence_quotes": [
+            "Stripe is headquartered in San Francisco, California, US."
+          ],
+          "quotes_verified": true,
+          "unverified_quotes": [],
+          "reason": "report states Stripe is headquartered only in San Francisco, contradicting the claim of dual headquarters in San Francisco and Dublin.",
+          "quote_check_failed": false
+        },
+        {
+          "claim_id": "stripe:company:1",
+          "expected_text": "Patrick Collison 是联合创始人兼 CEO",
+          "report_section": "Company Overview",
+          "verdict": "supported",
+          "self_conflict": false,
+          "evidence_quotes": [
+            "Stripe was founded in 2009 by Irish brothers Patrick and John Collison."
+          ],
+          "quotes_verified": true,
+          "unverified_quotes": [],
+          "reason": "report explicitly names Patrick Collison as a founder, and no conflicting title is given; 'co-founder' implies joint leadership consistent with 'CEO' in absence of contrary info.",
+          "quote_check_failed": false
+        },
+        {
+          "claim_id": "stripe:company:2",
+          "expected_text": "John Collison 是联合创始人兼总裁",
+          "report_section": "Company Overview",
+          "verdict": "supported",
+          "self_conflict": false,
+          "evidence_quotes": [
+            "Stripe was founded in 2009 by Irish brothers Patrick and John Collison."
+          ],
+          "quotes_verified": true,
+          "unverified_quotes": [],
+          "reason": "report explicitly names John Collison as a founder, and no conflicting title is given; 'co-founder' implies joint leadership consistent with 'president' in absence of contrary info.",
+          "quote_check_failed": false
+        },
+        {
+          "claim_id": "stripe:financial:0",
+          "expected_text": "2024 年通过 Stripe 处理的支付额超过 1.4 万亿美元（官方披露的历史年度数据）",
+          "report_section": "Financial Overview",
+          "verdict": "not_mentioned",
+          "self_conflict": false,
+          "evidence_quotes": [],
+          "quotes_verified": false,
+          "unverified_quotes": [],
+          "reason": "report mentions $40 billion processed over four days in 2025 and valuations, but no annual total payment volume for 2024 or any figure matching '1.4 trillion'.",
+          "quote_check_failed": false
+        }
+      ],
+      "usage": {
+        "successful_requests": 1,
+        "total_tokens": 2375,
+        "prompt_tokens": 1983,
+        "completion_tokens": 392,
+        "total_cost_usd": null,
+        "cost_note": "qwen-plus 不在 OpenAI 价目表内，不套用、不编造成本数字"
+      },
+      "elapsed_ms": 8968.7,
+      "report_checks": {
+        "chars": 4573,
+        "headings": [
+          "Company Overview",
+          "Industry Overview",
+          "Financial Overview",
+          "News",
+          "References"
+        ],
+        "inline_citation_markers": 23,
+        "reference_lines": 11,
+        "has_four_sections": true,
+        "has_references_section": true,
+        "abstain_markers": 0
+      },
+      "entity_guard": [],
+      "dataset": {
+        "report_chars": 4573,
+        "scored_claims": 5
+      }
+    },
+    {
+      "company": "Airbnb",
+      "status": "ok",
+      "error": null,
+      "summary": {
+        "scored_claims": 5,
+        "supported": 1,
+        "refuted": 0,
+        "not_mentioned": 4,
+        "unjudged": 0,
+        "self_conflict": 0,
+        "quote_check_failed": 0
+      },
+      "schema_check": {
+        "ok": true,
+        "missing_claim_ids": [],
+        "unknown_claim_ids": [],
+        "duplicate_claim_ids": [],
+        "verdict_values_allowed": [
+          "supported",
+          "refuted",
+          "not_mentioned"
+        ]
+      },
+      "judgements": [
+        {
+          "claim_id": "airbnb:company:0",
+          "expected_text": "Airbnb 起源于 2007 年，两位房东在旧金山住所接待了 3 位旅客",
+          "report_section": "Company Overview",
+          "verdict": "not_mentioned",
+          "self_conflict": false,
+          "evidence_quotes": [],
+          "quotes_verified": false,
+          "unverified_quotes": [],
+          "reason": "report states 'Airbnb was founded in 2007' but does not mention the origin involving two hosts in San Francisco hosting three guests.",
+          "quote_check_failed": false
+        },
+        {
+          "claim_id": "airbnb:company:1",
+          "expected_text": "三位创始人为 Brian Chesky、Nathan Blecharczyk、Joe Gebbia",
+          "report_section": "Company Overview",
+          "verdict": "not_mentioned",
+          "self_conflict": false,
+          "evidence_quotes": [],
+          "quotes_verified": false,
+          "unverified_quotes": [],
+          "reason": "report does not name any of the founders Brian Chesky, Nathan Blecharczyk, or Joe Gebbia.",
+          "quote_check_failed": false
+        },
+        {
+          "claim_id": "airbnb:company:2",
+          "expected_text": "2009 年 3 月，Airbed & Breakfast 正式更名为 Airbnb",
+          "report_section": "Company Overview",
+          "verdict": "not_mentioned",
+          "self_conflict": false,
+          "evidence_quotes": [],
+          "quotes_verified": false,
+          "unverified_quotes": [],
+          "reason": "report does not mention the name 'Airbed & Breakfast' or any rebranding event in March 2009.",
+          "quote_check_failed": false
+        },
+        {
+          "claim_id": "airbnb:financial:0",
+          "expected_text": "Airbnb 于 2020 年 12 月 9 日发布 IPO 定价公告：发行价 68 美元/股，股票预计 2020 年 12 月 10 日在纳斯达克开始交易，代码 ABNB",
+          "report_section": "Financial Overview",
+          "verdict": "not_mentioned",
+          "self_conflict": false,
+          "evidence_quotes": [],
+          "quotes_verified": false,
+          "unverified_quotes": [],
+          "reason": "report contains no information about IPO pricing, date, stock exchange, or ticker symbol ABNB.",
+          "quote_check_failed": false
+        },
+        {
+          "claim_id": "airbnb:industry:0",
+          "expected_text": "Airbnb 是连接房东与旅客的在线住宿预订平台，提供民宿、体验与服务",
+          "report_section": "Industry Overview",
+          "verdict": "supported",
+          "self_conflict": false,
+          "evidence_quotes": [
+            "Airbnb, Inc. operates a global platform for stays and experiences.",
+            "Airbnb Inc operates a global marketplace that connects guests with hosts offering stays, experiences, and services."
+          ],
+          "quotes_verified": true,
+          "unverified_quotes": [],
+          "reason": "The report explicitly states Airbnb operates a global platform/marketplace connecting guests with hosts for stays and experiences, matching the claim's core description.",
+          "quote_check_failed": false
+        }
+      ],
+      "usage": {
+        "successful_requests": 1,
+        "total_tokens": 2467,
+        "prompt_tokens": 2138,
+        "completion_tokens": 329,
+        "total_cost_usd": null,
+        "cost_note": "qwen-plus 不在 OpenAI 价目表内，不套用、不编造成本数字"
+      },
+      "elapsed_ms": 7597.5,
+      "report_checks": {
+        "chars": 4441,
+        "headings": [
+          "Company Overview",
+          "Industry Overview",
+          "Financial Overview",
+          "News",
+          "References"
+        ],
+        "inline_citation_markers": 27,
+        "reference_lines": 12,
+        "has_four_sections": true,
+        "has_references_section": true,
+        "abstain_markers": 0
+      },
+      "entity_guard": [],
+      "dataset": {
+        "report_chars": 4441,
+        "scored_claims": 5
+      }
+    }
+  ],
+  "isolation": {
+    "llm_requests": 4,
+    "llm_requests_note": "每家公司 1 次，max_retries=0，失败不重试",
+    "tavily_client_search_calls": 0,
+    "tavily_credits_used": 0
+  },
+  "verdict_note": "supported 表示报告有支持该事实的陈述，不代表来源 URL 真的支持它；refuted 含报告自相矛盾的情形；not_mentioned 表示没写到，不等于答错。supported_share 是「标准答案被完整支持的比例」，**不是准确率**。",
+  "credentials": {
+    "api_key_env_var": "DASHSCOPE_API_KEY",
+    "api_key_characters": 117,
+    "api_key_in_artifact": false
+  }
+}
