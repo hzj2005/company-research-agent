@@ -1,5 +1,7 @@
 """简报生成节点（S5-B：模板基线 / 结构化输出双路径）。
 
+从 capabilities.briefing 后端与结构化契约，补一份「按栏目段落」的正文：
+
 两条硬约定始终成立：
 1. 正文行内引用 [n] 与末尾 References **来自同一份** `state["references"]`；
 2. 降级栏目直接输出「该类信息未找到公开依据」，绝不拿低分/无关内容硬凑。
@@ -12,6 +14,10 @@
 
 结构化抽取失败属于「生成失败」，与 evidence_check 判定的「检索证据不足」是两类降级：
 只在报告与 `briefings` 里拒答、在 `review_notes` 留痕，不改写 `degraded_sections`。
+
+S10 起 `on` 路径多一步**同栏目事实冲突标注**（`capabilities/conflict.py`）：同一栏目
+对同一槽位给出两个取值时，在该栏目末尾追加一行 markdown 引用块说明冲突。用引用块而不是
+bullet 是刻意的 —— 它不是事实陈述，不该出现在「每条 bullet 都必须带引用」的统计里。
 """
 
 from __future__ import annotations
@@ -19,6 +25,7 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from capabilities.briefing import BriefingBackend, make_briefing_backend
+from capabilities.conflict import detect_conflicts
 from capabilities.structured import extract_section_brief
 from config.loader import Settings
 from graph.state import ResearchState, Section
@@ -113,12 +120,12 @@ async def _render_structured(
         if section in degraded:
             text = settings.graph.degrade.message
             lines.append(f"- {text}")
-            briefings[section] = {"status": "degraded", "text": text}
+            briefings[section] = {"status": "degraded", "text": text, "conflicts": []}
             lines.append("")
             continue
         if not selected[section]:
             lines.append(f"- {settings.graph.degrade.message}")
-            briefings[section] = {"status": "no_evidence", "docs": []}
+            briefings[section] = {"status": "no_evidence", "docs": [], "conflicts": []}
             lines.append("")
             continue
 
@@ -137,6 +144,7 @@ async def _render_structured(
                 "status": "extraction_degraded",
                 "text": text,
                 "docs": [],
+                "conflicts": [],
             }
         else:
             for fact in result.brief.facts:
@@ -146,10 +154,30 @@ async def _render_structured(
                     else ""
                 )
                 lines.append(f"- {fact.claim}{marker}")
+            # S10：同栏目事实冲突前置 —— 检出后**标注而不是改写**，因为来源本身
+            # 可能就有错（真机里分数更高的 CB Insights 反而给了错的成立年份）
+            conflicts = (
+                detect_conflicts(result.brief.facts)
+                if settings.features.conflict_annotation
+                else []
+            )
+            for conflict in conflicts:
+                lines.append(f"> {conflict.render(norm_index)}")
             briefings[section] = {
                 "status": "ok",
                 "docs": [d["url"] for d in selected[section]],
                 "facts": [f.model_dump(mode="json") for f in result.brief.facts],
+                "conflicts": [
+                    {
+                        "slot": c.slot,
+                        "label": c.label,
+                        "values": [
+                            {"value": v.display, "source_urls": list(v.source_urls)}
+                            for v in c.values
+                        ],
+                    }
+                    for c in conflicts
+                ],
             }
         lines.append("")
     return lines, briefings, notes

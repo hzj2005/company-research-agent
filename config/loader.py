@@ -121,6 +121,9 @@ class FeaturesConfig(_Strict):
     inline_citations: bool
     human_review: bool
     auto_approve_review: bool
+    # S10：默认开启，可关掉做 A/B（关掉即回到「不消歧 / 不标冲突」的 S9 行为）
+    entity_guard: bool = True
+    conflict_annotation: bool = True
 
 
 class ReportConfig(_Strict):

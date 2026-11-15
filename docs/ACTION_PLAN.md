@@ -34,6 +34,7 @@
 | **S7** | #7 评测台 | ~~30–50 真实公司~~ → fixture 派生 golden（3 场景 / 23 claim / 1 拒答）、8 项指标、4 组 A/B、scorecard、CI | `evals/`、`.github/workflows/eval.yml` | 一条命令出分，能定位退化用例 | ✅ 完成（11.1–11.9，仅 fixture；**真实 golden 归 S8**） |
 | **S8** | #8 真实实测 | 切 `APP_MODE=live`，真实模型 + 真实 Tavily + 真实 DB 跑全量 | 对比表、失败案例、成本/延迟取舍 | 每个数字能由脚本与日志当场复现 | 🟢 S8.0–S8.6 全部完成（累计 8/50 credits、6 次模型请求、1 份真实报告、25 条人工核验 golden、1 次真实语义 judge、fixture vs 真机对比表、30 条可复现简历数字出处表，见 `docs/LIVE_REPORT.md` / `docs/RESUME_EVIDENCE.md`）；S9 已完成，见 12.18 |
 | **S9** | #9 简历交付 | 3–4 条描述 + 面试追问清单 | `docs/RESUME.md` | 每条能指到具体文件与 commit | ✅ 完成（12.16 规划 / 12.18 执行）：4 条描述 + 18 条追问，数字全部由出处表插值，`tests/test_s9_resume.py` 17 条护栏 |
+| **S10** | #10 质量修复（S9 之后追加） | 同名实体消歧 + 同栏目冲突前置 | `capabilities/entity_guard.py`、`capabilities/conflict.py`、`graph/nodes/collect.py`、`graph/nodes/report.py` | 真机三类硬伤里的两类被堵住，且不误杀 | ✅ 完成（12.20）：真实缓存回放 12 篇 → 拒 2 篇，References 11 → 9；56 条新护栏 |
 
 **顺序约束**：S2 是 S3/S4/S5/S6 的前置（都要改 `graph.py` / `state.py`），必须串行；S6 依赖 S2 的 checkpointer；S8 依赖 S7 且需要 key。
 
@@ -1143,3 +1144,95 @@ Tavily 仍 8 / 50。
 **下一步（可选，需用户拍板）**：① 扩到多家真实报告（要 Tavily credits + 模型调用）；
 ② 实体消歧与冲突前置两个修复（改图，不动额度）；③ 把 `docs/RESUME.md` 的 4 条按目标岗位
 （Agent 工程 / RAG / 后端）各出一版侧重点不同的措辞。
+
+### 12.20 S10 执行结果：同名实体消歧 + 同栏目冲突前置（2026-11-15，0 调用 / 0 credits）
+
+用户在三个可选项里选了「① 修两个硬伤 → ② 扩真实样本 → ③ 多版措辞」，本节只做 ①。
+**本轮 0 次 Tavily 调用、0 次模型请求**，全部验证都用已有的真实检索缓存在离线完成。
+
+#### 12.20.1 先纠正一个判断：那两个症状是同一个根因
+
+S8.4 当时把真机报告的三处硬伤分别记成「自相矛盾」「事实错」「实体混淆」。
+这次回看 `evals/cache/tavily/` 的**原文**（不是报告里的转述），发现前两处是同一件事：
+
+`cbinsights.com/company/notion` 那一页正文写着 `notion.online`、
+"editorial publishing and curation within the music, fashion, and creative industries"、
+"founded in 2014 and is based in London, England"、"51 Lloyd Baker Street" ——
+那是**一家做音乐时尚内容与半年刊杂志的英国公司**，和做协作工具的那个 Notion 只是重名。
+所以「2013 与 2014 矛盾」「总部写成伦敦门牌」不是来源打架，是**两家公司被当成一家**。
+
+这条纠正很重要：如果按原判断去做「按置信度选一条」，真机里 CB Insights 的 score 是 0.77、
+PitchBook 是 0.72，会保留**错的**那个（Notion 实际成立于 2013 年）。**用置信度替读者
+做决定，在来源本身就错的情况下比并列更糟。**
+
+#### 12.20.2 实现：三条规则 + 两道护栏
+
+新增 `capabilities/entity_guard.py`，接在 `curate` 的最前面（阈值判定之前）——
+名字不对的文档不该占用证据预算，也不该出现在 References 里。
+
+| 规则 | 判据 | 真机命中 |
+|---|---|---|
+| `ticker_binding` | 标题里 `{公司名} <扩展名> (<交易所代码>)` 且扩展名含**法域后缀**（Berhad/Bhd/Pte/GmbH/AG/…） | `Notion VTec Berhad (0083.KL) Valuation Measures` |
+| `listing_page` | 标题扩展名含法域后缀 **且** 正文命中 ≥2 个股票行情词（无 ticker 括号时兜底） | 同上（主规则失效时才用） |
+| `incoherent_profile` | 同栏目两篇文档的**官网域名无交集**，且其中一篇的**成立年份不是栏目多数** | `notion.online` / 2014（栏目多数 2013） |
+
+**刻意不做的事**：不猜 `Sia Partners buys … Notion Consulting` 这类同名不同业务的公司。
+它们没有行情页特征、也没有域名冲突，任何纯字面规则都会误杀 —— `Notion Labs, Inc.` 就是
+Notion 自己注册的实体名。这类留在报告里，如实标为「检索相关性」问题而非实体问题。
+
+**两道护栏**：
+1. **全灭护栏**：某栏目所有文档都被判异实体 → 说明规则在这家公司名上失效（例如用户调研的
+   正是那家带法域后缀的外国公司）→ 全部放行并留痕 `all_rejected_fallback`。隔离器不许清空栏目。
+2. **开关必须两阶段都停**：第一版只让单文档规则看 `features.entity_guard`，跨文档一致性还在
+   偷偷改证据集 —— 离线回放对照时发现「关掉的版本也拒了 cbinsights」，才补上。
+
+#### 12.20.3 冲突前置：第二道防线，只标注不改写
+
+新增 `capabilities/conflict.py`，在 `features.structured_output=on` 的路径上工作，
+检测三个槽位：成立年份 / 总部位置 / 员工人数（后者只标不判——同一公司不同年份员工数本就不同）。
+检出冲突时在该栏目末尾追加一行 markdown 引用块：
+
+```
+> **来源冲突**：成立年份出现 2 个取值 —— 2013 [6] / 2014 [4]，来源之间不一致，未判定哪个正确
+```
+
+四个刻意的设计：
+- **用 `> ` 而不是 `- `**：它不是事实陈述，不能混进「每条 bullet 都必须带引用」的统计；
+- **不改写、不删除任何 fact**：真机已经证明「分数高的那条反而错」，自动取舍会引入新错误；
+- **关键词去停用词后比 token 集合**：`London` 与 `London, England` 不报冲突；
+- **员工数留 10% 容差**：避免把四舍五入当冲突。
+
+#### 12.20.4 验证：真实缓存离线回放，0 调用
+
+12 篇真实检索原文（`evals/cache/tavily/`，2026-11-14 那次真实运行的原始返回）分栏目回放：
+
+| 栏目 | 候选 | 保留 | 拒绝 | 理由 |
+|---|---|---|---|---|
+| company | 3 | 2 | 1 | `notion.online` 域名不一致 + 2014 非多数年 |
+| financial | 3 | 2 | 1 | 标题绑定 `0083.KL`，扩展名含 `Berhad` |
+| industry | 3 | 3 | 0 | — |
+| news | 3 | 3 | 0 | — |
+
+端到端对照（开关 off / on 各跑一遍 `curate`）：
+
+- **off：11 条 References** —— 与真机产物 `evals/live_run.json` 的 11 条一致，证明回放语料就是那次运行；
+- **on：9 条 References** —— 恰好少掉 `finance.yahoo.com/quote/0083.KL` 和 `cbinsights.com/company/notion`，
+  其余 9 条一条不动。
+
+**这不是「拒得多所以更好」**：真机报告 27 条结论里有 10 条来自 VTec 那篇、4 条来自 notion.online 那篇，
+按条数算接近一半的硬伤内容被移除，而真身来源零损失。
+
+#### 12.20.5 验收
+
+| 项 | 结果 |
+|---|---|
+| 全量测试 | **438 passed**（新增 `tests/test_s10_entity_guard.py` 36 条 + `tests/test_s10_conflict.py` 20 条） |
+| 真实缓存回放 | 12 篇 → 拒 2 篇，0 误杀；被拒 url 与 code 逐条断言 |
+| A/B 对照 | `entity_guard=off` 时 11 条引用原样回来（含开关 bug 的回归用例） |
+| 冲突标注 | 关掉标注后报告 == 开启版去掉 `> ` 行，**逐字相同**（「只加不改」的可执行证明） |
+| 依赖 / 额度 | `uv pip check` 103 包兼容；Tavily 仍 **8 / 50**；本轮 **0 调用 0 credits** |
+
+**如实边界**：这次修的是「同名实体混入」与「冲突被抹平」，不改变
+`docs/LIVE_SCORE.md` 里 `supported=0 / refuted=2 / not_mentioned=3` 那份判定 ——
+那份判定是对**修复前**那份报告做的，保留原样以维持时间线真实。修复后的报告值多少分，
+需要重新跑一次真实模型抽取 + judge，归 ②（要 credits）。
