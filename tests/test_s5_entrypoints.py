@@ -108,3 +108,47 @@ def test_upstream_graph_not_used_by_entrypoints() -> None:
     assert not re.search(r"^\s*graph\s*=\s*Graph\(", entry_src, flags=re.M)
     assert not re.search(r"^\s*graph\s*=\s*Graph\(", app_src, flags=re.M)
     assert "build_graph(" in app_src and "build_graph(" in entry_src
+
+
+def test_research_rejects_blank_company() -> None:
+    """空公司名不能 200：否则会真的跑一次没有意义的调研，还在台账留一条记录。"""
+    from fastapi.testclient import TestClient
+
+    import application
+
+    with TestClient(application.app) as client:
+        for payload in ({"company": ""}, {"company": "   "}, {}):
+            response = client.post("/research", json=payload)
+            assert response.status_code == 422, f"{payload} -> {response.status_code}"
+
+
+def test_research_strips_company_whitespace() -> None:
+    """`  Notion  ` 存进台账的应该是 `Notion`，不是带空格的原文。"""
+    import time
+
+    from fastapi.testclient import TestClient
+
+    import application
+    from backend.classes.state import job_status
+
+    with TestClient(application.app) as client:
+        response = client.post("/research", json={"company": "  Notion  "})
+        assert response.status_code == 200
+        jid = response.json()["job_id"]
+        assert job_status[jid]["company"] == "Notion"
+        for _ in range(80):
+            if job_status[jid].get("status") in ("completed", "failed"):
+                break
+            time.sleep(0.05)
+
+
+def test_health_endpoints_answer() -> None:
+    """/api/health 是给外部探活的别名，不能是 404。"""
+    from fastapi.testclient import TestClient
+
+    import application
+
+    with TestClient(application.app) as client:
+        for path in ("/health", "/api/health", "/"):
+            response = client.get(path)
+            assert response.status_code == 200, f"{path} -> {response.status_code}"

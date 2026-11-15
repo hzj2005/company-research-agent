@@ -1465,3 +1465,33 @@ as a PostCSS plugin. The PostCSS plugin has moved to a separate package ...
 **验证**：`npm run build` 通过（1773 modules，CSS 35.91 kB / JS 532.91 kB，tsc 无错）；
 dev server 下 `/src/index.css` 返回 50 KB 编译结果、`.flex`/`.text-` 等工具类正常生成、
 字体 200。这类问题用 `curl` 看首页 200 是查不出来的——**首页永远是 200，错在样式编译**。
+
+---
+
+### 12.26 前后端联合复查：5 处契约不符（2026-11-15，0 调用 / 0 credits）
+
+检查方式不是"再跑一遍测试"，而是三张清单对齐：
+**后端 openapi 里的真实路由** × **前端所有 fetch/EventSource 调用点** × **每个接口手工打一遍**。
+
+| # | 问题 | 现象 | 修法 |
+|---|---|---|---|
+| 1 | 空公司名返回 200 | `{"company": ""}` 会真的跑一次空调研，还在台账留记录 | `ResearchRequest.company` 加 `min_length=1` + 去空白校验，空白返回 **422** |
+| 2 | `/api/health` 一直是 404 | 后端日志被探活请求刷了几十条 | 同时注册 `/health` 与 `/api/health` 两个路由指向同一函数 |
+| 3 | 前端进度映射是**上游旧节点名** | 新图节点是 grounding/research/curate/evidence_check…，旧映射表写的是 financial_analyst/curator/editor，界面上会直接显示 `Processing evidence_check...`，阶段条也不推进 | 按新图重写 `stepMap` 与阶段数组，提示语改用友好名 |
+| 4 | `complete` 事件不推阶段 | 拒答/降级的运行走不到 briefing，而报告面板只在 `briefing\|complete` 显示 → **报告不出来** | 收到 `complete` 时 `setCurrentPhase('complete')` |
+| 5 | `/research/{id}/report` 有一行 `raise` 之后的 `return report` | 不可达代码，读代码时误导 | 删除 |
+
+**确认没问题的地方**（都实测了，不是看代码猜）：
+CORS 预检回显 `http://localhost:5174`；`/generate-pdf` 返回 `application/pdf`（1783 字节，可被前端 `blob()` 接住）；
+`/research/pdf/xxx` 不会被 `/research/{job_id}` 抢先匹配（返回 404 而不是 404 job）；
+`/config` 与 `/models` 的字段和前端 `ServerConfig` / `ModelInfo` 接口一致；
+SSE 的 `complete` / `error` 两条分支都会 `eventSource.close()`，不会无限重连。
+
+**另外发现一件环境问题**：后端进程在两次对话之间被杀（退出码 127，日志无异常堆栈），
+不是代码问题；重启即可。SSE 实测序列为 `grounding → evidence_check → complete`——
+fixture 太快，中间节点在一次 0.1s 轮询内就跳过了，界面上会看到跳步，这是预期行为。
+
+**遗留（属于产品决策，没动）**：界面上的行业/总部/模型/key 四个字段后端不消费；
+模型下拉来自 OpenRouter 而新图用 DashScope；无鉴权 + CORS 全开。这三条要改就动 UX 或部署姿势，得先定。
+
+**回归**：全量 **505 passed**；前端 `npm run build` 通过（4.16s，tsc 无错）。

@@ -155,19 +155,20 @@ function App() {
       try {
         const data = JSON.parse(event.data);
         
-        // Helper function to map node names to user-friendly step names
+        // Helper function to map node names to user-friendly step names.
+        // S5-B 起后端换成了新图（grounding / research / curate / evidence_check /
+        // rewrite_query / degrade / human_review / briefing），上游那份旧节点名
+        // （financial_analyst、curator、editor…）已经不会再出现，这里按新图重写。
         const getStepName = (nodeName: string): string => {
           const stepMap: Record<string, string> = {
             'grounding': 'Search',
-            'financial_analyst': 'Search',
-            'news_scanner': 'Search',
-            'industry_analyst': 'Search',
-            'company_analyst': 'Search',
-            'collector': 'Search',
-            'curator': 'Enriching',
-            'enricher': 'Enriching',
-            'briefing': 'Briefing',
-            'editor': 'Finalizing'
+            'research': 'Search',
+            'curate': 'Enriching',
+            'evidence_check': 'Checking evidence',
+            'rewrite_query': 'Retrying',
+            'degrade': 'Refusing',
+            'human_review': 'Awaiting review',
+            'briefing': 'Briefing'
           };
           return stepMap[nodeName] || nodeName;
         };
@@ -177,13 +178,13 @@ function App() {
           const stepName = getStepName(data.step);
           setStatus({
             step: stepName,
-            message: `Processing ${data.step}...`
+            message: `Processing ${stepName}...`
           });
           
-          // Update phase based on step
-          if (['grounding', 'financial_analyst', 'news_scanner', 'industry_analyst', 'company_analyst', 'collector'].includes(data.step)) {
+          // Update phase based on step（新图的节点名）
+          if (['grounding', 'research'].includes(data.step)) {
             setCurrentPhase('search');
-          } else if (['curator', 'enricher'].includes(data.step)) {
+          } else if (['curate', 'evidence_check', 'rewrite_query', 'degrade', 'human_review'].includes(data.step)) {
             setCurrentPhase('enrichment');
           } else if (data.step === 'briefing') {
             setCurrentPhase('briefing');
@@ -359,6 +360,9 @@ function App() {
           setStatus({ step: "Complete", message: "Research completed successfully" });
           setIsComplete(true);
           setIsResearching(false);
+          // 必须把阶段推到 complete：拒答/降级的运行走不到 briefing，
+          // 不推的话报告面板（只在 briefing|complete 显示）永远不出现。
+          setCurrentPhase('complete');
           eventSource.close();
         } else if (data.type === 'error') {
           setError(data.error);

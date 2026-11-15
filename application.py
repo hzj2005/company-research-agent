@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 from backend.llm import DEFAULT_OPENROUTER_MODEL, OPENROUTER_BASE_URL
 
@@ -99,13 +99,26 @@ pdf_service = PDFService({"pdf_output_dir": "pdfs"})
 # 就多一条「本地能跑、换台机器跑不起来」的路。
 
 class ResearchRequest(BaseModel):
-    company: str
+    company: str = Field(min_length=1)
     company_url: str | None = None
     industry: str | None = None
     hq_location: str | None = None
     tavily_api_key: str | None = None
     openrouter_api_key: str | None = None
     model: str | None = None
+
+    @field_validator("company")
+    @classmethod
+    def _require_real_company(cls, value: str) -> str:
+        """公司名是唯一被图消费的字段，空白串必须挡在门外。
+
+        不挡的话 `{"company": ""}` 会 200 并真的跑一次空调研——
+        既浪费一次运行，又在台账里留一条没有意义的记录。
+        """
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("company 不能为空")
+        return cleaned
 
 class PDFGenerationRequest(BaseModel):
     report_content: str
@@ -249,6 +262,16 @@ async def process_research(job_id: str, data: ResearchRequest, db_path=None):
 @app.get("/")
 async def ping():
     return {"message": "Alive"}
+
+@app.get("/health")
+@app.get("/api/health")
+async def health():
+    """存活探针。
+
+    `/api/health` 是别名：外部监控和预览面板默认探这个路径，没有就会每几秒
+    刷一条 404（实测日志里刷了几十条）。两个路径都指同一个函数，不额外开销。
+    """
+    return {"status": "ok"}
 
 @app.get("/config")
 async def get_config():
@@ -407,7 +430,6 @@ async def get_research_report(job_id: str):
             content={"status": result.get("status", "pending"), "message": "Report not ready yet"}
         )
     raise HTTPException(status_code=404, detail="Job not found")
-    return report
 
 @app.post("/generate-pdf")
 async def generate_pdf(data: PDFGenerationRequest):
