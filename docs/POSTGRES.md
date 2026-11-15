@@ -10,6 +10,8 @@
 | 跑测试、离线复现、`--verify` 出处表 | SQLite（默认，零运维） |
 | 多进程/多实例、想证明「重启还能查」 | Postgres |
 
+两条启动方式都实测过（2026-11-15）：`--loop ...:selector_loop` 与 `--reload` 在 Windows 上都能连上 PG。
+
 ## 2. 三步起起来
 
 ```bash
@@ -79,6 +81,10 @@ uv run python -m persistence.migrate_sqlite_to_pg --apply --force   # 目标已�
 
 - **SSE 实时进度仍在进程内存**（`job_status`），所以多 worker 时：台账查得到，进度流可能对不上。
   这条是明确留下的，不是 bug。
+- **没有「僵尸任务」清理**：进程在任务跑到一半时被杀，这条 job 会永远停在 `pending` / `processing`。
+  没有启动时回收，也没有超时标记——查历史时要自己看 `updated_at`。
+- **checkpoint 连接是「一次运行一条」**，不是连接池：`CheckpointSession` 每个请求新建连接、跑完关闭。
+  并发几十个请求会顶到 Postgres 的 `max_connections`；本项目是本地单机，够用，但没有为此做池化。
 - **评测产物、检索缓存、PDF 文件不进库**：它们是证据，要能 `git diff`、能离线回放、能被出处表引用。
 - **SQLite 不会被删除**：它是测试后端与迁移对照，`data/checkpoints.db` 留着。
 

@@ -147,3 +147,19 @@ async def table_counts(store: PostgresJobStore) -> dict[str, int]:
             row = await cur.fetchone()
             out[table] = int(row["n"]) if row else 0
     return out
+
+
+async def missing_tables(store: PostgresJobStore) -> list[str]:
+    """哪些表还不存在。
+
+    启动时查一次，比等第一个请求 500 强：`to_regclass` 对不存在的表返回 null，
+    不用去 catch UndefinedTable，也不会把「库连上了但没建表」当成连接问题。
+    """
+    missing: list[str] = []
+    async with store.pool.connection() as conn:
+        for table in REQUIRED_TABLES:
+            cur = await conn.execute("select to_regclass(%s) as reg", (f"public.{table}",))
+            row = await cur.fetchone()
+            if row is None or row["reg"] is None:
+                missing.append(table)
+    return missing

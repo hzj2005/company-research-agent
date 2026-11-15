@@ -244,13 +244,15 @@ curl -X POST http://localhost:8000/research \
 | `OPENAI_API_KEY` | No* | Research and editing when no OpenRouter key is available |
 | `GEMINI_API_KEY` | No | Briefing synthesis when no OpenRouter key is available (falls back to OpenAI) |
 | `CHECKPOINTER` | No | `sqlite` (default) or `postgres` for graph checkpoints |
-| `POSTGRES_DSN` | No* | Required when `CHECKPOINTER=postgres` or `JOB_STORE=postgres` |
+| `POSTGRES_DSN` | No† | Required when `CHECKPOINTER=postgres` or `JOB_STORE=postgres` |
 | `JOB_STORE` | No | `memory` (default) or `postgres` for job/report persistence |
 | `MONGODB_URI` | No | Upstream only; ignored by the reworked entry points |
 | `VITE_API_URL` | Yes | Frontend API connection |
 | `VITE_GOOGLE_MAPS_API_KEY` | No | Frontend location autocomplete |
 
 \* An LLM key is needed from somewhere: `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, or an OpenRouter key entered in the app's Settings.
+
+† Only when you opt into Postgres. Defaults (`sqlite` / `memory`) need no database at all — see `docs/POSTGRES.md`.
 
 ## License
 

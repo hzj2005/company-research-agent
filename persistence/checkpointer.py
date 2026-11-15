@@ -43,9 +43,21 @@ _SCHEMA_READY: set[str] = set()
 
 
 def _looks_like_missing_schema(exc: BaseException) -> bool:
-    """把「表不存在」和「连不上库」区分开——两者的处置完全不同。"""
+    """把「表不存在」和「连不上库」区分开——两者的处置完全不同。
+
+    只用字符串匹配会误伤：`database "research" does not exist` 也含
+    「does not exist」，但它要找的是建库，不是建表。所以先看异常类型，
+    再看是不是在说 relation。
+    """
+    try:
+        import psycopg
+
+        if isinstance(exc, psycopg.errors.UndefinedTable):
+            return True
+    except Exception:  # pragma: no cover - psycopg 缺失时退化为字符串判断
+        pass
     text = str(exc).lower()
-    return "does not exist" in text or "undefinedtable" in type(exc).__name__.lower()
+    return "relation" in text and "does not exist" in text
 
 
 class CheckpointSession(AbstractAsyncContextManager["CheckpointSession"]):
@@ -63,7 +75,10 @@ class CheckpointSession(AbstractAsyncContextManager["CheckpointSession"]):
     ):
         self._settings = settings or get_settings()
         self._explicit_path = Path(path) if path is not None else None
-        self.backend = "sqlite" if self._explicit_path else (backend or self._settings.graph.checkpointer)
+        chosen = backend or self._settings.graph.checkpointer
+        if chosen not in {"sqlite", "postgres"}:
+            raise ValueError(f"未知的 checkpointer 后端：{chosen!r}（只支持 sqlite / postgres）")
+        self.backend = "sqlite" if self._explicit_path else chosen
         self._cm: Any = None
         self.saver: Any = None
         self.dsn: str | None = None

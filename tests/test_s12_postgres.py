@@ -305,7 +305,58 @@ def test_migration_copies_thread_between_backends(tmp_path) -> None:
                 assert report["src_count"] == report["dst_count"] >= 2
                 assert report["values_equal"] is True
                 assert report["keys_equal"] is True
+                assert report["next_equal"] is True
             finally:
                 await dst.adelete_thread(tid)
+
+    asyncio.run(flow())
+
+
+# --- 配置与诊断（不需要真库）---
+
+
+def test_unknown_backend_is_rejected() -> None:
+    """写错后端名要当场报错，而不是落到 else 分支去连 Postgres。"""
+    with pytest.raises(ValueError) as exc:
+        CheckpointSession(settings=load_settings(environ={"APP_MODE": "fixture"}), backend="mysql")
+    assert "sqlite" in str(exc.value) and "postgres" in str(exc.value)
+
+
+def test_missing_schema_probe_does_not_misfire_on_missing_database() -> None:
+    """「库不存在」不能被判成「表没建」——两种错要给两种处置。"""
+    from persistence.checkpointer import _looks_like_missing_schema
+
+    assert _looks_like_missing_schema(Exception('relation "checkpoints" does not exist')) is True
+    assert _looks_like_missing_schema(Exception('database "research" does not exist')) is False
+    assert _looks_like_missing_schema(Exception("password authentication failed")) is False
+
+
+@requires_pg
+def test_missing_tables_tells_you_to_run_setup() -> None:
+    """空库要能明确指出「缺哪张表」，而不是等请求时抛 UndefinedTable。"""
+    import asyncio
+
+    import psycopg
+
+    from persistence.job_store import PostgresJobStore, missing_tables, setup_schema
+
+    dbname = f"probe_{uuid.uuid4().hex[:8]}"
+    admin_dsn = DSN.rsplit("/", 1)[0] + "/postgres"
+    temp_dsn = DSN.rsplit("/", 1)[0] + "/" + dbname
+
+    async def flow() -> None:
+        async with await psycopg.AsyncConnection.connect(admin_dsn, autocommit=True) as conn:
+            await conn.execute(f'create database "{dbname}"')
+        try:
+            store = await PostgresJobStore(temp_dsn).open()
+            try:
+                assert await missing_tables(store) == ["jobs", "reports"]
+                await setup_schema(store)
+                assert await missing_tables(store) == []
+            finally:
+                await store.close()
+        finally:
+            async with await psycopg.AsyncConnection.connect(admin_dsn, autocommit=True) as conn:
+                await conn.execute(f'drop database "{dbname}"')
 
     asyncio.run(flow())

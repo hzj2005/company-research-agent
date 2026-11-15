@@ -25,7 +25,7 @@ from config.loader import build_thread_id, get_settings, resolve_postgres_dsn
 from graph.builder import build_graph
 from graph.state import initial_state
 from persistence.checkpointer import CheckpointSession
-from persistence.job_store import PostgresJobStore
+from persistence.job_store import PostgresJobStore, missing_tables
 from backend.services.pdf_service import PDFService
 from backend.classes.state import EventQueue, job_status
 
@@ -54,6 +54,13 @@ async def lifespan(_app: FastAPI):
     if settings.app.job_store == "postgres":
         try:
             job_store = await PostgresJobStore(resolve_postgres_dsn(settings)).open()
+            missing = await missing_tables(job_store)
+            if missing:
+                # 表没建：现在抛，比等第一个请求 500 强，而且提示能直接照做
+                raise RuntimeError(
+                    f"Postgres 缺少台账表 {missing}；先跑 "
+                    "`uv run python -m persistence.setup_postgres`"
+                )
             logger.info("任务台账：Postgres（重启后仍可查）")
         except Exception as exc:  # 连不上 / 库没建 / DSN 空
             if settings.app.mode == "live":
@@ -127,10 +134,15 @@ async def research(data: ResearchRequest):
             "last_update": datetime.now().isoformat(),
         })
         if job_store is not None:
-            # 先落库再排队：前端立刻查 /research/{id} 就能看到 pending
-            await job_store.create_job(
-                job_id, data.model_dump(exclude={"tavily_api_key", "openrouter_api_key"})
-            )
+            # 先落库再排队：前端立刻查 /research/{id} 就能看到 pending。
+            # 落库失败就把内存里那条也撤掉——否则库和内存各说一套。
+            try:
+                await job_store.create_job(
+                    job_id, data.model_dump(exclude={"tavily_api_key", "openrouter_api_key"})
+                )
+            except Exception:
+                job_status.pop(job_id, None)
+                raise
         asyncio.create_task(process_research(job_id, data))
 
         response = JSONResponse(content={
@@ -203,8 +215,10 @@ async def process_research(job_id: str, data: ResearchRequest, db_path=None):
             })
             
             if job_store is not None:
-                await job_store.update_job(job_id, status="completed")
+                # 先存正文再改状态：反过来的话，store_report 失败会留下
+                # 「状态 completed 但查不到报告」的假成功。
                 await job_store.store_report(job_id, report_content)
+                await job_store.update_job(job_id, status="completed")
             
             logger.info(f"Research completed successfully for {data.company}")
         else:
@@ -226,7 +240,11 @@ async def process_research(job_id: str, data: ResearchRequest, db_path=None):
         })
         
         if job_store is not None:
-            await job_store.update_job(job_id, status="failed", error=str(e))
+            # 台账写失败不能再抛：那会把真正的失败原因盖掉，改成记日志
+            try:
+                await job_store.update_job(job_id, status="failed", error=str(e))
+            except Exception:
+                logger.exception("台账写入失败（job %s）；原始错误见上一条日志", job_id)
 
 @app.get("/")
 async def ping():

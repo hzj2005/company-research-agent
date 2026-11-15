@@ -84,6 +84,8 @@ async def verify_thread(src, dst, thread_id: str) -> dict[str, object]:
         "dst_count": len(dst_tuples),
         "values_equal": src_values == dst_values,
         "keys_equal": sorted(src_values) == sorted(dst_values),
+        # next 决定「还能不能接着跑」：值对了但 next 不同，等于迁了个死存档
+        "next_equal": (src_state or {}).get("next") == (dst_state or {}).get("next"),
     }
 
 
@@ -130,11 +132,12 @@ async def run(apply: bool, force: bool) -> int:
                 report["src_count"] == report["dst_count"]
                 and report["values_equal"]
                 and report["keys_equal"]
+                and report["next_equal"]
             )
             mark = "OK" if ok else "MISMATCH"
             print(
                 f"[{mark}] {tid}：存档点 {report['src_count']} -> {report['dst_count']}，"
-                f"最新状态一致={report['values_equal']}"
+                f"最新状态一致={report['values_equal']}，下一步一致={report['next_equal']}"
             )
             if not ok:
                 failures += 1

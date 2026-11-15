@@ -36,7 +36,7 @@
 | **S9** | #9 简历交付 | 3–4 条描述 + 面试追问清单 | `docs/RESUME.md` | 每条能指到具体文件与 commit | ✅ 完成（12.16 规划 / 12.18 执行）：4 条描述 + 18 条追问，数字全部由出处表插值，`tests/test_s9_resume.py` 17 条护栏 |
 | **S10** | #10 质量修复（S9 之后追加） | 同名实体消歧 + 同栏目冲突前置 | `capabilities/entity_guard.py`、`capabilities/conflict.py`、`graph/nodes/collect.py`、`graph/nodes/report.py` | 真机三类硬伤里的两类被堵住，且不误杀 | ✅ 完成（12.20）：真实缓存回放 12 篇 → 拒 2 篇，References 11 → 9；56 条新护栏 |
 | **S11** | #11 按岗位出多版措辞（S9 之后追加） | 同一批事实句按 Agent / RAG / 后端三种视角重排，不改写事实 | `evals/build_resume_variants.py`、`docs/RESUME_VARIANTS.md` | 三版排法必须真的不同，且粘贴行与 `docs/RESUME.md` 逐字一致 | ✅ 完成（12.22）：三个方向 × 三条，14 条新护栏；顺手补上 D 组漏渲染与一处归因不准 |
-| **S12** | #12 持久化换 Postgres（S11 之后追加） | checkpoint 与任务台账搬 Postgres，SSE 进度仍留内存 | `persistence/checkpointer.py`、`persistence/job_store.py`、`persistence/setup_postgres.py`、`persistence/migrate_sqlite_to_pg.py` | 重启后同一 job 与存档仍可查；无库时测试整组跳过而非误通过 | ✅ 完成（12.23）：**499 passed**、10 条 PG 用例、旧存档 11→11 状态一致；运行手册 `docs/POSTGRES.md` |
+| **S12** | #12 持久化换 Postgres（S11 之后追加） | checkpoint 与任务台账搬 Postgres，SSE 进度仍留内存 | `persistence/checkpointer.py`、`persistence/job_store.py`、`persistence/setup_postgres.py`、`persistence/migrate_sqlite_to_pg.py` | 重启后同一 job 与存档仍可查；无库时测试整组跳过而非误通过 | ✅ 完成（12.23 / 复查 12.24）：**502 passed**、13 条 PG 用例、旧存档 11→11 状态一致；运行手册 `docs/POSTGRES.md` |
 
 **顺序约束**：S2 是 S3/S4/S5/S6 的前置（都要改 `graph.py` / `state.py`），必须串行；S6 依赖 S2 的 checkpointer；S8 依赖 S7 且需要 key。
 
@@ -1407,7 +1407,7 @@ VTec 股价变成 2 条真事实。
 
 | 项 | 结果 |
 |---|---|
-| 全量测试 | **499 passed**（新增 `tests/test_s12_postgres.py` 10 条） |
+| 全量测试 | **502 passed**（`tests/test_s12_postgres.py` 13 条，含复查新增 3 条） |
 | Postgres 用例覆盖 | 跨会话恢复 / 线程隔离与累加 / 7 节点业务图恢复 / `interrupt`→`resume` / 台账往返 / 白名单拒注入 / 迁移三口径一致 |
 | 实测（fixture，0 credits） | 提交 → 台账 `HTTP 200`（旧版 501）→ 报告 200 → **换进程重启**后同一 job 与报告仍可查 |
 | 迁移 | SQLite 11 个存档点 → PG 11 个，最新状态逐字段一致 |
@@ -1418,3 +1418,26 @@ VTec 股价变成 2 条真事实。
 - SSE 进度仍是单 worker；台账已可跨重启，进度流不行。
 - 测试默认 `JOB_STORE=memory` / `CHECKPOINTER=sqlite`，CI 不需要数据库。
 - 运行手册见 `docs/POSTGRES.md`；Windows 启动方式以那篇为准。
+
+---
+
+### 12.24 S12 复查：找到 6 处问题，全部修掉（2026-11-15，0 调用 / 0 credits）
+
+复查不是「重跑测试看绿」，而是按「代码 → 边界行为 → 文档一致性」三层过一遍。
+测试全绿时下面 5 条依然成立，说明它们是**测试没覆盖到的空档**。
+
+| # | 问题 | 后果 | 修法 |
+|---|---|---|---|
+| 1 | 完成顺序是先 `status=completed` 再 `store_report` | 存正文失败会留下「状态说完成、报告查不到」的假成功 | 调换顺序：先存正文，再改状态 |
+| 2 | `process_research` 的 except 里直接 `await update_job` | 台账写失败会**盖掉真正的报错**，异常还逃出任务变成「never retrieved」 | 包 try/except，失败只记日志，原始错误保留 |
+| 3 | 端点先写内存再写库，库写失败时内存那条留着 | 库和内存各说一套，查库 404、SSE 却看得见 | `create_job` 失败时 `job_status.pop(job_id)` 再抛出 |
+| 4 | `_looks_like_missing_schema` 只做字符串匹配 | `database "x" does not exist` 被误判成「表没建」，提示跑错命令 | 先判 `psycopg.errors.UndefinedTable`，再要求报文含 `relation` |
+| 5 | 忘了建表时只在**第一个请求**报错 | 启动看着正常，请求时才 500，排查绕远 | 启动时 `missing_tables()` 探一次：fixture 退回内存并告警，live 直接启动失败 |
+| 6 | `CheckpointSession(backend=...)` 不校验取值 | 写成 `mysql` 会落到 else 分支去连 Postgres，报错牛头不对马嘴 | 只接受 `sqlite` / `postgres`，其余当场 ValueError |
+
+顺带两处小修：迁移校验增加 `next_equal`（值对但 next 不同 = 迁了个不能续跑的存档）；
+README 里 `POSTGRES_DSN` 的状态列原来复用 `No*`，与「LLM key 必须有一个」的脚注语义冲突，改成 `No†` 并补脚注。
+
+新增 3 条护栏：后端名非法要报错、缺少表的探测不能误伤「库不存在」、空库要能点名缺哪两张表（用临时数据库建/删验证）。
+
+**回归**：全量 **502 passed**；迁移用更严口径重跑，`11 -> 11，最新状态一致=True，下一步一致=True`。
