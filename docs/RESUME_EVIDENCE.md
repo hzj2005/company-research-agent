@@ -81,7 +81,7 @@ uv run pytest -q tests/test_s8_resume_evidence.py      # 护栏：命令、commi
 | `F35` | 判为反证的条数 | `2` | `evals/live_score_batch.json` → `aggregate.refuted` | `b1fdc84` | `uv run python -c 'import json; d=json.load(open("evals/live_score_batch.json", encoding="utf-8")); print(json.dumps(d["aggregate"]["refuted"], ensure_ascii=False))'` |
 | `F36` | 判为未提及的条数 | `10` | `evals/live_score_batch.json` → `aggregate.not_mentioned` | `b1fdc84` | `uv run python -c 'import json; d=json.load(open("evals/live_score_batch.json", encoding="utf-8")); print(json.dumps(d["aggregate"]["not_mentioned"], ensure_ascii=False))'` |
 | `F37` | 引文校验失败条数 | `0` | `evals/live_score_batch.json` → `aggregate.quote_check_failed` | `b1fdc84` | `uv run python -c 'import json; d=json.load(open("evals/live_score_batch.json", encoding="utf-8")); print(json.dumps(d["aggregate"]["quote_check_failed"], ensure_ascii=False))'` |
-| `F38` | Tavily credits 累计 | `50` | `evals/credits_ledger.json` → `total_credits` | `bbf11c1` | `uv run python -c 'import json; d=json.load(open("evals/credits_ledger.json", encoding="utf-8")); print(json.dumps(d["total_credits"], ensure_ascii=False))'` |
+| `F38` | Tavily credits 累计 | `50` | `evals/credits_ledger.json` → `total_credits` | `6a0a412` | `uv run python -c 'import json; d=json.load(open("evals/credits_ledger.json", encoding="utf-8")); print(json.dumps(d["total_credits"], ensure_ascii=False))'` |
 | `F39` | 实体消歧拒绝篇次 | `4` | `evals/live_batch.json` → `summary.entity_guard_rejections` | `b1fdc84` | `uv run python -c 'import json; d=json.load(open("evals/live_batch.json", encoding="utf-8")); print(json.dumps(d["summary"]["entity_guard_rejections"], ensure_ascii=False))'` |
 
 ## 3. 简历可用措辞（按编号）
@@ -189,7 +189,7 @@ uv run pytest -q tests/test_s8_resume_evidence.py      # 护栏：命令、commi
 | ❌「准确率 0%（因为 supported=0）」 | AI judge 的 supported 计数是极少量样本的判定分布 | `evals/live_score.json` → `summary.supported` 〔`3e16906`〕 | `usable_as_resume_metric=false`、`is_human_adjudicated=false` |
 | ❌ 把 judge 结果写成人工评测指标 | judge 是 AI 判定，未经人工抽检一致率校准 | `evals/live_score.json` → `is_human_adjudicated` 〔`3e16906`〕 | 样本见 F17 / F18，另有措辞瑕疵记录 |
 | ❌「独立开发 / 从零自研」 | 本项目基于上游仓库二次开发（Apache-2.0） | `docs/UPSTREAM.md` → 落地 commit 〔`6e7ce22`〕；根目录 `LICENSE` 〔`23fe92d`〕 | 必须保留 LICENSE 与上游 commit 归因 |
-| ❌「上线 / 甲方 / 用户量 / 效果提升 X%」 | 本项目是本地个人工程复现，无这些事实 | `docs/ACTION_PLAN.md` → 12.3 硬约束 〔`51fe0fa`〕 | 简历只写「本地实测」 |
+| ❌「上线 / 甲方 / 用户量 / 效果提升 X%」 | 本项目是本地个人工程复现，无这些事实 | `docs/ACTION_PLAN.md` → 12.3 硬约束 〔`6a0a412`〕 | 简历只写「本地实测」 |
 | ❌「引用可追溯率 X%」 | 最终 URL 多数未在本项目内重新抓取核验 | `evals/golden_live.jsonl` → `0.citation_layer_usable_as_metric` 〔`3e16906`〕 | 引用层指标明确不可用 |
 
 ## 5. 未测清单（一律不得写进简历）
