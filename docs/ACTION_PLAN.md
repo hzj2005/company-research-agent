@@ -32,8 +32,8 @@
 | **S5** | #5 LangChain 深化 | Tavily 封 `BaseRetriever`；`with_structured_output` + 字段置信度 + 校验重试；行内引用 | `capabilities/`、Pydantic schema | 每条 Fact 能对回 source_url；抽取失败自动重试不静默丢字段 | ✅ 完成（8.1–8.5，见 8.7 / 9.6；**仅 fixture，live 实测归 S8**） |
 | **S6** | #6 HITL | 成稿前 `interrupt()` 复核 + `Command(resume=...)`；复核留痕导出标注 | `graph/nodes/human_review.py` | 中断→恢复后 State 一致；依赖真实 checkpointer | ✅ 完成（10.1–10.4，见 10.5；仅 fixture） |
 | **S7** | #7 评测台 | ~~30–50 真实公司~~ → fixture 派生 golden（3 场景 / 23 claim / 1 拒答）、8 项指标、4 组 A/B、scorecard、CI | `evals/`、`.github/workflows/eval.yml` | 一条命令出分，能定位退化用例 | ✅ 完成（11.1–11.9，仅 fixture；**真实 golden 归 S8**） |
-| **S8** | #8 真实实测 | 切 `APP_MODE=live`，真实模型 + 真实 Tavily + 真实 DB 跑全量 | 对比表、失败案例、成本/延迟取舍 | 每个数字能由脚本与日志当场复现 | 🟢 S8.0–S8.6 全部完成（累计 8/50 credits、6 次模型请求、1 份真实报告、25 条人工核验 golden、1 次真实语义 judge、fixture vs 真机对比表、30 条可复现简历数字出处表，见 `docs/LIVE_REPORT.md` / `docs/RESUME_EVIDENCE.md`）；S9 待执行 |
-| **S9** | #9 简历交付 | 3–4 条描述 + 面试追问清单 | `docs/RESUME.md` | 每条能指到具体文件与 commit | ⏳ |
+| **S8** | #8 真实实测 | 切 `APP_MODE=live`，真实模型 + 真实 Tavily + 真实 DB 跑全量 | 对比表、失败案例、成本/延迟取舍 | 每个数字能由脚本与日志当场复现 | 🟢 S8.0–S8.6 全部完成（累计 8/50 credits、6 次模型请求、1 份真实报告、25 条人工核验 golden、1 次真实语义 judge、fixture vs 真机对比表、30 条可复现简历数字出处表，见 `docs/LIVE_REPORT.md` / `docs/RESUME_EVIDENCE.md`）；S9 已完成，见 12.18 |
+| **S9** | #9 简历交付 | 3–4 条描述 + 面试追问清单 | `docs/RESUME.md` | 每条能指到具体文件与 commit | ✅ 完成（12.16 规划 / 12.18 执行）：4 条描述 + 18 条追问，数字全部由出处表插值，`tests/test_s9_resume.py` 17 条护栏 |
 
 **顺序约束**：S2 是 S3/S4/S5/S6 的前置（都要改 `graph.py` / `state.py`），必须串行；S6 依赖 S2 的 checkpointer；S8 依赖 S7 且需要 key。
 
@@ -1086,3 +1086,60 @@ Tavily 仍 **8 / 50**、本轮 0 次模型请求 / 0 credits。
 12.15 保留为首次生成的 25 条快照并加注记，不篡改历史。
 
 
+### 12.18 S8.6 复查（续）：commit 列每提交一次就失效（2026-11-15，0 调用 / 0 credits）
+
+用户说「开始」之前按惯例复查上一步，**全量测试在 HEAD 上就是红的**，不是环境问题：
+
+- 失败用例：`tests/test_s8_resume_evidence.py::test_document_is_exactly_the_rendered_output`。
+- 现象：文档里 `docs/ACTION_PLAN.md` 的 commit 是 `6fb301e`，而 `render()` 现算得到 `076a992`
+  （12.17 那次提交改过该文件）。
+- 根因：commit 列每次渲染都现场跑 `git log -1 --format=%h -- <文件>`，但文档是**提交前**生成的。
+  于是「任何一次提交，只要改到被引用的文件，文档与 render 就必然不一致」——测试永远只能
+  在脏工作区里通过，提交即红。S9 还要继续改 `docs/ACTION_PLAN.md`，不修就交不了。
+
+**修法**：把「录入时该文件的最后一次修改提交」冻结进 `evals/resume_evidence_commits.json`
+（14 个文件，含产物与文档），渲染只读台账；新增 `--record-commits` 作为唯一刷新入口。
+这不降低可信度，反而更贴近简历语义——**数值在那个 commit 里确实存在**，而不是「文件后来又被改过」。
+
+**护栏同步加强**（不是把断言改松）：
+1. 每条数字用 `git show <commit>:<文件>` 回到台账标注的版本，按同一路径重算 → 必须与当前值一致；
+   先跑只读探针确认 31 条在各自 commit 下 **0 mismatch**，再固化成测试。
+2. commit 必须是 `HEAD` 的祖先（不能指向未来），且该 commit 下文件必须存在。
+3. 台账必须覆盖全部被引用文件（产物 + `docs/UPSTREAM.md` / `docs/ACTION_PLAN.md` /
+   `docs/LIVE_REPORT.md` / `LICENSE`）。
+4. 把 `live_commit` 打成必炸后 `render()` 仍须成功——直接钉死「渲染不许现场问 git」。
+
+**验收**：S8.6 护栏 **111 条**通过；全量 **362 passed**；`uv pip check` 103 包兼容；
+Tavily 仍 8 / 50；本轮 0 调用。**提交后复验 `doc == render` 通过**——这正是旧版本做不到的那一步。
+
+### 12.19 S9 执行结果：简历描述与面试追问（2026-11-15，0 调用 / 0 credits）
+
+**产出**：`evals/build_resume.py`（生成脚本）、`docs/RESUME.md`（交付物）、
+`tests/test_s9_resume.py`（17 条护栏）。另给出处表补一条 `F31`（advanced 单次计费），
+让「按官方规则 2 credits/次」这句话也有编号可指。
+
+**结构**：§1 可直接粘贴的 4 条（图编排 / 评测与人工核验 / 真实链路与额度 / 问题定位）；
+§2 每条展开成技术细节 + F 编号 + 代码位置；§3 18 条面试追问（设计取舍 7 / 数字口径 5 /
+问题定位 4 / 复现与额度 2），每答都指到文件；§4 不能写的话；§5 复现命令；§6 状态与边界。
+归因按 `docs/UPSTREAM.md` 现场读取上游 commit，写「Apache-2.0 二次开发」，不写「独立开发」。
+
+**数字纪律（这是本阶段的核心）**：模板里禁止出现裸数字，只能写 `{F31}` 这样的占位符，
+渲染时从 `build_resume_evidence` 的同一套 `Fact` 取值。因此「简历上的数字查不到出处」
+在结构上不可能发生，而不是靠人工核对。渲染后再查一遍：除代码、编号、章节号、指标名
+（`p95`）与许可证名（`Apache-2.0`）外，正文里的每个数字都必须命中出处表。
+
+**变异探针**：往 `docs/RESUME.md` 末尾手写一行「准确率 100%」→
+`test_document_is_exactly_the_rendered_output` 与 `test_every_number_in_document_comes_from_the_evidence_table`
+**同时 FAIL**；改 `golden_live.claims_revised_by_user` 或 `live_run.credits.user_ceiling`，
+渲染结果跟着变。恢复后 17 / 17 通过。
+
+**如实边界**：仍然 0 次模型请求 / 0 credits；真实准确率 / 幻觉率 / 引用可追溯率 / p95 /
+成本单价**仍未测**，简历里也只写「未测」。这份材料只保证「写出来的每个数字查得到」，
+不保证「系统效果好」——后者需要扩样本重跑，另算额度。
+
+**验收**：全量 **382 passed**；`--verify` **31 / 31 PASS**；`uv pip check` 103 包兼容；
+Tavily 仍 8 / 50。
+
+**下一步（可选，需用户拍板）**：① 扩到多家真实报告（要 Tavily credits + 模型调用）；
+② 实体消歧与冲突前置两个修复（改图，不动额度）；③ 把 `docs/RESUME.md` 的 4 条按目标岗位
+（Agent 工程 / RAG / 后端）各出一版侧重点不同的措辞。

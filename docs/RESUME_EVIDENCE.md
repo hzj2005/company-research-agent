@@ -66,6 +66,7 @@ uv run pytest -q tests/test_s8_resume_evidence.py      # 护栏：命令、commi
 | `F23` | fixture 回归外部 Tavily 调用 | `0` | `evals/scorecard.json` → `external_calls.tavily` | `55f24cb` | `uv run python -c 'import json; d=json.load(open("evals/scorecard.json", encoding="utf-8")); print(json.dumps(d["external_calls"]["tavily"], ensure_ascii=False))'` |
 | `F24` | 语义 judge 的 Tavily 调用 | `0` | `evals/live_score.json` → `isolation.tavily_client_search_calls` | `3e16906` | `uv run python -c 'import json; d=json.load(open("evals/live_score.json", encoding="utf-8")); print(json.dumps(d["isolation"]["tavily_client_search_calls"], ensure_ascii=False))'` |
 | `F25` | 最小真实探针 credits | `2` | `evals/live_probe.json` → `credits.estimated_credits_used` | `55f24cb` | `uv run python -c 'import json; d=json.load(open("evals/live_probe.json", encoding="utf-8")); print(json.dumps(d["credits"]["estimated_credits_used"], ensure_ascii=False))'` |
+| `F31` | 单次 advanced 检索计费 | `2` | `evals/live_run.json` → `credits.credits_per_search` | `53746f6` | `uv run python -c 'import json; d=json.load(open("evals/live_run.json", encoding="utf-8")); print(json.dumps(d["credits"]["credits_per_search"], ensure_ascii=False))'` |
 | `F30` | S8 累计真实模型请求 | `6` | `evals/llm_probe.json` + `evals/live_run.json` + `evals/live_score.json` → `llm_probe + live_run + live_score 三处求和` | `53746f6` / `53746f6` / `3e16906` | `uv run python -c 'import json; d0=json.load(open("evals/llm_probe.json", encoding="utf-8")); d1=json.load(open("evals/live_run.json", encoding="utf-8")); d2=json.load(open("evals/live_score.json", encoding="utf-8")); print(json.dumps(d0["usage"]["successful_requests"]+d1["llm_usage"]["successful_requests"]+d2["usage"]["successful_requests"], ensure_ascii=False))'` |
 
 ## 3. 简历可用措辞（按编号）
@@ -136,6 +137,8 @@ uv run pytest -q tests/test_s8_resume_evidence.py      # 护栏：命令、commi
   - 边界：judge 只读本地报告；额度消耗见 `isolation.tavily_credits_used`
 - `F25` 用 2 credits 的最小探针坐实真实检索返回结构
   - 边界：按官方规则推算；真实累计见 F01
+- `F31` 按官方计费规则，每次 advanced 检索计 2 credits
+  - 边界：官方规则推算，不是账单；缓存命中不扣
 - `F30` S8 阶段累计 6 次真实模型请求（兼容性探针 + 端到端报告 + 语义批改）
   - 边界：分项见 F06 / F19 与 `evals/llm_probe.json`；成本仍 null
 
@@ -167,10 +170,10 @@ uv run pytest -q tests/test_s8_resume_evidence.py      # 护栏：命令、commi
 1. `evals/build_resume_evidence.py` 的 `Fact` 持有 `key/path`；`expr_from_path()` 把同一路径翻译成 `d["a"]["b"]`，拼成独立的 `python -c` 命令。
 2. `--verify` 对每条数字**真的起一个进程执行该命令**，把 stdout 与产物取值逐字比对（两边都用 `json.dumps`，bool/null 不会走样）。
 3. `tests/test_s8_resume_evidence.py` 再做一遍同样的事，并逐条用 `git show <commit>:<文件>` 回到台账标注的版本重算该字段——「这个数字在那个 commit 里就有」能被机器验证，而不只是写着一行 hash。
-4. 当前共 **30** 条可复现数字、**9** 条禁写规则；这两个计数也由列表长度生成，不是手填。
+4. 当前共 **31** 条可复现数字、**9** 条禁写规则；这两个计数也由列表长度生成，不是手填。
 
 ## 7. 状态
 
 - 本文生成：**0** 次外部连接、**0** 次模型请求、**0** Tavily credits。
-- 下一步 **S9**：`docs/RESUME.md` 3–4 条简历描述 + 面试追问清单，每条描述必须指回本表编号与对应 commit。
+- **S9 已完成**：`docs/RESUME.md` 的每条描述都按本表编号插值，`tests/test_s9_resume.py` 校验「简历里出现的每个数字都来自本表」。
 - 真实效果指标仍为未测；本表只保证「写出来的数字查得到」，不保证「系统效果好」。

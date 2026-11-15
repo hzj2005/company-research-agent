@@ -279,6 +279,9 @@ def facts() -> list[Fact]:
         Fact("F25", "最小真实探针 credits", "live_probe", "credits.estimated_credits_used",
              "用 {v} credits 的最小探针坐实真实检索返回结构",
              "按官方规则推算；真实累计见 F01", "C"),
+        Fact("F31", "单次 advanced 检索计费", "live_run", "credits.credits_per_search",
+             "按官方计费规则，每次 advanced 检索计 {v} credits",
+             "官方规则推算，不是账单；缓存命中不扣", "C"),
         Fact("F30", "S8 累计真实模型请求", "live_run",
              "llm_probe + live_run + live_score 三处求和",
              "S8 阶段累计 {v} 次真实模型请求（兼容性探针 + 端到端报告 + 语义批改）",
@@ -538,8 +541,8 @@ def render(data: dict[str, Any], blocked: int) -> str:
     add("## 7. 状态")
     add("")
     add(f"- 本文生成：**{blocked}** 次外部连接、**0** 次模型请求、**0** Tavily credits。")
-    add(f"- 下一步 **S9**：`docs/RESUME.md` 3–4 条简历描述 + 面试追问清单，"
-        "每条描述必须指回本表编号与对应 commit。")
+    add("- **S9 已完成**：`docs/RESUME.md` 的每条描述都按本表编号插值，"
+        "`tests/test_s9_resume.py` 校验「简历里出现的每个数字都来自本表」。")
     add("- 真实效果指标仍为未测；本表只保证「写出来的数字查得到」，不保证「系统效果好」。")
     return "\n".join(L) + "\n"
 
