@@ -1686,3 +1686,63 @@ GET /research?limit=20&company=figma
 - **没有删除/归档接口**，测试数据只能进 psql 清。
 
 **回归**：全量 **509 passed**（新增 `tests/test_s5_entrypoints.py::test_history_endpoint_lists_runs_and_filters_by_company`）。
+
+---
+
+### 12.31 数据目录从命名卷迁到 E 盘：搬完了，但顺带修了两个真 bug（2026-11-15）
+
+#### 12.31.1 迁移时发现的状态
+
+容器 `pj-pg` 已经改成挂载 `E:/DockerData/postgresql/pgdata`，但那个目录里是**全新的空库**
+（`Did not find any relations`）——盘换了、数据没搬。19 条任务 / 17 份报告 / 358 个存档点
+还在旧命名卷 `pj-pg-data`（67M）里。
+
+**做法**（物理搬运，版本完全一致，比 dump/restore 更保真）：
+
+1. 先把旧卷打包到 `E:/DockerData/postgresql/pgdata-old-volume-20261115-1816.tgz`（13M）；
+2. 停容器 → 清空目标目录（`find /to -mindepth 1 -delete`，不动挂载点本身）→ `cp -a /from/. /to/`；
+3. 启动容器，核对：**19 / 17 / 358，与迁移前完全一致**。
+
+绑定挂载的属主是 999:999（容器内 postgres），所以没有踩到
+`data directory has wrong ownership` 这个经典坑。
+
+#### 12.31.2 Bug 1：`localhost` 走了 IPv6，连接池 30 秒起不来
+
+迁完之后服务直接起不来：
+
+```
+psycopg_pool.PoolTimeout: pool initialization incomplete after 30.0 sec
+```
+
+单条连接能成功但**要 8.24 秒**；换 `127.0.0.1` 只要 **0.18 秒**。
+原因：Windows 上 `localhost` 先解析到 `::1`，该地址不通再回退 IPv4，每次白等约 8 秒；
+连接池默认 `min_size=4`，4×8=32 秒 > 30 秒初始化预算，于是必然超时。
+
+修法：`.env` / `.env.example` / 文档统一改 `127.0.0.1`；池参数改成
+`min_size=1, max_size=8, timeout=10`（起步只要一条连接，连不上就早点报错）。
+
+#### 12.31.3 Bug 2：Postgres 重启后，池里的坏连接让接口 500
+
+迁移过程中重启了数据库，后端没重启，`GET /research` 直接 500：
+
+```
+psycopg.OperationalError: consuming input failed: could not receive data from server
+```
+
+psycopg_pool 会在归还时丢弃坏连接，但**第一次拿到它的请求仍然会抛**。
+修法：`persistence/job_store.py` 加 `_retry_once()`，所有读写遇到 `OperationalError`
+重试一次（并给池子 50ms 丢弃坏连接）；真连不上时只试两次，不会把请求挂死。
+
+**验证**：后端不重启，`docker restart pj-pg` → 等 healthy → 再打 `GET /research`，
+**HTTP 200、返回 3 条**。这条也顺带证明了绑定挂载的数据是持久的。
+
+#### 12.31.4 迁移后的状态
+
+| 项 | 值 |
+|---|---|
+| 数据目录 | `E:/DockerData/postgresql/pgdata`（67M，属主 999:999） |
+| 行数 | jobs 19 / reports 17 / checkpoints 358 |
+| compose | 已改为 bind mount，注释里写明属主与目录要求 |
+| 回滚点 | 旧卷 `pj-pg-data` + `pgdata-old-volume-20261115-1816.tgz` |
+
+**回归**：全量 **511 passed**（新增 `_retry_once` 的两条用例）。

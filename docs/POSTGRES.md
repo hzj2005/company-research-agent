@@ -24,7 +24,9 @@ uv run python -m persistence.setup_postgres
 
 # 3) 在 .env 里选后端
 #    CHECKPOINTER=postgres
-#    POSTGRES_DSN=postgresql://postgres:devpass@localhost:5432/research
+#    POSTGRES_DSN=postgresql://postgres:devpass@127.0.0.1:5432/research
+#    注意用 127.0.0.1 别用 localhost：Windows 上 localhost 会先试 IPv6(::1)，
+#    每次连接白等约 8 秒，连接池初始化（4 条）会直接 30 秒超时、服务起不来。
 #    JOB_STORE=postgres
 ```
 
@@ -79,7 +81,23 @@ uv run python -m persistence.migrate_sqlite_to_pg --apply --force   # 目标已�
 **限制**：目标库的 `checkpoint_id` 会重新生成，父链按写入顺序重建——语义一致，但 id 不能两边对照。
 线程名里带 job_id，所以迁过去主要用于「历史可追溯」，不是「接着昨天的活干」。
 
-## 6. 边界（没做的部分，别当成做了）
+## 6. 数据存在哪、怎么备份
+
+- **物理位置**：绑定挂载到 `E://DockerData//postgresql//pgdata`（2026-11-15 从 Docker 命名卷迁过来）。
+  用命名卷时数据在 WSL 内部，资源管理器里看不见；绑定挂载后可以直接看到文件、单独备份。
+- **目录属主必须是容器内的 postgres（uid 999）**，否则报 `data directory has wrong ownership`。
+- **备份**：
+  ```bash
+  docker exec pj-pg pg_dump -U postgres -d research > backup_$(date +%F).sql
+  ```
+- **恢复**：
+  ```bash
+  cat backup_2026-11-15.sql | docker exec -i pj-pg psql -U postgres -d research
+  ```
+- 迁移前的旧命名卷 `pj-pg-data` 与打包文件 `pgdata-old-volume-*.tgz` 作为回滚点保留，
+  确认稳定后可删（`docker volume rm pj-pg-data`）。
+
+## 7. 边界（没做的部分，别当成做了）
 
 - **SSE 实时进度仍在进程内存**（`job_status`），所以多 worker 时：台账查得到，进度流可能对不上。
   这条是明确留下的，不是 bug。
@@ -90,7 +108,7 @@ uv run python -m persistence.migrate_sqlite_to_pg --apply --force   # 目标已�
 - **评测产物、检索缓存、PDF 文件不进库**：它们是证据，要能 `git diff`、能离线回放、能被出处表引用。
 - **SQLite 不会被删除**：它是测试后端与迁移对照，`data/checkpoints.db` 留着。
 
-## 7. 回滚到 SQLite
+## 8. 回滚到 SQLite
 
 ```bash
 # .env 里改回

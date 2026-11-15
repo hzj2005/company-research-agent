@@ -14,11 +14,31 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
-from typing import Any
+from collections.abc import Awaitable, Callable
+from typing import Any, TypeVar
 
+import psycopg
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
+
+T = TypeVar("T")
+
+
+async def _retry_once(op: Callable[[], Awaitable[T]]) -> T:
+    """连接被服务端断开时重试一次。
+
+    场景很具体：Postgres 重启（换数据目录、改配置、容器重建）后，池子里还留着
+    **已经断开的旧连接**；第一次拿到它的请求会抛
+    `OperationalError: could not receive data from server`，接口直接 500。
+    psycopg_pool 会在归还时丢弃坏连接，所以重试一次就能拿到新连接——但必须有人重试。
+    """
+    try:
+        return await op()
+    except psycopg.OperationalError:
+        await asyncio.sleep(0.05)  # 给池子一点时间把坏连接丢掉
+        return await op()
 
 # 幂等：重复执行不会报错，也不会清数据
 SCHEMA_SQL = """
@@ -58,7 +78,14 @@ class PostgresJobStore:
     async def open(self) -> "PostgresJobStore":
         if self._pool is None:
             self._pool = AsyncConnectionPool(
-                conninfo=self.dsn, open=False, kwargs={"row_factory": dict_row}
+                conninfo=self.dsn,
+                open=False,
+                # 起步只要一条连接：默认 min_size=4 时，若单次连接偏慢（Windows 上
+                # `localhost` 先走 IPv6 能慢到 8 秒），4 条就把 30 秒初始化预算吃光。
+                min_size=1,
+                max_size=8,
+                timeout=10,  # 连不上就早点报错，别让启动挂 30 秒
+                kwargs={"row_factory": dict_row},
             )
             await self._pool.open()
             await self._pool.wait()
@@ -76,12 +103,16 @@ class PostgresJobStore:
         return self._pool
 
     async def create_job(self, job_id: str, payload: dict[str, Any]) -> None:
-        async with self.pool.connection() as conn:
-            await conn.execute(
-                "insert into jobs (job_id, company, status, inputs) values (%s, %s, %s, %s)"
-                " on conflict (job_id) do nothing",
-                (job_id, str(payload.get("company", "")), "pending", json.dumps(payload, ensure_ascii=False)),
-            )
+        async def op() -> None:
+            async with self.pool.connection() as conn:
+                await conn.execute(
+                    "insert into jobs (job_id, company, status, inputs) values (%s, %s, %s, %s)"
+                    " on conflict (job_id) do nothing",
+                    (job_id, str(payload.get("company", "")), "pending",
+                     json.dumps(payload, ensure_ascii=False)),
+                )
+
+        await _retry_once(op)
 
     async def update_job(self, job_id: str, **fields: Any) -> None:
         unknown = set(fields) - _UPDATABLE
@@ -91,36 +122,49 @@ class PostgresJobStore:
             return
         assignments = ", ".join(f"{name} = %s" for name in fields)
         values = list(fields.values())
-        async with self.pool.connection() as conn:
-            await conn.execute(
-                f"update jobs set {assignments}, updated_at = now() where job_id = %s",
-                (*values, job_id),
-            )
+
+        async def op() -> None:
+            async with self.pool.connection() as conn:
+                await conn.execute(
+                    f"update jobs set {assignments}, updated_at = now() where job_id = %s",
+                    (*values, job_id),
+                )
+
+        await _retry_once(op)
 
     async def get_job(self, job_id: str) -> dict[str, Any] | None:
-        async with self.pool.connection() as conn:
-            cur = await conn.execute(
-                "select job_id, company, status, current_step, error, inputs,"
-                " created_at, updated_at from jobs where job_id = %s",
-                (job_id,),
-            )
-            return await cur.fetchone()
+        async def op() -> dict[str, Any] | None:
+            async with self.pool.connection() as conn:
+                cur = await conn.execute(
+                    "select job_id, company, status, current_step, error, inputs,"
+                    " created_at, updated_at from jobs where job_id = %s",
+                    (job_id,),
+                )
+                return await cur.fetchone()
+
+        return await _retry_once(op)
 
     async def store_report(self, job_id: str, report: str) -> None:
-        async with self.pool.connection() as conn:
-            await conn.execute(
-                "insert into reports (job_id, report) values (%s, %s)"
-                " on conflict (job_id) do update set report = excluded.report",
-                (job_id, report),
-            )
+        async def op() -> None:
+            async with self.pool.connection() as conn:
+                await conn.execute(
+                    "insert into reports (job_id, report) values (%s, %s)"
+                    " on conflict (job_id) do update set report = excluded.report",
+                    (job_id, report),
+                )
+
+        await _retry_once(op)
 
     async def get_report(self, job_id: str) -> dict[str, Any] | None:
-        async with self.pool.connection() as conn:
-            cur = await conn.execute(
-                "select job_id, report, created_at from reports where job_id = %s", (job_id,)
-            )
-            row = await cur.fetchone()
-        return {"report": row["report"]} if row else None
+        async def op() -> dict[str, Any] | None:
+            async with self.pool.connection() as conn:
+                cur = await conn.execute(
+                    "select job_id, report, created_at from reports where job_id = %s", (job_id,)
+                )
+                row = await cur.fetchone()
+            return {"report": row["report"]} if row else None
+
+        return await _retry_once(op)
 
     async def list_jobs(
         self, limit: int = 20, company: str | None = None
@@ -144,9 +188,12 @@ class PostgresJobStore:
             params.append(f"%{company.strip()}%")
         sql += " order by j.created_at desc limit %s"
         params.append(limit)
-        async with self.pool.connection() as conn:
-            cur = await conn.execute(sql, params)
-            return list(await cur.fetchall())
+        async def op() -> list[dict[str, Any]]:
+            async with self.pool.connection() as conn:
+                cur = await conn.execute(sql, params)
+                return list(await cur.fetchall())
+
+        return await _retry_once(op)
 
 
 async def setup_schema(store: PostgresJobStore) -> None:

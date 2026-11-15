@@ -3,12 +3,12 @@
 #   docker compose -f docker-compose.postgres.yml up -d       # 起
 #   docker compose -f docker-compose.postgres.yml ps          # 看状态 / 等 healthy
 #   docker compose -f docker-compose.postgres.yml logs -f     # 看日志
-#   docker compose -f docker-compose.postgres.yml down        # 停（保留数据）
-#   docker compose -f docker-compose.postgres.yml down -v     # 停并删数据（存档全没）
+#   docker compose -f docker-compose.postgres.yml down        # 停（数据留在 E 盘，不受影响）
 #
-# 起完在 `.env` 里加两行就能让图改用它：
+# 起完在 `.env` 里配三行就能让应用用它：
 #   CHECKPOINTER=postgres
 #   POSTGRES_DSN=postgresql://postgres:devpass@localhost:5432/research
+#   JOB_STORE=postgres
 #
 # 注意：这里的账号密码是**本地开发专用**，不要带到任何能被公网访问的环境。
 
@@ -27,7 +27,10 @@ services:
       # 5432 被占时改左边：`"5433:5432"`，DSN 里的端口也要跟着改
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # 绑定挂载（2026-11-15 从命名卷迁过来）：数据直接落在 E 盘，看得见、能单独备份。
+      # 目录必须存在；空的目录 Postgres 会自动初始化，非空目录必须是合法的数据目录。
+      # 属主必须是容器内的 postgres（uid 999），否则报 "data directory has wrong ownership"。
+      - E:/DockerData/postgresql/pgdata:/var/lib/postgresql/data
     healthcheck:
       # 用 pg_isready 判活，比 `sleep 5` 靠谱：容器「起来」和「能连」是两件事
       test: ["CMD-SHELL", "pg_isready -U postgres -d research"]
@@ -36,6 +39,6 @@ services:
       retries: 10
       start_period: 10s
 
-volumes:
-  pgdata:
-    name: pj-pg-data
+# 旧的命名卷 pj-pg-data（67M）作为迁移前的回滚点保留，确认稳定后可手动删除：
+#   docker volume rm pj-pg-data
+# 迁移前的完整打包备份：E:\DockerData\postgresql\pgdata-old-volume-20261115-1816.tgz

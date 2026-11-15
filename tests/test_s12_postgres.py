@@ -360,3 +360,46 @@ def test_missing_tables_tells_you_to_run_setup() -> None:
                 await conn.execute(f'drop database "{dbname}"')
 
     asyncio.run(flow())
+
+
+# --- 连接被服务端断开后的自愈 ---
+
+
+def test_retry_once_recovers_from_a_stale_pooled_connection() -> None:
+    """Postgres 重启后池里还有坏连接：第一次失败必须重试一次，而不是把 500 抛给用户。"""
+    import asyncio
+
+    import psycopg
+
+    from persistence.job_store import _retry_once
+
+    calls = {"n": 0}
+
+    async def flaky() -> str:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise psycopg.OperationalError("could not receive data from server")
+        return "ok"
+
+    assert asyncio.run(_retry_once(flaky)) == "ok"
+    assert calls["n"] == 2
+
+
+def test_retry_once_gives_up_after_two_attempts() -> None:
+    """真的连不上时只能试两次，不能变成无限重试把请求挂死。"""
+    import asyncio
+
+    import psycopg
+    import pytest as _pytest
+
+    from persistence.job_store import _retry_once
+
+    calls = {"n": 0}
+
+    async def always_down() -> str:
+        calls["n"] += 1
+        raise psycopg.OperationalError("connection refused")
+
+    with _pytest.raises(psycopg.OperationalError):
+        asyncio.run(_retry_once(always_down))
+    assert calls["n"] == 2
