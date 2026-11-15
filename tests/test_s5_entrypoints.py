@@ -166,3 +166,33 @@ def test_config_reports_mode_and_key_requirements() -> None:
     assert config["requires_llm_key"] is (config["app_mode"] == "live")
     for key in ("openrouter_configured", "openai_configured", "dashscope_configured", "tavily_configured"):
         assert isinstance(config[key], bool), key
+
+
+def test_history_endpoint_lists_runs_and_filters_by_company() -> None:
+    """历史列表：有记录能列出来，按公司筛能筛到，字段够前端渲染一张表。"""
+    import time
+
+    from fastapi.testclient import TestClient
+
+    import application
+
+    with TestClient(application.app) as client:
+        # 先制造两条记录
+        for name in ("HistoryProbe", "OtherProbe"):
+            r = client.post("/research", json={"company": name})
+            assert r.status_code == 200
+        time.sleep(1.5)
+
+        listed = client.get("/research", params={"limit": 50})
+        assert listed.status_code == 200
+        body = listed.json()
+        assert body["source"] in ("postgres", "memory")
+        names = [row["company"] for row in body["jobs"]]
+        assert "HistoryProbe" in names and "OtherProbe" in names
+
+        filtered = client.get("/research", params={"company": "historyprobe"}).json()
+        assert [row["company"] for row in filtered["jobs"]] == ["HistoryProbe"]
+
+        row = filtered["jobs"][0]
+        for field in ("job_id", "company", "status", "created_at", "has_report", "report_chars"):
+            assert field in row, field

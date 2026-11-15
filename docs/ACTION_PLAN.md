@@ -1639,3 +1639,50 @@ qwen-plus 照抄来源语言。最终三处一起加才生效：
 台账累计 **74 / 200**。
 
 **回归**：全量 **506 passed**（含 2 条缓存回放，不再跳过）；中文样本见 `docs/samples/nvidia_live_report_zh.md`。
+
+---
+
+### 12.30 历史数据：存了，但之前看不见（2026-11-15，0 调用 / 0 credits）
+
+#### 12.30.1 已经存了什么
+
+`JOB_STORE=postgres` 时，每次调研都会落两行：
+
+- `jobs`：公司名、状态、当前节点、错误、入参、创建/更新时间；
+- `reports`：报告正文（Markdown 全文），与 `jobs` 一对一（外键级联删除）。
+
+实测库里当时有 **19 条任务 / 17 份报告**，包括 Meta、英伟达（两版）、Nvidia、Figma、Tesla、Notion 等。
+
+#### 12.30.2 缺的那一环：没有浏览入口
+
+历史只能凭 `job_id` 单条查（`GET /research/{job_id}`），而 `job_id` 是前端 POST 之后才拿到的——
+刷新页面就断了。等于**数据在库里睡着**。
+
+补的接口：
+
+```
+GET /research?limit=20&company=figma
+```
+
+返回 `{source, jobs:[{job_id, company, status, current_step, error, created_at, updated_at, has_report, report_chars}]}`。
+`company` 用 `ilike` 模糊匹配（库里同时存在 `Nvidia` 和 `英伟达`，等值匹配会漏）；
+`has_report` / `report_chars` 让人一眼分清「跑完有报告」和「只有一条状态」。
+
+内存模式（`JOB_STORE=memory`）也实现了同一接口，从 `job_status` 里现拼，字段保持一致。
+
+#### 12.30.3 顺带发现的两种脏数据（如实记录，暂不清理）
+
+| 记录 | 现象 | 原因 |
+|---|---|---|
+| `字节跳动` / `pending` | 永远停在 pending，没有报告 | 提交后进程被杀，没有「僵尸任务回收」 |
+| `Tesla` / 174 字报告 | 四栏全是拒答话术 | 当时还在 fixture 模式，语料里没有 Tesla |
+
+这两条恰好把之前写在文档里的两个边界变成了实物证据：**没有 reaper**、**fixture 只认内置公司**。
+
+#### 12.30.4 仍未做
+
+- **UI 没有历史面板**：接口有了，前端还没画列表；现在是 `curl` 能看到、点不到。
+- **同一家公司多次运行是并列记录**，没有「每家公司只看最新一份」的视图。
+- **没有删除/归档接口**，测试数据只能进 psql 清。
+
+**回归**：全量 **509 passed**（新增 `tests/test_s5_entrypoints.py::test_history_endpoint_lists_runs_and_filters_by_company`）。

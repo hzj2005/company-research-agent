@@ -350,6 +350,37 @@ async def get_pdf(filename: str):
         raise HTTPException(status_code=404, detail="PDF not found")
     return FileResponse(pdf_path, media_type='application/pdf', filename=filename)
 
+@app.get("/research")
+async def list_research(limit: int = 20, company: str | None = None):
+    """历史任务列表（最近 N 条），可按公司模糊筛选。
+
+    没有这个入口时，历史只存在于库里：知道 job_id 才能查，等于看不见。
+    `has_report` / `report_chars` 让人一眼分清「跑完了有报告」和「只有一条状态」。
+    """
+    limit = max(1, min(limit, 100))
+    if job_store is not None:
+        return {"source": "postgres", "jobs": await job_store.list_jobs(limit=limit, company=company)}
+
+    rows = []
+    for job_id, item in job_status.items():
+        name = str(item.get("company") or "")
+        if company and company.strip().lower() not in name.lower():
+            continue
+        report = item.get("report") or ""
+        rows.append({
+            "job_id": job_id,
+            "company": name,
+            "status": item.get("status"),
+            "current_step": item.get("current_step"),
+            "error": item.get("error"),
+            "created_at": item.get("last_update"),
+            "has_report": bool(report),
+            "report_chars": len(report),
+        })
+    rows.sort(key=lambda r: str(r.get("created_at") or ""), reverse=True)
+    return {"source": "memory", "jobs": rows[:limit]}
+
+
 @app.get("/research/{job_id}")
 async def get_research(job_id: str):
     """台账查询：配了 Postgres 就能跨重启查，否则退回进程内字典。

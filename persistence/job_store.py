@@ -122,14 +122,30 @@ class PostgresJobStore:
             row = await cur.fetchone()
         return {"report": row["report"]} if row else None
 
-    async def list_jobs(self, limit: int = 20) -> list[dict[str, Any]]:
-        """按时间倒序列出最近的任务，用来验收「重启后还查得到」。"""
+    async def list_jobs(
+        self, limit: int = 20, company: str | None = None
+    ) -> list[dict[str, Any]]:
+        """按时间倒序列出历史任务，附带「有没有报告」和报告字数。
+
+        `company` 用模糊匹配（ilike），大小写和前后空格都不敏感 —— 用户搜过
+        `Nvidia` 和 `英伟达`，写死等值匹配会漏掉一半记录。
+        """
+        limit = max(1, min(int(limit), 100))
+        sql = (
+            "select j.job_id, j.company, j.status, j.current_step, j.error,"
+            " j.created_at, j.updated_at,"
+            " (r.job_id is not null) as has_report,"
+            " coalesce(length(r.report), 0) as report_chars"
+            " from jobs j left join reports r on r.job_id = j.job_id"
+        )
+        params: list[Any] = []
+        if company:
+            sql += " where j.company ilike %s"
+            params.append(f"%{company.strip()}%")
+        sql += " order by j.created_at desc limit %s"
+        params.append(limit)
         async with self.pool.connection() as conn:
-            cur = await conn.execute(
-                "select job_id, company, status, created_at from jobs"
-                " order by created_at desc limit %s",
-                (limit,),
-            )
+            cur = await conn.execute(sql, params)
             return list(await cur.fetchall())
 
 
