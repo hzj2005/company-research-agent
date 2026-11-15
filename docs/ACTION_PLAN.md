@@ -1495,3 +1495,36 @@ fixture 太快，中间节点在一次 0.1s 轮询内就跳过了，界面上会
 模型下拉来自 OpenRouter 而新图用 DashScope；无鉴权 + CORS 全开。这三条要改就动 UX 或部署姿势，得先定。
 
 **回归**：全量 **505 passed**；前端 `npm run build` 通过（4.16s，tsc 无错）。
+
+---
+
+### 12.27 「要几个 key 才能用」：0 个，但前端不让点（2026-11-15，0 调用 / 0 credits）
+
+实测把前端跑起来后，点提交会被弹设置框挡住。查下来是上游的判定过严：
+
+```ts
+const hasLlmProvider = ... ;                       // 只认 OpenRouter / OpenAI
+const needsLlmSetup = serverConfig !== null && !hasLlmProvider;
+if (needsLlmSetup) { setIsSettingsOpen(true); return; }   // 直接不提交
+```
+
+它不知道这个 fork 有 **fixture 模式**（本地固定语料 + 确定性 stub，0 key 可跑），
+也不知道本项目 live 走的是 **DashScope** 而不是 OpenRouter。
+
+修法：
+- 后端 `/config` 增加 `app_mode`、`requires_llm_key`、`dashscope_configured`、`tavily_configured`；
+- 前端 `needsLlmSetup` 改成 `serverConfig?.requires_llm_key === true && !hasLlmProvider`；
+- `hasLlmProvider` 增加 `dashscope_configured`。
+
+**key 矩阵（如实）**
+
+| 模式 | 需要几个 key | 是哪些 |
+|---|---|---|
+| `fixture`（当前默认） | **0** | 无 |
+| `live` | **2** | `TAVILY_API_KEY`（检索）+ 一个模型 key：`DASHSCOPE_API_KEY`（qwen-plus）/ `OPENROUTER_API_KEY` / `OPENAI_API_KEY` 三选一 |
+
+**重要边界**：界面上的 key 输入框是摆饰——`process_research` 只从环境变量解析凭据，
+不读请求体里的 `tavily_api_key` / `openrouter_api_key`（避免密钥进日志）。所以填了也没用。
+
+**回归**：506 passed；前端 build 通过；`/config` 实测返回
+`app_mode=fixture, requires_llm_key=false, tavily_configured=true`。

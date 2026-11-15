@@ -78,9 +78,14 @@ function App() {
   const selectedModelInfo = models.find((model) => model.id === selectedModel);
   const hasLlmProvider = !!llmSettings.openrouterApiKey.trim()
     || !!serverConfig?.openrouter_configured
-    || !!serverConfig?.openai_configured;
-  // Only nag once we know the server has no key of its own
-  const needsLlmSetup = serverConfig !== null && !hasLlmProvider;
+    || !!serverConfig?.openai_configured
+    // 本项目实际走的是阿里云百炼 DashScope（qwen-plus），只认 OpenRouter/OpenAI
+    // 会让「服务端明明有 key」也被判成没配
+    || !!serverConfig?.dashscope_configured;
+  // Only nag when the server actually needs a key. 后端在 fixture 模式下
+  // 用本地固定语料 + 确定性 stub，一个 key 都不需要；上游这里只认「有没有 key」，
+  // 导致演示模式下点按钮永远弹设置框、任务根本发不出去。
+  const needsLlmSetup = serverConfig?.requires_llm_key === true && !hasLlmProvider;
 
   // Add new state for color cycling
   const [loaderColor, setLoaderColor] = useState("#2677FF");

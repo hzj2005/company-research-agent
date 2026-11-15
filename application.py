@@ -275,10 +275,22 @@ async def health():
 
 @app.get("/config")
 async def get_config():
-    """Report which LLM credentials the server already has, without exposing them."""
+    """Report which LLM credentials the server already has, without exposing them.
+
+    `app_mode` / `requires_llm_key` 是给前端判断「要不要卡住提交」用的：
+    fixture 模式跑的是本地固定语料 + 确定性 stub，**不需要任何 key**；
+    上游前端不知道这件事，没 key 就直接弹设置框、不提交（实测就是这么被挡住的）。
+    """
+    settings = get_settings()
+    mode = settings.app.mode
     return {
+        "app_mode": mode,
+        "requires_llm_key": mode == "live",
         "openrouter_configured": bool(os.getenv("OPENROUTER_API_KEY")),
         "openai_configured": bool(os.getenv("OPENAI_API_KEY")),
+        # 本项目 live 模式实际用的是 DashScope（qwen-plus），不报它前端会误判「没配 key」
+        "dashscope_configured": bool(os.getenv("DASHSCOPE_API_KEY")),
+        "tavily_configured": bool(os.getenv("TAVILY_API_KEY")),
         "default_model": os.getenv("OPENROUTER_MODEL") or DEFAULT_OPENROUTER_MODEL,
     }
 

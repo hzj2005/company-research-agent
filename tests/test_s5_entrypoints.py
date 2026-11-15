@@ -152,3 +152,17 @@ def test_health_endpoints_answer() -> None:
         for path in ("/health", "/api/health", "/"):
             response = client.get(path)
             assert response.status_code == 200, f"{path} -> {response.status_code}"
+
+
+def test_config_reports_mode_and_key_requirements() -> None:
+    """前端靠这两个字段决定要不要拦提交；fixture 模式不该要求任何 key。"""
+    from fastapi.testclient import TestClient
+
+    import application
+
+    with TestClient(application.app) as client:
+        config = client.get("/config").json()
+    assert config["app_mode"] in ("fixture", "live")
+    assert config["requires_llm_key"] is (config["app_mode"] == "live")
+    for key in ("openrouter_configured", "openai_configured", "dashscope_configured", "tavily_configured"):
+        assert isinstance(config[key], bool), key

@@ -6,8 +6,13 @@ export interface LLMSettings {
 }
 
 export interface ServerConfig {
+  // 后端运行模式：fixture 用本地语料 + stub，不需要任何 key；live 才需要
+  app_mode?: 'fixture' | 'live';
+  requires_llm_key?: boolean;
   openrouter_configured: boolean;
   openai_configured: boolean;
+  dashscope_configured?: boolean;
+  tavily_configured?: boolean;
   default_model: string;
 }
 
