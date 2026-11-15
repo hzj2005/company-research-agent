@@ -57,13 +57,12 @@ def test_reproduction_command_actually_runs_and_matches_value(fact: m.Fact, data
 
 @pytest.mark.parametrize("fact", ALL_FACTS, ids=lambda f: f.fid)
 def test_every_fact_row_has_value_source_commit_and_command(fact: m.Fact, data: dict, doc: str) -> None:
-    rel = m.FILES[fact.key]
-    commit = m.file_commit(rel)
     row = next(line for line in doc.splitlines() if line.startswith(f"| `{fact.fid}` |"))
     assert f"`{m.show(fact.value(data))}`" in row
-    assert f"`{rel}`" in row
+    for key in fact.source_keys():
+        assert f"`{m.FILES[key]}`" in row, f"{fact.fid} 缺源文件 {key}"
+        assert f"`{m.file_commit(m.FILES[key])}`" in row, f"{fact.fid} 缺 {key} 的 commit"
     assert f"`{fact.path}`" in row
-    assert f"`{commit}`" in row
     assert fact.command() in row
 
 
@@ -211,7 +210,38 @@ def test_fact_expression_matches_declared_path(data: dict) -> None:
             assert m.field(data[f.key], f.path) is not None
         else:
             assert "d" in f.expr
-            assert f.derive is not None
+            assert f.derive is not None or f.derive_all is not None
+        if f.sources:
+            assert len(f.sources) > 1
+            assert f.derive_all is not None, "跨文件条目必须给 derive_all"
+            assert f.expr is not None, "跨文件条目必须显式给 expr"
+            for var in (f"d{i}" for i in range(len(f.sources))):
+                assert var in f.expr
+
+
+def test_aggregate_model_requests_equals_its_parts(data: dict) -> None:
+    """跨文件求和必须与分项自洽，避免「累计 6 次」变成手抄数。"""
+    total = next(f for f in ALL_FACTS if f.fid == "F30").value(data)
+    parts = (
+        data["llm_probe"]["usage"]["successful_requests"]
+        + data["live_run"]["llm_usage"]["successful_requests"]
+        + data["live_score"]["usage"]["successful_requests"]
+    )
+    assert total == parts
+
+
+def test_verify_reports_single_failure_instead_of_crashing(data: dict) -> None:
+    """产物被改坏时，--verify 应报「哪条 FAIL」，而不是整批抛 traceback。"""
+    import copy
+
+    broken = copy.deepcopy(data)
+    del broken["live_run"]["credits"]["cumulative"]
+    rows = m.run_verification(broken)
+    assert len(rows) == len(ALL_FACTS), "一条坏字段不应中断其余条目"
+    failed = [r["fid"] for r in rows if not r["ok"]]
+    assert "F01" in failed
+    assert all(r["expected"] is not None or r["fid"] == "F01" for r in rows)
+    assert any("KeyError" in str(r["actual"]) for r in rows if r["fid"] == "F01")
 
 
 def test_every_fact_has_four_required_elements() -> None:

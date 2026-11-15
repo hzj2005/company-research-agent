@@ -91,6 +91,12 @@ def expr_from_path(path: str) -> str:
     return out
 
 
+def _loader(rel: str, var: str) -> str:
+    if rel.endswith(".jsonl"):
+        return f'{var}=[json.loads(l) for l in open("{rel}", encoding="utf-8") if l.strip()]'
+    return f'{var}=json.load(open("{rel}", encoding="utf-8"))'
+
+
 @dataclass(frozen=True)
 class Fact:
     fid: str
@@ -102,8 +108,15 @@ class Fact:
     group: str
     expr: str | None = None  # 默认由 path 生成
     derive: Callable[[Any], Any] | None = None  # 默认 field(doc, path)
+    sources: tuple[str, ...] | None = None  # 跨文件求值时按顺序加载为 d0/d1/...
+    derive_all: Callable[[dict[str, Any]], Any] | None = None
+
+    def source_keys(self) -> tuple[str, ...]:
+        return self.sources or (self.key,)
 
     def value(self, data: dict[str, Any]) -> Any:
+        if self.derive_all:
+            return self.derive_all(data)
         doc = data[self.key]
         return self.derive(doc) if self.derive else field(doc, self.path)
 
@@ -111,20 +124,27 @@ class Fact:
         return self.expr or expr_from_path(self.path)
 
     def code(self) -> str:
-        """一条独立、可直接执行的 python -c 代码：只读原始产物，不依赖本脚本。"""
-        rel = FILES[self.key]
-        if rel.endswith(".jsonl"):
-            loader = (
-                "import json; "
-                f'd=[json.loads(l) for l in open("{rel}", encoding="utf-8") if l.strip()]'
-            )
-        else:
-            loader = f'import json; d=json.load(open("{rel}", encoding="utf-8"))'
-        return f"{loader}; print(json.dumps({self.expression()}, ensure_ascii=False))"
+        """一条独立、可直接执行的 python -c 代码：只读原始产物，不依赖本脚本。
+
+        单文件用变量 `d`；跨文件（`sources`）按顺序用 `d0/d1/...`。
+        """
+        keys = self.source_keys()
+        loads = [_loader(FILES[k], "d" if len(keys) == 1 else f"d{i}") for i, k in enumerate(keys)]
+        return (
+            "import json; " + "; ".join(loads)
+            + f"; print(json.dumps({self.expression()}, ensure_ascii=False))"
+        )
 
     def command(self) -> str:
         # 代码内部只用双引号，外层用单引号包裹，bash / PowerShell 均可直接执行。
         return f"uv run python -c '{self.code()}'"
+
+    def source_ref(self) -> str:
+        files = " + ".join(f"`{FILES[k]}`" for k in self.source_keys())
+        return f"{files} → `{self.path}`"
+
+    def commits(self) -> list[str]:
+        return [file_commit(FILES[k]) for k in self.source_keys()]
 
 
 def show(value: Any) -> str:
@@ -172,6 +192,11 @@ def facts() -> list[Fact]:
         Fact("F12", "dry-run 预算 query 数", "dryrun", "budget.query_count",
              "0 调用预演出完整调研最多会发 {v} 条 query",
              "预算推算，非真实请求；真实检索次数见 F04", "A"),
+        Fact("F26", "报告栏目数", "live_run", "len(config.sections)",
+             "输出 {v} 个固定栏目（Company / Industry / Financial / News）",
+             "栏目结构固定；每栏内容质量另见 F17 / F18 的批改口径", "A",
+             expr='len(d["config"]["sections"])',
+             derive=lambda d: len(d["config"]["sections"])),
         # --- B. 评测工程 / 数据可信度 ---
         Fact("F13", "人工核验标准答案条数", "golden_live",
              'len([r for r in lines if r["kind"] == "claim"])',
@@ -182,7 +207,7 @@ def facts() -> list[Fact]:
         Fact("F14", "覆盖公司数", "golden_live",
              'len({r["case"] for r in lines if r["kind"] == "claim"})',
              "标准答案覆盖 {v} 家公司",
-             "其中仅 1 家有真实报告可比，见 F17", "B",
+             "其中仅 `live_run.company` 一家有真实报告；可对答案的条数见 F17", "B",
              expr='len({r["case"] for r in d if r["kind"] == "claim"})',
              derive=lambda d: len({r["case"] for r in d if r["kind"] == "claim"})),
         Fact("F15", "用户二次修订条数", "golden_live", "0.claims_revised_by_user",
@@ -215,6 +240,17 @@ def facts() -> list[Fact]:
              "fixture 合成语料，测流程契约不测真实效果；除 baseline 外才是 A/B 对照", "B",
              expr='len(d["summary"]["groups_run"])',
              derive=lambda d: len(d["summary"]["groups_run"])),
+        Fact("F27", "评测指标项数", "scorecard", "len(runs.baseline.metrics)",
+             "评测台覆盖 {v} 项指标",
+             "fixture 合成语料；指标定义见 `evals/metrics.py`，不代表真机效果", "B",
+             expr='len(d["runs"]["baseline"]["metrics"])',
+             derive=lambda d: len(d["runs"]["baseline"]["metrics"])),
+        Fact("F28", "fixture 用例数", "scorecard", "runs.baseline.counts.cases",
+             "fixture 回归覆盖 {v} 个用例场景",
+             "合成语料，只测流程契约；真实样本见 F13 / F14", "B"),
+        Fact("F29", "fixture 标准答案条数", "scorecard", "runs.baseline.counts.expected_claims",
+             "fixture 集含 {v} 条标准 claim",
+             "合成语料；人工核验的真实 golden 见 F13", "B"),
         # --- C. 额度纪律 ---
         Fact("F23", "fixture 回归外部 Tavily 调用", "scorecard", "external_calls.tavily",
              "fixture 契约回归全程 {v} 次外部检索",
@@ -226,6 +262,18 @@ def facts() -> list[Fact]:
         Fact("F25", "最小真实探针 credits", "live_probe", "credits.estimated_credits_used",
              "用 {v} credits 的最小探针坐实真实检索返回结构",
              "按官方规则推算；真实累计见 F01", "C"),
+        Fact("F30", "S8 累计真实模型请求", "live_run",
+             "llm_probe + live_run + live_score 三处求和",
+             "S8 阶段累计 {v} 次真实模型请求（兼容性探针 + 端到端报告 + 语义批改）",
+             "分项见 F06 / F19 与 `evals/llm_probe.json`；成本仍 null", "C",
+             sources=("llm_probe", "live_run", "live_score"),
+             expr='d0["usage"]["successful_requests"]+d1["llm_usage"]["successful_requests"]'
+                  '+d2["usage"]["successful_requests"]',
+             derive_all=lambda data: (
+                 data["llm_probe"]["usage"]["successful_requests"]
+                 + data["live_run"]["llm_usage"]["successful_requests"]
+                 + data["live_score"]["usage"]["successful_requests"]
+             )),
     ]
 
 
@@ -243,25 +291,30 @@ def file_commit(rel: str) -> str:
 
 
 def run_verification(data: dict[str, Any]) -> list[dict[str, Any]]:
-    """逐条**实际执行**复现命令，比对 stdout 与产物取值。不做任何网络调用。"""
+    """逐条**实际执行**复现命令，比对 stdout 与产物取值。不做任何网络调用。
+
+    单条失败（产物字段被删、命令报错、值不符）只让该条 FAIL，
+    不中断其余条目 —— 否则「哪条断了」会被一个 traceback 掩盖。
+    """
     rows: list[dict[str, Any]] = []
     for f in facts():
-        r = subprocess.run(
-            [sys.executable, "-c", f.code()],
-            cwd=ROOT, capture_output=True, text=True,
-        )
-        expected = show(f.value(data))
-        actual = r.stdout.strip()
-        rows.append({
-            "fid": f.fid,
-            "label": f.label,
-            "command": f.command(),
-            "expected": expected,
-            "actual": actual,
-            "returncode": r.returncode,
-            "stderr": r.stderr.strip()[:300],
-            "ok": r.returncode == 0 and actual == expected,
-        })
+        row: dict[str, Any] = {
+            "fid": f.fid, "label": f.label, "command": f.command(),
+            "expected": None, "actual": None, "returncode": None, "stderr": "", "ok": False,
+        }
+        try:
+            row["expected"] = show(f.value(data))
+            r = subprocess.run(
+                [sys.executable, "-c", f.code()],
+                cwd=ROOT, capture_output=True, text=True,
+            )
+            row["returncode"] = r.returncode
+            row["stderr"] = r.stderr.strip()[:300]
+            row["actual"] = r.stdout.strip()
+            row["ok"] = r.returncode == 0 and row["actual"] == row["expected"]
+        except Exception as exc:  # 字段缺失 / 编码错误 / 子进程启动失败
+            row["actual"] = f"<{type(exc).__name__}: {exc}>"
+        rows.append(row)
     return rows
 
 
@@ -272,10 +325,10 @@ def fact_table(data: dict[str, Any], group: str) -> list[str]:
         "|---|---|---:|---|---|---|",
     ]
     for f in rows:
-        rel = FILES[f.key]
+        commits = " / ".join(f"`{h}`" for h in f.commits())
         out.append(
             f"| `{f.fid}` | {f.label} | `{show(f.value(data))}` | "
-            f"`{rel}` → `{f.path}` | `{file_commit(rel)}` | `{f.command()}` |"
+            f"{f.source_ref()} | {commits} | `{f.command()}` |"
         )
     return out
 
@@ -428,7 +481,7 @@ def render(data: dict[str, Any], blocked: int) -> str:
     add("## 7. 状态")
     add("")
     add(f"- 本文生成：**{blocked}** 次外部连接、**0** 次模型请求、**0** Tavily credits。")
-    add(f"- 下一步 **S9**：`docs/RESUME.md` 三条简历描述 + 面试追问清单，"
+    add(f"- 下一步 **S9**：`docs/RESUME.md` 3–4 条简历描述 + 面试追问清单，"
         "每条描述必须指回本表编号与对应 commit。")
     add("- 真实效果指标仍为未测；本表只保证「写出来的数字查得到」，不保证「系统效果好」。")
     return "\n".join(L) + "\n"

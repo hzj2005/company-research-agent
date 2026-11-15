@@ -32,7 +32,7 @@
 | **S5** | #5 LangChain 深化 | Tavily 封 `BaseRetriever`；`with_structured_output` + 字段置信度 + 校验重试；行内引用 | `capabilities/`、Pydantic schema | 每条 Fact 能对回 source_url；抽取失败自动重试不静默丢字段 | ✅ 完成（8.1–8.5，见 8.7 / 9.6；**仅 fixture，live 实测归 S8**） |
 | **S6** | #6 HITL | 成稿前 `interrupt()` 复核 + `Command(resume=...)`；复核留痕导出标注 | `graph/nodes/human_review.py` | 中断→恢复后 State 一致；依赖真实 checkpointer | ✅ 完成（10.1–10.4，见 10.5；仅 fixture） |
 | **S7** | #7 评测台 | ~~30–50 真实公司~~ → fixture 派生 golden（3 场景 / 23 claim / 1 拒答）、8 项指标、4 组 A/B、scorecard、CI | `evals/`、`.github/workflows/eval.yml` | 一条命令出分，能定位退化用例 | ✅ 完成（11.1–11.9，仅 fixture；**真实 golden 归 S8**） |
-| **S8** | #8 真实实测 | 切 `APP_MODE=live`，真实模型 + 真实 Tavily + 真实 DB 跑全量 | 对比表、失败案例、成本/延迟取舍 | 每个数字能由脚本与日志当场复现 | 🟢 S8.0–S8.6 全部完成（累计 8/50 credits、6 次模型请求、1 份真实报告、25 条人工核验 golden、1 次真实语义 judge、fixture vs 真机对比表、25 条可复现简历数字出处表，见 `docs/LIVE_REPORT.md` / `docs/RESUME_EVIDENCE.md`）；S9 待执行 |
+| **S8** | #8 真实实测 | 切 `APP_MODE=live`，真实模型 + 真实 Tavily + 真实 DB 跑全量 | 对比表、失败案例、成本/延迟取舍 | 每个数字能由脚本与日志当场复现 | 🟢 S8.0–S8.6 全部完成（累计 8/50 credits、6 次模型请求、1 份真实报告、25 条人工核验 golden、1 次真实语义 judge、fixture vs 真机对比表、30 条可复现简历数字出处表，见 `docs/LIVE_REPORT.md` / `docs/RESUME_EVIDENCE.md`）；S9 待执行 |
 | **S9** | #9 简历交付 | 3–4 条描述 + 面试追问清单 | `docs/RESUME.md` | 每条能指到具体文件与 commit | ⏳ |
 
 **顺序约束**：S2 是 S3/S4/S5/S6 的前置（都要改 `graph.py` / `state.py`），必须串行；S6 依赖 S2 的 checkpointer；S8 依赖 S7 且需要 key。
@@ -1030,6 +1030,8 @@ Tavily 仍 **8 / 50**、本轮 0 次模型请求 / 0 credits。
 **边界不变**：真实准确率 / 幻觉率 / 引用可追溯率 / p95 / 成本单价仍为「未测」；
 本表只保证「写出来的数字查得到」，不保证「系统效果好」。
 
+【S8.6 历史快照：本节记录首次生成的 25 条；复查后已扩到 30 条，见 12.17】
+
 ### 12.16 下一阶段规划：S9 简历交付（待用户放行执行）
 
 **目标**：`docs/RESUME.md`，3–4 条可直接粘贴的简历项目描述 + 面试追问清单。
@@ -1046,5 +1048,41 @@ Tavily 仍 **8 / 50**、本轮 0 次模型请求 / 0 credits。
 4. **验收**：新增 `tests/test_s9_resume.py`，断言简历里出现的每个数字都能在
    `RESUME_EVIDENCE.md` 找到编号、禁用词表为空、归因声明存在；
    全量 pytest 与 `uv pip check` 通过，Tavily 仍 8/50。
+
+**四条描述的主题（每条只讲一件事，避免堆砌）**：
+
+| # | 主题 | 主要证据 |
+|---|---|---|
+| 1 | 图编排与自纠正：LangGraph 子图并行检索、条件边路由、栏目级 retry、checkpoint、HITL 中断/恢复 | `graph/builder.py`、`graph/subgraphs/research.py`、`graph/nodes/`、`tests/test_s6_hitl.py` |
+| 2 | 可信度与评测：人工核验 golden、AI 语义批改、fixture vs 真机对比、A/B 回归门禁 | `evals/golden_live.jsonl`、`evals/judge.py`、`evals/build_live_report.py`、`.github/workflows/eval.yml`；F13/F17/F21/F22 |
+| 3 | 真实链路与额度纪律：三重 opt-in、禁网守卫、调用预算、缓存 | `capabilities/tavily_retriever.py`、`evals/run_eval.py`、`evals/live_dryrun.json`；F01/F02/F04/F05/F12/F30 |
+| 4 | 问题定位：真机报告三类硬伤（自相矛盾 / 来源污染 / 实体混淆）与「引用编号对得上 ≠ 事实对」 | `docs/LIVE_FINDINGS.md`、`evals/live_quality.json`、`docs/LIVE_SCORE.md`；F08/F09/F10 |
+
+### 12.17 S8.6 复查结果：补 5 个漏收数字并加固失败路径（2026-11-15，0 调用 / 0 credits）
+
+用户按惯例要求「先检查上一步、有问题解决、不知道就问、好了再规划下一阶段」。
+用只读探针复查，坐实 **3 个真问题 + 1 处措辞不精确**，全部修复：
+
+1. **漏收 5 个简历真会用的数字**（最实质的问题）：原表 25 条只有单次报告 4 次模型请求，
+   但 `12.15` 与总表已写「累计 6 次模型请求」，简历若照写就**查不到出处**。
+   探针另外发现「4 个栏目」「8 项评测指标」「3 个 fixture 用例」「23 条 fixture claim」
+   都是简历常用工程数字，却一条未收。已补 F26–F30：
+   栏目数 4（`live_run.config.sections`）、指标项数 8、fixture 用例 3、fixture claim 23
+   （均在 `scorecard.runs.baseline`）、累计模型请求 6（`llm_probe` + `live_run` + `live_score` 三处求和）。
+   **为跨文件求和扩展 `Fact.sources` / `derive_all`**，复现命令按顺序加载为 `d0/d1/d2`；
+   出处列与 commit 列同时列出 3 个文件，不再只标主文件。
+2. **`--verify` 失败路径会整批崩**：删掉 `live_run.credits.cumulative` 后探针得到
+   `KeyError` 直接抛出，其余 29 条都跑不到，「哪条断了」被一个 traceback 掩盖。
+   已改成逐条 `try/except` → 该条 `ok=False` 并记下异常类型，其余照跑；
+   新增护栏断言「一条坏字段不影响其余条目，且 F01 明确 FAIL」。
+3. **F14 的边界指向不精确**：「其中仅 1 家有真实报告可比，见 F17」，
+   但 F17 是「可对答案 5 条」、不是「1 家」。改为「仅 `live_run.company` 一家有真实报告；
+   可对答案的条数见 F17」，不再拿条数冒充家数。
+4. **§7 写「三条简历描述」与任务表「3–4 条」不一致**：统一为 3–4 条。
+
+**验收**：`--verify` **30 / 30 PASS**；`tests/test_s8_resume_evidence.py` 从 67 条增至
+**79 条**（新增跨文件求和自洽、失败路径、多源出处完整性）；全量 pytest 通过；
+`uv pip check` 103 包兼容；Tavily 仍 **8 / 50**；本轮 0 次模型请求 / 0 credits。
+12.15 保留为首次生成的 25 条快照并加注记，不篡改历史。
 
 

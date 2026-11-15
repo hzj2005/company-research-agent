@@ -38,6 +38,7 @@ uv run pytest -q tests/test_s8_resume_evidence.py      # 护栏：命令、commi
 | `F10` | 正文行内引用标记 | `27` | `evals/live_run.json` → `report_checks.inline_citation_markers` | `53746f6` | `uv run python -c 'import json; d=json.load(open("evals/live_run.json", encoding="utf-8")); print(json.dumps(d["report_checks"]["inline_citation_markers"], ensure_ascii=False))'` |
 | `F11` | 单次墙钟耗时(ms) | `62875.8` | `evals/live_run.json` → `timing.elapsed_ms` | `53746f6` | `uv run python -c 'import json; d=json.load(open("evals/live_run.json", encoding="utf-8")); print(json.dumps(d["timing"]["elapsed_ms"], ensure_ascii=False))'` |
 | `F12` | dry-run 预算 query 数 | `12` | `evals/live_dryrun.json` → `budget.query_count` | `0d6247b` | `uv run python -c 'import json; d=json.load(open("evals/live_dryrun.json", encoding="utf-8")); print(json.dumps(d["budget"]["query_count"], ensure_ascii=False))'` |
+| `F26` | 报告栏目数 | `4` | `evals/live_run.json` → `len(config.sections)` | `53746f6` | `uv run python -c 'import json; d=json.load(open("evals/live_run.json", encoding="utf-8")); print(json.dumps(len(d["config"]["sections"]), ensure_ascii=False))'` |
 
 ### 2.2 B 组｜评测工程与数据可信度
 
@@ -53,6 +54,9 @@ uv run pytest -q tests/test_s8_resume_evidence.py      # 护栏：命令、commi
 | `F20` | 语义 judge token 用量 | `2776` | `evals/live_score.json` → `usage.total_tokens` | `3e16906` | `uv run python -c 'import json; d=json.load(open("evals/live_score.json", encoding="utf-8")); print(json.dumps(d["usage"]["total_tokens"], ensure_ascii=False))'` |
 | `F21` | 审计重算差异条数 | `0` | `evals/live_score_audit.json` → `len(recheck.delta_vs_original)` | `9041beb` | `uv run python -c 'import json; d=json.load(open("evals/live_score_audit.json", encoding="utf-8")); print(json.dumps(len(d["recheck"]["delta_vs_original"]), ensure_ascii=False))'` |
 | `F22` | fixture 评测组总数 | `6` | `evals/scorecard.json` → `len(summary.groups_run)` | `55f24cb` | `uv run python -c 'import json; d=json.load(open("evals/scorecard.json", encoding="utf-8")); print(json.dumps(len(d["summary"]["groups_run"]), ensure_ascii=False))'` |
+| `F27` | 评测指标项数 | `8` | `evals/scorecard.json` → `len(runs.baseline.metrics)` | `55f24cb` | `uv run python -c 'import json; d=json.load(open("evals/scorecard.json", encoding="utf-8")); print(json.dumps(len(d["runs"]["baseline"]["metrics"]), ensure_ascii=False))'` |
+| `F28` | fixture 用例数 | `3` | `evals/scorecard.json` → `runs.baseline.counts.cases` | `55f24cb` | `uv run python -c 'import json; d=json.load(open("evals/scorecard.json", encoding="utf-8")); print(json.dumps(d["runs"]["baseline"]["counts"]["cases"], ensure_ascii=False))'` |
+| `F29` | fixture 标准答案条数 | `23` | `evals/scorecard.json` → `runs.baseline.counts.expected_claims` | `55f24cb` | `uv run python -c 'import json; d=json.load(open("evals/scorecard.json", encoding="utf-8")); print(json.dumps(d["runs"]["baseline"]["counts"]["expected_claims"], ensure_ascii=False))'` |
 
 ### 2.3 C 组｜额度纪律
 
@@ -61,6 +65,7 @@ uv run pytest -q tests/test_s8_resume_evidence.py      # 护栏：命令、commi
 | `F23` | fixture 回归外部 Tavily 调用 | `0` | `evals/scorecard.json` → `external_calls.tavily` | `55f24cb` | `uv run python -c 'import json; d=json.load(open("evals/scorecard.json", encoding="utf-8")); print(json.dumps(d["external_calls"]["tavily"], ensure_ascii=False))'` |
 | `F24` | 语义 judge 的 Tavily 调用 | `0` | `evals/live_score.json` → `isolation.tavily_client_search_calls` | `3e16906` | `uv run python -c 'import json; d=json.load(open("evals/live_score.json", encoding="utf-8")); print(json.dumps(d["isolation"]["tavily_client_search_calls"], ensure_ascii=False))'` |
 | `F25` | 最小真实探针 credits | `2` | `evals/live_probe.json` → `credits.estimated_credits_used` | `55f24cb` | `uv run python -c 'import json; d=json.load(open("evals/live_probe.json", encoding="utf-8")); print(json.dumps(d["credits"]["estimated_credits_used"], ensure_ascii=False))'` |
+| `F30` | S8 累计真实模型请求 | `6` | `evals/llm_probe.json` + `evals/live_run.json` + `evals/live_score.json` → `llm_probe + live_run + live_score 三处求和` | `53746f6` / `53746f6` / `3e16906` | `uv run python -c 'import json; d0=json.load(open("evals/llm_probe.json", encoding="utf-8")); d1=json.load(open("evals/live_run.json", encoding="utf-8")); d2=json.load(open("evals/live_score.json", encoding="utf-8")); print(json.dumps(d0["usage"]["successful_requests"]+d1["llm_usage"]["successful_requests"]+d2["usage"]["successful_requests"], ensure_ascii=False))'` |
 
 ## 3. 简历可用措辞（按编号）
 
@@ -90,13 +95,15 @@ uv run pytest -q tests/test_s8_resume_evidence.py      # 护栏：命令、commi
   - 边界：含网络往返，非确定性字段；不得写成 p95 / 平均延迟
 - `F12` 0 调用预演出完整调研最多会发 12 条 query
   - 边界：预算推算，非真实请求；真实检索次数见 F04
+- `F26` 输出 4 个固定栏目（Company / Industry / Financial / News）
+  - 边界：栏目结构固定；每栏内容质量另见 F17 / F18 的批改口径
 
 **评测工程**
 
 - `F13` 构建 25 条人工核验的事实标准答案
   - 边界：事实层经用户逐条复核；引用层未核验
 - `F14` 标准答案覆盖 5 家公司
-  - 边界：其中仅 1 家有真实报告可比，见 F17
+  - 边界：其中仅 `live_run.company` 一家有真实报告；可对答案的条数见 F17
 - `F15` 二次复核修订 11 条最终标准答案
   - 边界：正式 golden 同时保留草稿版与最终版，可追溯改动
 - `F16` 复核发现并替换 6 条打不开的原始出处
@@ -113,6 +120,12 @@ uv run pytest -q tests/test_s8_resume_evidence.py      # 护栏：命令、commi
   - 边界：0 差异代表修复未改变既有判定，不代表判定正确
 - `F22` 评测台内置 6 个评测组（含 baseline 与开关 A/B 组）
   - 边界：fixture 合成语料，测流程契约不测真实效果；除 baseline 外才是 A/B 对照
+- `F27` 评测台覆盖 8 项指标
+  - 边界：fixture 合成语料；指标定义见 `evals/metrics.py`，不代表真机效果
+- `F28` fixture 回归覆盖 3 个用例场景
+  - 边界：合成语料，只测流程契约；真实样本见 F13 / F14
+- `F29` fixture 集含 23 条标准 claim
+  - 边界：合成语料；人工核验的真实 golden 见 F13
 
 **额度纪律**
 
@@ -122,6 +135,8 @@ uv run pytest -q tests/test_s8_resume_evidence.py      # 护栏：命令、commi
   - 边界：judge 只读本地报告；额度消耗见 `isolation.tavily_credits_used`
 - `F25` 用 2 credits 的最小探针坐实真实检索返回结构
   - 边界：按官方规则推算；真实累计见 F01
+- `F30` S8 阶段累计 6 次真实模型请求（兼容性探针 + 端到端报告 + 语义批改）
+  - 边界：分项见 F06 / F19 与 `evals/llm_probe.json`；成本仍 null
 
 > 措辞里出现的每个数值都由对应编号的字段插值生成；别把两个编号的数字拼成一句未经验证的复合指标（例如「准确率」「提升」）。
 
@@ -136,14 +151,14 @@ uv run pytest -q tests/test_s8_resume_evidence.py      # 护栏：命令、commi
 | ❌「准确率 0%（因为 supported=0）」 | AI judge 的 supported 计数是极少量样本的判定分布 | `evals/live_score.json` → `summary.supported` 〔`3e16906`〕 | `usable_as_resume_metric=false`、`is_human_adjudicated=false` |
 | ❌ 把 judge 结果写成人工评测指标 | judge 是 AI 判定，未经人工抽检一致率校准 | `evals/live_score.json` → `is_human_adjudicated` 〔`3e16906`〕 | 样本见 F17 / F18，另有措辞瑕疵记录 |
 | ❌「独立开发 / 从零自研」 | 本项目基于上游仓库二次开发（Apache-2.0） | `docs/UPSTREAM.md` → 落地 commit 〔`6e7ce22`〕；根目录 `LICENSE` 〔`23fe92d`〕 | 必须保留 LICENSE 与上游 commit 归因 |
-| ❌「上线 / 甲方 / 用户量 / 效果提升 X%」 | 本项目是本地个人工程复现，无这些事实 | `docs/ACTION_PLAN.md` → 12.3 硬约束 〔`49eb393`〕 | 简历只写「本地实测」 |
+| ❌「上线 / 甲方 / 用户量 / 效果提升 X%」 | 本项目是本地个人工程复现，无这些事实 | `docs/ACTION_PLAN.md` → 12.3 硬约束 〔`6fb301e`〕 | 简历只写「本地实测」 |
 | ❌「引用可追溯率 X%」 | 最终 URL 多数未在本项目内重新抓取核验 | `evals/golden_live.jsonl` → `0.citation_layer_usable_as_metric` 〔`3e16906`〕 | 引用层指标明确不可用 |
 
 ## 5. 未测清单（一律不得写进简历）
 
 - 真实准确率、幻觉率、引用可追溯率、p95 延迟、成本单价：**未测**。
 - 依据：`evals/live_score.json` → `metric_boundary` 〔`3e16906`〕；`evals/live_run.json` → `llm_usage.total_cost_usd` 为 `null` 〔`53746f6`〕。
-- 完整对比见 `docs/LIVE_REPORT.md` 〔`49eb393`〕；fixture 侧有值、真机侧未测，两者不可相减。
+- 完整对比见 `docs/LIVE_REPORT.md` 〔`6fb301e`〕；fixture 侧有值、真机侧未测，两者不可相减。
 - 累计额度仍为 `8` / `50` credits；本阶段未新增任何调用。
 
 ## 6. 复现机制
@@ -151,10 +166,10 @@ uv run pytest -q tests/test_s8_resume_evidence.py      # 护栏：命令、commi
 1. `evals/build_resume_evidence.py` 的 `Fact` 持有 `key/path`；`expr_from_path()` 把同一路径翻译成 `d["a"]["b"]`，拼成独立的 `python -c` 命令。
 2. `--verify` 对每条数字**真的起一个进程执行该命令**，把 stdout 与产物取值逐字比对（两边都用 `json.dumps`，bool/null 不会走样）。
 3. `tests/test_s8_resume_evidence.py` 再做一遍同样的事，并校验 commit 能被 git 解析、文档与 `render()` 一致、生成脚本里没有硬编码的真实数字。
-4. 当前共 **25** 条可复现数字、**9** 条禁写规则；这两个计数也由列表长度生成，不是手填。
+4. 当前共 **30** 条可复现数字、**9** 条禁写规则；这两个计数也由列表长度生成，不是手填。
 
 ## 7. 状态
 
 - 本文生成：**0** 次外部连接、**0** 次模型请求、**0** Tavily credits。
-- 下一步 **S9**：`docs/RESUME.md` 三条简历描述 + 面试追问清单，每条描述必须指回本表编号与对应 commit。
+- 下一步 **S9**：`docs/RESUME.md` 3–4 条简历描述 + 面试追问清单，每条描述必须指回本表编号与对应 commit。
 - 真实效果指标仍为未测；本表只保证「写出来的数字查得到」，不保证「系统效果好」。
