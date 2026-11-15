@@ -1,10 +1,10 @@
 {
   "LICENSE": "23fe92d",
-  "docs/ACTION_PLAN.md": "acd5391",
+  "docs/ACTION_PLAN.md": "5171af6",
   "docs/LIVE_BATCH.md": "b1fdc84",
   "docs/LIVE_REPORT.md": "6fb301e",
   "docs/UPSTREAM.md": "6e7ce22",
-  "evals/credits_ledger.json": "acd5391",
+  "evals/credits_ledger.json": "5171af6",
   "evals/golden_live.jsonl": "3e16906",
   "evals/golden_live_review_filled.jsonl": "3e16906",
   "evals/live_batch.json": "b1fdc84",
