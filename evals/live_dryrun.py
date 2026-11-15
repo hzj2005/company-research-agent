@@ -67,6 +67,9 @@ def _settings_snapshot(settings: Any) -> dict[str, Any]:
         "app_mode": settings.app.mode,
         "search_depth": settings.retrieval.search_depth,
         "max_results_per_query": settings.retrieval.max_results_per_query,
+        # 这个旋钮直接决定预演里出现几条 query（N 条 = 每轮 4N 次检索 = 8N credits）。
+        # 12.32 之前它根本没被生产代码读过，快照里也漏了它，导致「预演」看不出花费假设。
+        "queries_per_analyst": settings.retrieval.queries_per_analyst,
         "topics": dict(settings.retrieval.topics),
         "max_retry": settings.graph.max_retry,
         "sections": list(settings.graph.sections),

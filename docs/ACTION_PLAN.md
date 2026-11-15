@@ -1883,3 +1883,73 @@ Tavily key（必填！）、Company URL、HQ、Industry 四栏，以及一个模
 
 **回归**：前端 `npm run build` 通过（1708 modules，tsc 无错）；后端 `pytest` **512 passed**（与改造前一致）。
 `npm run lint` 跑不起来——`eslint.config.js` 依赖未安装的 `typescript-eslint`，属上游遗留，本轮未修（`tsc` 已经是真正的类型闸门）。
+
+> **状态注记（12.34）**：上面两行是 12.33 当时的快照，原文保留。lint 依赖已在 12.34 补齐并跑通；
+> 12.33.6 只纠了 README 三处，12.34 又查出「选择模型」整节、示例请求、配置参考表等更大一片
+> 上游残留，已按代码重写。以下 12.34 为准。
+
+### 12.34 前五步复查：完成度核对 + 9 处漏洞补齐（2026-11-15，0 调用 / 0 credits）
+
+用户要求「检查前几个步骤完成的是什么任务、完成得怎么样、有漏洞就补」。复查范围是
+**12.29 中文输出与内容密度 / 12.30 历史数据 / 12.31 数据目录迁 E 盘 / 12.32 `queries_per_analyst` /
+12.33 前端瘦身**。方法固定：读代码与产物 → 只读探针查真实状态 → 端到端真机跑一遍 → 全量回归。
+
+#### 12.34.1 完成度核对（每条都要有实证，不写「应该做完了」）
+
+| 步骤 | 任务 | 本轮实证 |
+|---|---|---|
+| 12.29 | 报告原生中文 + 内容变密 | `capabilities/structured.py:32/46/78` 三层语言约束 + `graph/contracts.py:26` 字段描述；`docs/samples/bytedance_live_report_zh.md` 四栏全中文；`config/settings.yaml` 栏目标题中文、`## References` 保留英文 |
+| 12.30 | 历史任务与报告看得见 | `application.py:379/410` 两个查询入口；PG 里 `20 completed / 3 failed` 真实行，探针重启后可查 |
+| 12.31 | 数据目录迁到 E 盘 | `docker inspect pj-pg` → `E:\DockerData\postgresql\pgdata -> /var/lib/postgresql/data (bind)`，容器 healthy |
+| 12.32 | 接上没人读的检索旋钮 | `config/settings.yaml:37` 默认 1、`capabilities/retrieval.py:209` 真按它循环；重跑 dry-run 仍是 12 条 query（4 栏 × 3 轮 × 1），所以「最坏 12 次 / 24 credits」的旧口径**仍然成立**，不用改文档 |
+| 12.33 | 前端 13 组件 → 5 | 全仓扫描旧组件 / 13 种事件 / 地图 key，只剩注释性提及；`npm run build` 1709 modules、JS 305.99 kB、CSS 15.99 kB |
+
+#### 12.34.2 查出的 9 处漏洞（当时测试全绿，全是覆盖空档）
+
+1. **`current_step` 只写内存**：库里有这一列、历史接口也返回它，但 `process_research` 从来不写 →
+   每个节点结束同时 `update_job(status="processing", current_step=node)`；写库失败只告警，绝不把调研搞挂。
+2. **僵尸任务**：进程跑到一半被杀，库里那条永远 `pending`（12.30 见过两条脏数据）→
+   `PostgresJobStore.interrupt_stale()` + lifespan 启动时收尾成 `failed`；**单 worker 前提**写进 `docs/POSTGRES.md` §7。
+3. **测试 DSN 用 `localhost`**：Windows 先解析 `::1`，每条连接白等约 8 秒 → 改 `127.0.0.1`（与服务端口径一致）。
+4. **dry-run 快照漏了花费旋钮**：`queries_per_analyst` 没记进 `evals/live_dryrun.json` → 补字段并重生成（0 请求）。
+5. **前端 `lint` 装不上、`start` 是坏的**：`eslint.config.js` 依赖 `typescript-eslint` 却没装 →
+   补 `typescript-eslint@^8` / `@eslint/js` / `globals`，删旧的 `@typescript-eslint/*@7`；
+   `start` 从 `serve -s build -l $PORT`（目录名错、`$PORT` 在 Windows cmd 不展开）改成 `serve -s dist`。
+6. **chip 常量混在组件里**：抽到 `ui/src/examples.ts`，避免「组件既导出常量又渲染」触发 react-refresh 规则。
+7. **`ui/.env.development.example` 还留 `VITE_GOOGLE_MAPS_API_KEY`** → 删，并注明不要加回来。
+8. **README 门面与代码对不上（最大一片）**：「Choosing a model」整节还在教用户点右上角 Settings 填
+   OpenRouter key；示例请求传 `company_url / industry / hq_location / model` 四个从不消费的字段；
+   配置参考表列着已删的 Google Maps key、「visitors can supply their own key in the UI」；还把
+   `setup.sh` 推荐为安装入口（它只会把 `OPENROUTER/OPENAI/GEMINI` key 写进 `.env`，既不匹配
+   DashScope 链路，也违反「密钥只放系统变量」）。→ 按 `application.py` / `config/settings.yaml` /
+   `run_server.py` 重写这几段，补上 `GET /research` 历史列表、`current_step`、`/health`、
+   `GET /config` 的 `app_mode` / `requires_llm_key`。顺手把 `backend/__init__.py` 那条
+   「请从 UI settings 填 OpenRouter key」的启动警告改成 **live 模式下按 provider 判断**，
+   fixture 不再刷两条误导日志——正是「要几个 API key 才能用」那次困惑的残留来源。
+9. **`ui/public/model-logos/` 25 个图标还在**：S13 删了 `ModelLogo` 组件，但图标仍被 vite
+   原样复制进 `dist`，`public` 58 个文件里近一半无人引用。确认全仓零引用后删除，
+   `public` **58 → 33**；`company-logos` 24 个是 chip 动态拼接 `/company-logos/{name}.png`
+   用的，逐个核对 24 个 chip **0 缺失**，必须保留。
+
+#### 12.34.3 真机验证（不是只看测试绿）
+
+- 往 PG 插一条 `pending` + 一条 `completed` 探针，`TestClient` 真触发 lifespan：
+  `pending → failed`（error 写明「进程重启，任务未完成」），`completed` 一字未改；探针行已删。
+- 同一进程 `POST /research {"company":"Notion"}` → API `completed / current_step=briefing`，
+  库里 `('completed','briefing')`、reports 表 772 字符。**0 credits**（fixture 本地语料）。
+- 回归：`uv run pytest -q` **514 passed**（+2 条 PG 护栏）、`npm run lint` 0 问题、
+  `npm run build` 通过、`uv run python -m evals.build_resume_evidence --verify` **39/39 PASS**、
+  `uv run python -m evals.live_dryrun` `queries=12 / calls_made=0 / blocked=0`。额度台账仍 **90/200**。
+- 构建时撞到工具环境的批量删除保护：vite 清空 `dist` 时一次删 58 个文件被拦。**没有绕过**，
+  而是顺着查到根因是第 9 条那 25 个废弃图标：删掉后 `public` 33 个文件，
+  **连续跑两次 `npm run build` 都通过**（第二次不清 `dist`），1709 modules / JS 305.99 kB / CSS 15.99 kB。
+
+#### 12.34.4 仍未做的（明确边界，不混进「已完成」）
+
+- SSE 进度仍只在进程内 `job_status`；多 worker 时台账查得到、进度流对不上。`interrupt_stale` 同样
+  依赖单 worker，真要上多 worker 得先给任务加 owner + heartbeat 再按 owner 收尾。
+- 真实准确率 / 幻觉率 / 引用可追溯率 / p95 / 单位成本**未测**，简历禁写（见 `docs/RESUME_EVIDENCE.md` §禁写清单）。
+- `GET /research` 只取最近 N 条，没有分页与按 company 的索引。
+- `setup.sh` 本体未改，只在 README 标注为上游遗留、不推荐。
+- 18:26 记录的 CLI/批量评测路径缺陷仍在：`thread_id={company}:{date}` 配合 merge reducer，
+  同公司同天重跑会残留旧数据。API 路径因 thread 拼了 `job_id` 不受影响。**待用户拍板是否修**。

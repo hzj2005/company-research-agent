@@ -201,11 +201,18 @@ verified by socket-level guards in `tests/test_s5_offline.py`.
 
 Open [http://localhost:5174](http://localhost:5174). The API is available at [http://localhost:8000/docs](http://localhost:8000/docs).
 
-Alternatively, `./setup.sh` installs everything, asks for your Tavily and OpenRouter keys, and writes `.env` for you.
+`./setup.sh` is upstream legacy: it writes `OPENROUTER_API_KEY` / `OPENAI_API_KEY` / `GEMINI_API_KEY`
+into `.env`. That does not match this project's live path (DashScope `qwen-plus`) and puts secrets in a
+file. Use `.env.example` as the reference, and keep real keys in OS user variables instead.
 
-### Choosing a model
+### Model and credentials
 
-Click the model button in the top-right corner to open **Settings**. There you can paste an OpenRouter key (stored only in your browser and sent with each research request) and search or filter the full OpenRouter catalog by provider. The selected model is used for every step of the research pipeline. If no OpenRouter key is available, the backend falls back to `OPENAI_API_KEY` (with Gemini for briefings when `GEMINI_API_KEY` is set).
+The UI has no settings panel and no key input. Credentials come only from environment variables:
+`LLM_PROVIDER=dashscope` + `LLM_MODEL=qwen-plus` + `DASHSCOPE_API_KEY` (mapped in-process from
+`SYSTEM_ALIYUN_APIKEY` by `run_server.py`), plus `TAVILY_API_KEY` for real search. Fixture mode needs
+**zero keys**. `/config` returns `app_mode` and `requires_llm_key` so the UI knows whether to block
+submission. `GET /models` is still present as an upstream OpenRouter catalog endpoint, but the
+reworked UI never calls it.
 
 ## Docker
 
@@ -221,10 +228,13 @@ This exposes the API on port `8000` and the UI on port `5174`.
 
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
-| `POST` | `/research` | Start a research job. Accepts optional `openrouter_api_key` and `model`. |
-| `GET` | `/models` | List text models available on OpenRouter (cached for an hour). |
-| `GET` | `/config` | Report which LLM keys the server has configured and the default model. |
-| `GET` | `/research/{job_id}/stream` | Receive server-sent progress and completion events. |
+| `POST` | `/research` | Start a research job; returns `job_id` immediately. Only `company` is consumed. |
+| `GET` | `/health`, `/api/health` | Liveness probe. |
+| `GET` | `/config` | `app_mode`, `requires_llm_key`, which credentials are configured. |
+| `GET` | `/models` | Upstream OpenRouter catalog (kept for compatibility; unused by this UI). |
+| `GET` | `/research` | Recent jobs, optional `company` filter (Postgres only). |
+| `GET` | `/research/{job_id}` | Job status, including `current_step`. |
+| `GET` | `/research/{job_id}/stream` | SSE `progress` / `complete` / `error` events. |
 | `GET` | `/research/{job_id}/report` | Retrieve a completed report. |
 | `POST` | `/generate-pdf` | Generate a PDF from report Markdown. |
 | `GET` | `/research/pdf/{filename}` | Download a generated PDF. |
@@ -234,34 +244,33 @@ Example request:
 ```bash
 curl -X POST http://localhost:8000/research \
   -H 'Content-Type: application/json' \
-  -d '{
-    "company": "Tavily",
-    "company_url": "https://tavily.com",
-    "industry": "AI search",
-    "hq_location": "New York, USA",
-    "model": "anthropic/claude-sonnet-5.5"
-  }'
+  -d '{"company": "Tavily"}'
 ```
 
-`model` and `openrouter_api_key` are optional. When `openrouter_api_key` is omitted, the backend uses `OPENROUTER_API_KEY` from its environment; when neither is set, it falls back to OpenAI/Gemini and ignores `model`.
+`company` is the **only** field the graph consumes (blank strings are rejected with 422).
+`company_url` / `industry` / `hq_location` / `model` / `tavily_api_key` / `openrouter_api_key`
+are declared only for upstream client compatibility: nothing reads them, and keys must come from
+environment variables, never from a request body. The report arrives over the SSE stream, not in
+the POST response. A mode badge in the UI shows whether you are in `live` or `fixture` mode.
 
 ## Configuration reference
 
 | Variable | Required | Used by |
 | --- | --- | --- |
-| `TAVILY_API_KEY` | No | Backend fallback for research and curation; visitors can supply their own key in the UI |
-| `OPENROUTER_API_KEY` | No* | All LLM steps via OpenRouter; users can supply their own key in Settings instead |
-| `OPENROUTER_MODEL` | No | Default OpenRouter model (`google/gemini-3.8-flash` if unset) |
-| `OPENAI_API_KEY` | No* | Research and editing when no OpenRouter key is available |
-| `GEMINI_API_KEY` | No | Briefing synthesis when no OpenRouter key is available (falls back to OpenAI) |
-| `CHECKPOINTER` | No | `sqlite` (default) or `postgres` for graph checkpoints |
-| `POSTGRES_DSN` | No† | Required when `CHECKPOINTER=postgres` or `JOB_STORE=postgres` |
-| `JOB_STORE` | No | `memory` (default) or `postgres` for job/report persistence |
-| `MONGODB_URI` | No | Upstream only; ignored by the reworked entry points |
-| `VITE_API_URL` | Yes | Frontend API connection |
-| `VITE_GOOGLE_MAPS_API_KEY` | No | Frontend location autocomplete |
+| `APP_MODE` | No | `fixture` (zero keys; yaml default) or `live`. The local `.env` sets `live`. |
+| `TAVILY_API_KEY` | live only | Real search. Keep it in OS user variables, not in `.env`. |
+| `TAVILY_LIVE_ENABLED`, `TAVILY_MAX_CALLS`, `TAVILY_DRY_RUN` | No | The three-way opt-in gate; `TAVILY_MAX_CALLS` is a per-run hard budget, `TAVILY_DRY_RUN=true` previews queries with 0 requests. |
+| `LLM_PROVIDER`, `LLM_MODEL`, `LLM_BASE_URL` | live only | `dashscope` / `qwen-plus` / DashScope's OpenAI-compatible endpoint. |
+| `DASHSCOPE_API_KEY` | live only | Mapped in-process from `SYSTEM_ALIYUN_APIKEY` by `run_server.py`. |
+| `QUERIES_PER_ANALYST`, `MAX_RESULTS_PER_QUERY`, `SEARCH_DEPTH` | No | Retrieval cost knobs: N queries per section = 4N searches per round; results-per-query affects tokens, not credits. |
+| `CHECKPOINTER` | No | `sqlite` (default) or `postgres` for graph checkpoints. |
+| `POSTGRES_DSN` | No† | Required when `CHECKPOINTER=postgres` or `JOB_STORE=postgres`. Use `127.0.0.1`, not `localhost`, on Windows. |
+| `JOB_STORE` | No | `memory` (default) or `postgres` for job/report persistence. |
+| `VITE_API_URL` | Yes | Frontend API connection (`ui/.env.development.local`). |
 
-\* An LLM key is needed from somewhere: `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, or an OpenRouter key entered in the app's Settings.
+\* Fixture mode needs no key at all. `OPENROUTER_API_KEY` / `OPENAI_API_KEY` / `GEMINI_API_KEY` /
+`MONGODB_URI` remain in `.env.example` as upstream fallbacks; the reworked entries do not use them.
+`VITE_GOOGLE_MAPS_API_KEY` and the HQ field were removed in S13.
 
 † Only when you opt into Postgres. Defaults (`sqlite` / `memory`) need no database at all — see `docs/POSTGRES.md`.
 

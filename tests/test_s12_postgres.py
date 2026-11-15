@@ -27,7 +27,9 @@ from graph.builder import build_graph
 from graph.state import ResearchState, initial_state
 from persistence.checkpointer import CheckpointSession
 
-DSN = os.getenv("POSTGRES_DSN", "postgresql://postgres:devpass@localhost:5432/research")
+# 用 127.0.0.1 而不是 localhost：Windows 上 localhost 先解析到 ::1，每条连接白等约 8 秒，
+# 十几个用例串起来能慢好几分钟（文档 docs/POSTGRES.md 里对服务端也是一样的口径）。
+DSN = os.getenv("POSTGRES_DSN", "postgresql://postgres:devpass@127.0.0.1:5432/research")
 
 
 def _pg_ready() -> bool:
@@ -403,3 +405,70 @@ def test_retry_once_gives_up_after_two_attempts() -> None:
     with _pytest.raises(psycopg.OperationalError):
         asyncio.run(_retry_once(always_down))
     assert calls["n"] == 2
+
+
+# --- 进度落库与僵尸任务收尾（12.34 复查补）---
+
+
+@requires_pg
+def test_current_step_is_persisted_not_only_kept_in_memory() -> None:
+    """库里有这一列、历史接口也返回它，就必须真的写；否则那一路全是空字段。"""
+    import asyncio
+
+    from persistence.job_store import PostgresJobStore
+
+    jid = f"step-{uuid.uuid4().hex[:8]}"
+
+    async def flow() -> None:
+        store = await PostgresJobStore(DSN).open()
+        try:
+            await store.create_job(jid, {"company": "Notion"})
+            assert (await store.get_job(jid))["current_step"] is None, "新建任务不该有进度"
+            await store.update_job(jid, status="processing", current_step="evidence_check")
+            job = await store.get_job(jid)
+            assert job["status"] == "processing"
+            assert job["current_step"] == "evidence_check"
+        finally:
+            async with store.pool.connection() as conn:
+                await conn.execute("delete from jobs where job_id = %s", (jid,))
+            await store.close()
+
+    asyncio.run(flow())
+
+
+@requires_pg
+def test_interrupt_stale_closes_orphans_but_never_rewrites_finished_rows() -> None:
+    """进程重启后非终态任务要收尾；completed / failed 一个字都不许改。"""
+    import asyncio
+
+    from persistence.job_store import PostgresJobStore
+
+    tag = uuid.uuid4().hex[:8]
+    ids = {name: f"{name}-{tag}" for name in ("pending", "processing", "done", "failed")}
+
+    async def flow() -> None:
+        store = await PostgresJobStore(DSN).open()
+        try:
+            for name, jid in ids.items():
+                await store.create_job(jid, {"company": name})
+            await store.update_job(ids["processing"], status="processing", current_step="briefing")
+            await store.update_job(ids["done"], status="completed")
+            await store.update_job(ids["failed"], status="failed", error="boom")
+
+            # 定向收尾：只碰这四条，不动库里别人的行
+            cleaned = await store.interrupt_stale("进程重启，任务未完成（测试）", list(ids.values()))
+            assert cleaned == 2, f"应只收尾 pending + processing，实际 {cleaned}"
+
+            assert (await store.get_job(ids["pending"]))["status"] == "failed"
+            assert (await store.get_job(ids["processing"]))["status"] == "failed"
+            assert "进程重启" in (await store.get_job(ids["processing"]))["error"]
+            assert (await store.get_job(ids["done"]))["status"] == "completed"
+            assert (await store.get_job(ids["failed"]))["error"] == "boom"
+        finally:
+            async with store.pool.connection() as conn:
+                await conn.execute(
+                    "delete from jobs where job_id = any(%s)", (list(ids.values()),)
+                )
+            await store.close()
+
+    asyncio.run(flow())

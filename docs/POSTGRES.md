@@ -60,9 +60,10 @@ Linux/macOS 无此问题，正常 `uvicorn application:app` 即可。
 curl -s -X POST localhost:8000/research -H 'Content-Type: application/json' -d '{"company":"Notion"}'
 curl -s localhost:8000/research/<job_id>
 
-# 库侧：行数 + 最新任务
+# 库侧：行数 + 最新任务（current_step 能看出停在哪个节点）
 docker exec pj-pg psql -U postgres -d research \
-  -c "select (select count(*) from checkpoints) cp, (select count(*) from jobs) jobs;"
+  -c "select (select count(*) from checkpoints) cp, (select count(*) from jobs) jobs;" \
+  -c "select company, status, current_step from jobs order by created_at desc limit 3;"
 ```
 
 **重启服务再查同一个 job_id** —— 还能查到，才算真的持久化（内存版会 404）。
@@ -101,8 +102,12 @@ uv run python -m persistence.migrate_sqlite_to_pg --apply --force   # 目标已�
 
 - **SSE 实时进度仍在进程内存**（`job_status`），所以多 worker 时：台账查得到，进度流可能对不上。
   这条是明确留下的，不是 bug。
-- **没有「僵尸任务」清理**：进程在任务跑到一半时被杀，这条 job 会永远停在 `pending` / `processing`。
-  没有启动时回收，也没有超时标记——查历史时要自己看 `updated_at`。
+- **僵尸任务在启动时收尾**（12.34 起）：进程在任务跑到一半时被杀，下次启动会把库里所有
+  `pending` / `processing` 一次性标成 `failed`，`error` 写明「进程重启，任务未完成」。
+  这依赖**单 worker** 前提——多 worker 时，一个进程启动会误杀另一个进程正在跑的任务；
+  真要上多 worker，得先给任务加 owner + heartbeat，再按 owner 收尾。
+- **进度会逐步写库**：每个节点跑完写一次 `current_step`（`grounding → … → briefing`），
+  所以历史列表里能看到任务停在哪一步。写库失败只打日志，不会中断调研。
 - **checkpoint 连接是「一次运行一条」**，不是连接池：`CheckpointSession` 每个请求新建连接、跑完关闭。
   并发几十个请求会顶到 Postgres 的 `max_connections`；本项目是本地单机，够用，但没有为此做池化。
 - **评测产物、检索缓存、PDF 文件不进库**：它们是证据，要能 `git diff`、能离线回放、能被出处表引用。

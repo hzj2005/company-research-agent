@@ -62,6 +62,16 @@ async def lifespan(_app: FastAPI):
                     "`uv run python -m persistence.setup_postgres`"
                 )
             logger.info("任务台账：Postgres（重启后仍可查）")
+            try:
+                # 上一个进程留下的非终态任务永远不会有人推进（job_status 在内存里），
+                # 启动时收尾一次，否则历史列表里会一直挂着 pending。
+                cleaned = await job_store.interrupt_stale(
+                    "进程重启，任务未完成（启动时自动收尾）"
+                )
+                if cleaned:
+                    logger.warning("收尾了 %s 条上次进程留下的未完成任务", cleaned)
+            except Exception as exc:  # 收尾失败不该拦住启动
+                logger.warning("收尾未完成任务失败：%s", exc)
         except Exception as exc:  # 连不上 / 库没建 / DSN 空
             if settings.app.mode == "live":
                 # 真实模式必须失败：宁可起不来，也不要假装存下来了
@@ -99,6 +109,13 @@ pdf_service = PDFService({"pdf_output_dir": "pdfs"})
 # 就多一条「本地能跑、换台机器跑不起来」的路。
 
 class ResearchRequest(BaseModel):
+    """公司名是**唯一**被图消费的字段。
+
+    下面几个可选字段只为兼容上游客户端而保留声明，图一个都不读：检索与模型的
+    凭据只从环境变量取（`/config` 也印证这一点），把 key 放进请求体既不会被用，
+    还会被写进日志的风险。写进台账的也只有 `company`。
+    """
+
     company: str = Field(min_length=1)
     company_url: str | None = None
     industry: str | None = None
@@ -211,6 +228,15 @@ async def process_research(job_id: str, data: ResearchRequest, db_path=None):
                     "current_step": node_name,
                     "last_update": datetime.now().isoformat()
                 })
+                if job_store is not None:
+                    # 之前这里只写内存：库里 current_step 永远是空的，接口却把它返回出去。
+                    # 台账写失败只告警，绝不因为「记进度」把调研本身搞挂。
+                    try:
+                        await job_store.update_job(
+                            job_id, status="processing", current_step=node_name
+                        )
+                    except Exception as exc:
+                        logger.warning("进度写台账失败（调研继续）：%s", exc)
 
             snapshot = await compiled.aget_state(config)
             final_state = dict(snapshot.values)

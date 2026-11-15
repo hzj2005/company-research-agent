@@ -1,33 +1,4 @@
-/**
- * 首页默认可选的公司。全部写死在这里，只用于「点一下就填进去」，
- * 不再是上游那套「填 url / 总部 / 行业」的表单——后端只消费公司名。
- */
-export const EXAMPLE_COMPANIES = [
-  'Stripe',
-  'Shopify',
-  'Notion',
-  'Tesla',
-  'Airbnb',
-  'Slack',
-  'Spotify',
-  'Microsoft',
-  'Apple',
-  'Amazon',
-  'Google',
-  'Netflix',
-  'Meta',
-  'Nvidia',
-  'Adobe',
-  'Figma',
-  'Zoom',
-  'Salesforce',
-  'Uber',
-  'Coinbase',
-  'Datadog',
-  'Snowflake',
-  'Canva',
-  'Atlassian',
-];
+import { EXAMPLE_COMPANIES } from '../examples';
 
 interface ExampleChipsProps {
   disabled: boolean;

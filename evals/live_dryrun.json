@@ -186,6 +186,7 @@
     "live_max_calls_per_run": 0,
     "max_results_per_query": 5,
     "max_retry": 2,
+    "queries_per_analyst": 1,
     "search_depth": "advanced",
     "sections": [
       "company",
