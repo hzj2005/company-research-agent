@@ -84,6 +84,10 @@ Tavily 装哨兵，失败如实落盘不重试。prompt **不送**任何出处/A
 产物标 `is_human_adjudicated=false`、`usable_as_resume_metric=false`：
 AI judge 未经人工抽检一致率校准，样本仅 1 家 5 条，引用层未核验。
 
+12:22 按用户要求复查，只读探针坐实 6 个问题（证据句校验口径 3 处、失败留痕、
+输入/代码指纹、跨盘符路径），已全部修复并补 `evals/audit_score.py` 事后审计；
+按新口径重算 5 条判定 **0 差异**，原始产物一字未改。详见 `docs/LIVE_SCORE.md` §7。
+
 ## 5. 简历可用性（如实）
 
 现在能写的：**「25 条真实事实经人工二次复核（11 条修订），落成正式 golden」**、
@@ -100,6 +104,7 @@ S8.4 的 `supported=0` 是 5 条 AI 判定明细，两者都不得当效果数�
 uv run python -m evals.build_golden_live    # 0 调用，重生成 evals/golden_live.jsonl
 uv run python -m evals.build_golden --check
 uv run python -m evals.judge                # 默认 dry-run，0 调用、0 额度
+uv run python -m evals.audit_score          # 0 调用，生成事后审计与指纹
 uv run pytest -q
 ```
 

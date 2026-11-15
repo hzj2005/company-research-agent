@@ -9,9 +9,10 @@
 1. **不泄漏出处**：送进 prompt 的只有 `claim_id` + `expected_text`；
    `source_url` / `source_content` / `ai_note` / `human_note` 一律不送，
    否则 judge 会拿标准答案的出处替报告脑补证据。
-2. **证据句可机器核验**：模型给的 evidence_quotes 必须能在报告正文里逐字
-   （归一化空白与 `[n]` 标记后）找到；核不到的标 `quote_check_failed`，
-   不作为可靠判定依据，绝不静默采信。
+2. **证据句可机器核验**：模型给的 evidence_quotes 必须能在报告**正文**里
+   （不含 References 来源清单；归一化空白与 `[n]` 标记、忽略大小写后）找到；
+   核不到的标 `quote_check_failed`，不作为可靠判定依据，绝不静默采信。
+   References 标题不能冒充正文证据句，也不能给任何 verdict 塞编造引文。
 3. **1 次请求 / 0 credits**：`max_retries=0` 且不做任何重试；给
    `AsyncTavilyClient.search` 装哨兵，被调用即抛错；不构造 document_tool。
    真实调用需同时满足 `--live` + `JUDGE_LIVE=1` + `DASHSCOPE_API_KEY`，
@@ -20,18 +21,22 @@
    `usable_as_resume_metric=false`。样本仅 1 家 5 条，AI judge 未经人工抽检
    一致率校准，引用层未核验 —— 这里的计数只能叫「判定明细」，不是准确率。
 
-失败如实落盘（status=failed + error），不吞异常、不自动烧第 2 次请求。
+模型调用失败如实落盘（status=failed + error）；前置检查失败写独立的
+`live_score_failed.json`，**不覆盖已有的成功产物**。两类失败都不吞异常、
+不自动烧第 2 次请求。
 """
 
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import re
 import sys
 import time
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Any, Iterator, Literal
 
 from langchain_community.callbacks import get_openai_callback
@@ -45,6 +50,7 @@ GOLDEN = ROOT / "evals" / "golden_live.jsonl"
 REPORT = ROOT / "evals" / "live_run.json"
 OUTPUT = ROOT / "evals" / "live_score.json"
 DRYRUN_OUTPUT = ROOT / "evals" / "live_score_dryrun.json"
+PREFLIGHT_OUTPUT = ROOT / "evals" / "live_score_failed.json"
 
 VERDICTS = ("supported", "refuted", "not_mentioned")
 OPT_IN_VAR = "JUDGE_LIVE"
@@ -129,14 +135,40 @@ def build_payload(claims: list[dict[str, Any]], report: str, company: str) -> st
     )
 
 
+def report_body(report: str) -> str:
+    """证据句只认正文；References 是来源清单，标题文字不算事实陈述。"""
+    body, sep, _ = report.partition("## References")
+    return body if sep else report
+
+
 def normalise(text: str) -> str:
+    """归一化空白与 [n] 标记、忽略大小写 —— 不是「原始逐字」，口径要写清。"""
     text = re.sub(r"\[\d+\]", " ", text)  # 行内引用编号不属于事实文字
     return re.sub(r"\s+", " ", text).strip().casefold()
 
 
 def quote_in_report(quote: str, report: str) -> bool:
     q = normalise(quote)
-    return bool(q) and q in normalise(report)
+    return bool(q) and q in normalise(report_body(report))
+
+
+def fingerprints(payload: str) -> dict[str, Any]:
+    """运行时采集输入/代码指纹，让判定结果可追溯到具体版本（S7 同款口径）。"""
+    def sha(data: bytes) -> str:
+        return hashlib.sha256(data).hexdigest()
+
+    return {
+        "recorded_at": "runtime",
+        "golden_live_jsonl_sha256": sha(GOLDEN.read_bytes()),
+        "live_run_json_sha256": sha(REPORT.read_bytes()),
+        "judge_py_sha256": sha(Path(__file__).read_bytes()),
+        "system_prompt_sha256": sha(_SYSTEM_PROMPT.encode("utf-8")),
+        "payload_sha256": sha(payload.encode("utf-8")),
+        "note": (
+            "运行时采集；用于判断产物对应哪版 golden / 报告 / prompt / 代码。"
+            "payload_sha256 覆盖送进模型的全部文本"
+        ),
+    }
 
 
 def assemble(
@@ -153,6 +185,7 @@ def assemble(
     company: str,
     elapsed_ms: float,
     isolation: dict[str, Any],
+    provenance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """把模型输出与可机器核验的校验结果合成最终产物。"""
     by_id = {c["id"]: c for c in claims}
@@ -188,8 +221,11 @@ def assemble(
             continue
         unverified = [q for q in j.evidence_quotes if not quote_in_report(q, report)]
         quotes_verified = bool(j.evidence_quotes) and not unverified
-        # supported / refuted 必须有可核验的逐字证据，否则判定不可靠
-        quote_check_failed = j.verdict in ("supported", "refuted") and not quotes_verified
+        # 两独立失败源：① 给了但核不到（任何 verdict 都不许塞编造引文）；
+        # ② supported/refuted 却没给可核验证据（无引文或引文全失效）。
+        quote_check_failed = bool(unverified) or (
+            j.verdict in ("supported", "refuted") and not quotes_verified
+        )
         verdicts.append(
             {
                 "claim_id": c["id"],
@@ -214,9 +250,11 @@ def assemble(
         "self_conflict": sum(v["self_conflict"] is True for v in verdicts),
         "quote_check_failed": sum(v["quote_check_failed"] is True for v in verdicts),
     }
+    # 模型请求成功但 judge 少返回/多返回条目时，不能标 ok 让人误以为全判完
+    effective_status = "partial" if status == "ok" and not schema_ok else status
     return {
         "purpose": "S8.4 语义批改：人工核验的中文标准答案 vs 系统生成的英文真实报告",
-        "status": status,
+        "status": effective_status,
         "error": error,
         "method": "AI judge (qwen-plus structured output)，非人工判定",
         "is_real_judge": is_real_judge,
@@ -240,6 +278,8 @@ def assemble(
             "skipped_claims": skipped_claims,
             "skipped_reason": "其余公司没有真实报告可比，不得凭空生成卷子",
             "report_chars": len(report),
+            "report_body_chars": len(report_body(report)),
+            "quote_check_scope": "仅报告正文（## References 之前的段落），来源清单标题不算证据",
             "claim_fields_sent_to_judge": ["claim_id", "expected_text"],
             "claim_fields_withheld_from_judge": [
                 "source_url",
@@ -253,6 +293,7 @@ def assemble(
         },
         "config": config,
         "usage": usage,
+        "provenance": provenance,
         "schema_check": {
             "ok": schema_ok,
             "missing_claim_ids": missing,
@@ -265,7 +306,8 @@ def assemble(
         "verdict_note": (
             "supported 表示报告有支持该事实的陈述，不代表该陈述的来源 URL 真的支持它；"
             "refuted 含报告自相矛盾的情形；not_mentioned 表示未写到，不等于系统答错。"
-            "quote_check_failed=true 的条目证据句未能在报告中逐字核到，判定不可靠；"
+            "证据句校验只在正文做，归一化空白/[n]/大小写，不是原始逐字比对；"
+            "quote_check_failed=true 表示引文核不到或该判却缺引文，判定不可靠；"
             "quote_check_failed=null 表示 judge 未返回该条，单独计入 unjudged。"
         ),
         "isolation": isolation,
@@ -444,6 +486,7 @@ def run_live() -> dict[str, Any]:
             "document_tool_constructed": False,
             "tavily_credits_used": 0,
         },
+        provenance=fingerprints(payload),
     )
     result["credentials"] = {
         "api_key_env_var": "DASHSCOPE_API_KEY",
@@ -454,6 +497,33 @@ def run_live() -> dict[str, Any]:
     }
     OUTPUT.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return result
+
+
+def write_preflight_failure(exc: BaseException) -> dict[str, Any]:
+    """前置检查失败留痕：写独立文件，绝不覆盖已有的成功产物。"""
+    key = os.environ.get("DASHSCOPE_API_KEY", "").strip()
+    error = f"{type(exc).__name__}: {str(exc)[:400]}"
+    if key and key in error:
+        error = "错误信息中疑似含密钥，已整体屏蔽"
+    payload = {
+        "purpose": "S8.4 judge 前置检查失败记录（0 次模型请求）",
+        "status": "failed",
+        "phase": "preflight",
+        "error": error,
+        "is_real_judge": False,
+        "is_human_adjudicated": False,
+        "usable_as_resume_metric": False,
+        "llm_requests": 0,
+        "tavily_credits_used": 0,
+        "note": (
+            "配置/输入/prompt 检查在模型调用之前失败，未发起任何请求；"
+            "evals/live_score.json（若已存在）未被覆盖"
+        ),
+    }
+    PREFLIGHT_OUTPUT.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    return payload
 
 
 def main() -> int:
@@ -469,7 +539,15 @@ def main() -> int:
         print(f"  scored={r['summary']['scored_claims']} skipped={r['dataset']['skipped_claims']}")
         print("  这是占位判定，不是评测结果；不得写进简历")
         return 0
-    r = run_live()
+    try:
+        r = run_live()
+    except Exception as exc:  # 前置失败也留痕，但不覆盖成功产物
+        failed = write_preflight_failure(exc)
+        # 用文件名而非 relative_to(ROOT)：被 monkeypatch 到跨盘符临时目录时不会抛错
+        print(f"[S8.4 judge live] preflight failed -> evals/{PREFLIGHT_OUTPUT.name}")
+        print(f"  error={failed['error'][:200]}")
+        print("  0 次模型请求；已有 evals/live_score.json 未被覆盖")
+        return 1
     print(f"[S8.4 judge live] status={r['status']} -> {OUTPUT.relative_to(ROOT)}")
     print(
         f"  usage={r['usage'].get('total_tokens', 'n/a')} tokens, "

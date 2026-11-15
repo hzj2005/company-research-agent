@@ -32,7 +32,7 @@
 | **S5** | #5 LangChain 深化 | Tavily 封 `BaseRetriever`；`with_structured_output` + 字段置信度 + 校验重试；行内引用 | `capabilities/`、Pydantic schema | 每条 Fact 能对回 source_url；抽取失败自动重试不静默丢字段 | ✅ 完成（8.1–8.5，见 8.7 / 9.6；**仅 fixture，live 实测归 S8**） |
 | **S6** | #6 HITL | 成稿前 `interrupt()` 复核 + `Command(resume=...)`；复核留痕导出标注 | `graph/nodes/human_review.py` | 中断→恢复后 State 一致；依赖真实 checkpointer | ✅ 完成（10.1–10.4，见 10.5；仅 fixture） |
 | **S7** | #7 评测台 | ~~30–50 真实公司~~ → fixture 派生 golden（3 场景 / 23 claim / 1 拒答）、8 项指标、4 组 A/B、scorecard、CI | `evals/`、`.github/workflows/eval.yml` | 一条命令出分，能定位退化用例 | ✅ 完成（11.1–11.9，仅 fixture；**真实 golden 归 S8**） |
-| **S8** | #8 真实实测 | 切 `APP_MODE=live`，真实模型 + 真实 Tavily + 真实 DB 跑全量 | 对比表、失败案例、成本/延迟取舍 | 每个数字能由脚本与日志当场复现 | 🟢 S8.0–S8.3 首轮完成（累计 8/50 credits、5 次模型请求、1 份真实报告，见 `docs/LIVE_FINDINGS.md`）；S8.4 起待 25 条 golden 人工复核 |
+| **S8** | #8 真实实测 | 切 `APP_MODE=live`，真实模型 + 真实 Tavily + 真实 DB 跑全量 | 对比表、失败案例、成本/延迟取舍 | 每个数字能由脚本与日志当场复现 | 🟢 S8.0–S8.4 完成（累计 8/50 credits、6 次模型请求、1 份真实报告、25 条人工核验 golden + 1 次真实语义 judge，见 `docs/LIVE_FINDINGS.md` / `docs/LIVE_SCORE.md`）；S8.5 对比表起待执行 |
 | **S9** | #9 简历交付 | 3–4 条描述 + 面试追问清单 | `docs/RESUME.md` | 每条能指到具体文件与 commit | ⏳ |
 
 **顺序约束**：S2 是 S3/S4/S5/S6 的前置（都要改 `graph.py` / `state.py`），必须串行；S6 依赖 S2 的 checkpointer；S8 依赖 S7 且需要 key。
@@ -878,6 +878,9 @@ Pydantic `model_fields` 改用类属性避免弃用告警。
   `tests/test_s8_golden_live.py`（把写死的 25/6/10 改成从输入动态推导，新增
   「旧草稿不得覆盖用户最终措辞」「6 条原始 URL 全部替换」「换 URL 不得伪造页面内容」护栏）。
   全量 **206 passed**。0 调用 0 credits，Tavily 仍 8/50。
+> 注：本节末段的「下一步」是 12.10 写就时的历史快照；S8.4 已于 12.11 完成，
+> 复查与修复见 12.12。
+
 - 下一步不变：S8.4 语义 judge（中文答案 vs 英文报告，待用户放行 1 次 `qwen-plus` 或走 0 调用弱代理）
   → S8.5 对比表 → S8.6 数字出处表 → S9 简历。仍无真实准确率 / 幻觉率 / p95 / 成本单价。
 
@@ -911,5 +914,59 @@ Tavily 累计仍 **8/50**；`total_cost_usd=null` 不编造单价。5 条全判�
 **仍未做（S8.5 → S8.6 → S9）**：`docs/LIVE_REPORT.md` fixture `1.000` vs 真机判定对比表
 （0 调用）；`docs/RESUME_EVIDENCE.md` 数字出处表；3–4 条简历描述 + 面试追问清单。
 真实准确率 / 幻觉率 / 引用可追溯率 / p95 / 成本单价**仍为「未测」**，不得写进简历。
+
+### 12.12 S8.4 复查：6 个问题及修复（2026-11-15 12:22，0 调用 / 0 credits）
+
+用户按惯例要求「先检查上一步有没有问题」。只读探针逐个坐实，**不是静态翻看**：
+
+| # | 问题 | 坐实 | 修复 |
+|---|---|---|---|
+| 1 | References 标题能冒充正文证据句 | Forbes 标题在 References、不在正文，旧 `quote_in_report` 返回 `True` | 新增 `report_body()`，只在 `## References` 之前核 |
+| 2 | `not_mentioned` 塞编造引文不标失败 | 塞 `"THIS IS INVENTED BY JUDGE"`，`quote_check_failed=False` | 任何 verdict 有核不到的引文一律标失败 |
+| 3 | schema 缺条目时 `status` 仍 `ok` | 只返回 1/5 条，`status=ok` 但 `unjudged=4` | 改 `partial`，与 `main()` 返回码一致 |
+| 4 | 前置检查失败不落盘 | `common_inputs()` 等在 `try` 外，异常直接冒泡 | `main()` 兜底写独立 `live_score_failed.json`，不覆盖成功产物 |
+| 5 | 产物无输入/代码指纹（S7 已有 `code_sha256` 先例） | `has_any_hash_field=False` | `judge.py` 加运行时 `fingerprints()`；既有产物由审计事后补记 |
+| 6 | 跨盘符路径让 `relative_to(ROOT)` 抛错 | 新增护栏测试实测失败 | 打印改用文件名 |
+
+另修两处措辞：自动校验是「归一化后比对」而非「原始逐字」；`LIVE_SCORE.md` §2
+表格列名对 `not_mentioned` 行不成立。总表 S8 状态同步为 S8.0–S8.4 完成。
+
+**新增**：`evals/audit_score.py` + `evals/live_score_audit.json`（0 调用事后审计）、
+`tests/test_s8_judge.py` 扩到 25 条、`tests/test_s8_score_audit.py` 5 条。
+审计结论：按新口径重算 5 条，`delta_vs_original=[]`、`verdicts_changed=[]`，
+**0 差异，既有判定与 3 条正文引文全部不受影响**；原始 `live_score.json` 一字未改，
+用 `source_artifact_sha256` 锚定。指纹标 `recorded_after_run=true`，
+`judge_py_at_run_commit_sha256` 取自 git `3e16906`，如实说明是事后补记、
+不等价于运行时采集。详见 `docs/LIVE_SCORE.md` §7。全量 **236 passed**，Tavily 仍 8/50。
+
+### 12.13 下一阶段规划：S8.5 fixture vs 真机对比表（待用户放行执行）
+
+**目标**：一份能当场复现的 `docs/LIVE_REPORT.md`，把「假数据满分」与「真机表现」
+并排讲清楚，作为 S8.6 简历数字出处表的事实底座。
+
+**输入全部已存在，0 调用 / 0 credits，不重跑模型、不扩样本、不动额度**：
+`evals/scorecard.json`（`runs.baseline.metrics`）、`evals/live_run.json`（Notion 真机报告）、
+`evals/live_quality.json`（词法检查）、`evals/live_score.json`（5 条 AI 判定）、
+`evals/live_score_audit.json`（§7 审计）、`evals/live_dryrun.json`（预算推算）。
+
+**12:22 只读探针先核实了输入可用，并发现一处必须写进红线的口径风险**：
+`scorecard.json` 的 `runs.baseline.metrics` 里就有 `fact_accuracy=1.0`、
+`citation_traceability=1.0`、`hallucination_rate=0.0`、`p95_latency_ms=2379.819`、
+`cost_per_report=0.0`，但全部来自 **fixture 合成语料 + 0 外部调用**（文件自带
+`disclaimer` 已声明）。数字不是顶层字段，藏在 `runs.baseline.metrics`，
+对比表要按这个字段路径取，且**绝不能把 `2379.819 ms` 当真实 p95、
+把 `0.0` 当真实成本**引用。准确口径：fixture 侧有值、真机侧全部未测。
+
+**产出与验收**：
+1. 对比表：逐项列「fixture 测什么 / 真机看到什么 / 差距说明」，每个数字标出处文件 + 字段；
+2. 已知问题清单：`LIVE_SCORE.md` §4 的三类硬伤 + judge 措辞瑕疵，写成可讲的项目发现；
+3. 「不能写成什么」清单：`1.000` ≠ 效果好、`supported=0` ≠ 准确率 0%、
+   不编造 p95 / 成本单价 / 幻觉率；样本量 1 家 5 条必须写明；
+4. 复现命令与 CI 护栏：新增 `tests/test_s8_live_report.py`，断言对比表里每个数字
+   能从对应产物字段重算出来，禁止手写死数字；
+5. 全量测试通过、`uv pip check` 通过、Tavily 仍 8/50。
+
+**之后**：S8.6 `docs/RESUME_EVIDENCE.md` 数字出处表 → S9 三条简历描述 + 面试追问清单。
+真实准确率 / 幻觉率 / 引用可追溯率 / p95 / 成本单价仍为未测，全程不得写进简历。
 
 

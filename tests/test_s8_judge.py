@@ -107,6 +107,16 @@ def test_verbatim_quote_with_citation_marker_matches() -> None:
     assert judge.quote_in_report("  Notion   was founded in 2013. [6] ", REPORT)
 
 
+def test_reference_title_cannot_impersonate_body_evidence() -> None:
+    """修复前：References 里的标题能骗过 quote_in_report。"""
+    body, sep, refs = REPORT.partition("## References")
+    assert sep
+    title = "[4] https://example.org/a"
+    assert title in refs and title not in body
+    assert judge.quote_in_report("https://example.org/a", REPORT) is False
+    assert judge.report_body(REPORT) == body
+
+
 @pytest.mark.parametrize(
     "fake",
     [
@@ -192,6 +202,30 @@ def test_not_mentioned_does_not_require_evidence() -> None:
     assert r["judgements"][0]["quote_check_failed"] is False
 
 
+def test_not_mentioned_with_fabricated_quote_is_flagged() -> None:
+    """修复前：not_mentioned 塞编造引文，unverified_quotes 有值却不算失败。"""
+    r = _assemble(
+        _judged(
+            judge.ClaimJudgement(
+                claim_id=CLAIMS[0]["id"],
+                verdict="not_mentioned",
+                evidence_quotes=["THIS IS INVENTED BY JUDGE"],
+                reason="不该给引文",
+            ),
+            judge.ClaimJudgement(
+                claim_id=CLAIMS[1]["id"],
+                verdict="not_mentioned",
+                evidence_quotes=[],
+                reason="正常",
+            ),
+        )
+    )
+    assert r["judgements"][0]["quote_check_failed"] is True
+    assert r["judgements"][0]["unverified_quotes"] == ["THIS IS INVENTED BY JUDGE"]
+    assert r["judgements"][1]["quote_check_failed"] is False
+    assert r["summary"]["quote_check_failed"] == 1
+
+
 # --- schema 对齐 -------------------------------------------------------------
 
 
@@ -213,6 +247,20 @@ def test_missing_unknown_and_duplicate_ids_are_reported_not_silently_fixed() -> 
     assert s["unknown_claim_ids"] == ["ghost"]
     assert s["duplicate_claim_ids"] == ["notion:company:0"]
     assert len(r["judgements"]) == 2  # 不凭空多造条目
+
+
+def test_incomplete_schema_downgrades_status_to_partial() -> None:
+    """修复前：模型少返回 4 条，产物 status 仍写 ok。"""
+    r = _assemble(
+        _judged(
+            judge.ClaimJudgement(
+                claim_id=CLAIMS[0]["id"], verdict="not_mentioned", reason="only one"
+            )
+        )
+    )
+    assert r["status"] == "partial"
+    assert r["schema_check"]["ok"] is False
+    assert r["summary"]["unjudged"] == len(CLAIMS) - 1
 
 
 def test_verdict_enum_rejects_invalid_value() -> None:
@@ -253,6 +301,62 @@ def test_real_run_requires_both_flag_and_env(monkeypatch: pytest.MonkeyPatch) ->
     with pytest.raises(SystemExit, match="不发起任何模型请求"):
         judge.main()
     assert called == [], "缺 opt-in 时绝不能发起真实请求"
+
+
+def test_preflight_failure_leaves_successful_artifact_untouched(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    success = tmp_path / "live_score.json"
+    success.write_text('{"status": "ok"}', encoding="utf-8")
+    failed = tmp_path / "live_score_failed.json"
+    monkeypatch.setattr(judge, "OUTPUT", success)
+    monkeypatch.setattr(judge, "PREFLIGHT_OUTPUT", failed)
+    monkeypatch.setattr(judge, "run_live", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
+    monkeypatch.setattr(sys, "argv", ["judge.py", "--live"])
+    monkeypatch.setenv(judge.OPT_IN_VAR, "1")
+
+    assert judge.main() == 1
+    assert json.loads(success.read_text(encoding="utf-8"))["status"] == "ok"
+    d = json.loads(failed.read_text(encoding="utf-8"))
+    assert d["status"] == "failed" and d["phase"] == "preflight"
+    assert d["llm_requests"] == 0 and d["tavily_credits_used"] == 0
+    assert d["is_real_judge"] is False
+
+
+def test_preflight_failure_masks_api_key(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
+    monkeypatch.setattr(judge, "PREFLIGHT_OUTPUT", tmp_path / "failed.json")
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "SUPERSECRET123")
+    d = judge.write_preflight_failure(RuntimeError("bad key SUPERSECRET123"))
+    assert "SUPERSECRET123" not in json.dumps(d, ensure_ascii=False)
+    assert "整体屏蔽" in d["error"]
+
+
+def test_fingerprints_cover_inputs_and_track_changes(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    golden = tmp_path / "g.jsonl"
+    report = tmp_path / "r.json"
+    golden.write_text("a", encoding="utf-8")
+    report.write_text("b", encoding="utf-8")
+    monkeypatch.setattr(judge, "GOLDEN", golden)
+    monkeypatch.setattr(judge, "REPORT", report)
+    a = judge.fingerprints("payload-A")
+    b = judge.fingerprints("payload-B")
+    for k in (
+        "golden_live_jsonl_sha256",
+        "live_run_json_sha256",
+        "judge_py_sha256",
+        "system_prompt_sha256",
+        "payload_sha256",
+    ):
+        assert len(a[k]) == 64, k
+    assert a["recorded_at"] == "runtime"
+    assert a["payload_sha256"] != b["payload_sha256"]
+    golden.write_text("changed", encoding="utf-8")
+    assert (
+        judge.fingerprints("payload-A")["golden_live_jsonl_sha256"]
+        != a["golden_live_jsonl_sha256"]
+    )
 
 
 # --- 红线 4：不冒充人工 / 不冒充指标 ----------------------------------------
@@ -321,7 +425,11 @@ def test_real_score_artifact_is_auditable_and_verifiable() -> None:
     report = json.loads(
         (judge.ROOT / "evals" / "live_run.json").read_text(encoding="utf-8")
     )["report"]
+    body = judge.report_body(report)
+    assert len(body) < len(report), "真实报告必须有独立的 References 段"
     for v in d["judgements"]:
         assert v["quote_check_failed"] is not True, f"{v['claim_id']} 证据句核不上"
         for q in v["evidence_quotes"]:
+            # 双层：精确逐字 + 必须落在正文（不能来自 References 标题）
             assert q in report, f"{v['claim_id']} 的引文不是报告原文逐字片段：{q[:60]}"
+            assert q in body, f"{v['claim_id']} 的引文来自 References 而非正文：{q[:60]}"

@@ -24,6 +24,8 @@
     "skipped_claims": 20,
     "skipped_reason": "其余公司没有真实报告可比，不得凭空生成卷子",
     "report_chars": 4998,
+    "report_body_chars": 3286,
+    "quote_check_scope": "仅报告正文（## References 之前的段落），来源清单标题不算证据",
     "claim_fields_sent_to_judge": [
       "claim_id",
       "expected_text"
@@ -40,6 +42,7 @@
   },
   "config": null,
   "usage": null,
+  "provenance": null,
   "schema_check": {
     "ok": true,
     "missing_claim_ids": [],
@@ -122,7 +125,7 @@
     "self_conflict": 0,
     "quote_check_failed": 0
   },
-  "verdict_note": "supported 表示报告有支持该事实的陈述，不代表该陈述的来源 URL 真的支持它；refuted 含报告自相矛盾的情形；not_mentioned 表示未写到，不等于系统答错。quote_check_failed=true 的条目证据句未能在报告中逐字核到，判定不可靠；quote_check_failed=null 表示 judge 未返回该条，单独计入 unjudged。",
+  "verdict_note": "supported 表示报告有支持该事实的陈述，不代表该陈述的来源 URL 真的支持它；refuted 含报告自相矛盾的情形；not_mentioned 表示未写到，不等于系统答错。证据句校验只在正文做，归一化空白/[n]/大小写，不是原始逐字比对；quote_check_failed=true 表示引文核不到或该判却缺引文，判定不可靠；quote_check_failed=null 表示 judge 未返回该条，单独计入 unjudged。",
   "isolation": {
     "llm_requests": 0,
     "tavily_client_search_calls": 0,

@@ -1,0 +1,89 @@
+{
+  "purpose": "S8.4 复查：为既有真实判定补事后可追溯性与新口径重核",
+  "source_artifact": "evals/live_score.json",
+  "source_artifact_sha256": "0e27dbf2d7c9bf1dd08686aa8d7ad074ab87d01b89e93a59db8bac136f7b61d6",
+  "source_artifact_modified_by_this_script": false,
+  "recorded_after_run": true,
+  "recorded_after_run_note": "以下是事后补记，不是运行时采集；不等价于 judge.py 下次运行时的 fingerprints() 字段。原始判定 verdict/reason/evidence_quotes 一字未改。",
+  "isolated_calls": {
+    "llm_requests": 0,
+    "tavily_credits_used": 0
+  },
+  "provenance": {
+    "git_commit_after_run": "3e16906",
+    "git_commit_note": "真实判定完成后立即提交；judge.py 在运行结束到该提交之间未编辑，故该提交的 judge.py 可代表运行时版本（依据 git 历史推定，非运行时采集）",
+    "golden_live_jsonl_sha256": "b4ae6761a24a988a9ae9a5fc57a0559f47be773325c3df42a6195ac23b3f9c6c",
+    "live_run_json_sha256": "4267c833792563b75154cfb015249fa9789bb2c727868ea4acd77c02d57cbed4",
+    "judge_py_current_sha256": "8e17ff40fe40b543e00404752d508b1a8055525b76653ff74339012bf37cf6de",
+    "judge_py_at_run_commit_sha256": "ffd96c1aa1d878eb8bfcc47a172fd241998f40d08eca0a71a37e960eb81d0ab8",
+    "judge_py_at_run_commit_available": true,
+    "report_body_chars": 3286,
+    "report_total_chars": 4998
+  },
+  "recheck": {
+    "rule_after_fix": "证据句只在报告正文核（排除 ## References），归一化空白/[n]/大小写",
+    "rows": [
+      {
+        "claim_id": "notion:company:0",
+        "verdict": "refuted",
+        "evidence_quotes": [
+          "Notion was founded in 2013. [6]",
+          "Notion was founded in 2014. [4]"
+        ],
+        "quotes_present_and_all_in_body": true,
+        "unverified_quotes_under_fixed_rule": [],
+        "quote_check_failed_original": false,
+        "quote_check_failed_recomputed": false
+      },
+      {
+        "claim_id": "notion:company:1",
+        "verdict": "refuted",
+        "evidence_quotes": [
+          "Notion's headquarters is located at 51 Lloyd Baker Street, London, England, WC1X 9AA, United Kingdom. [4]"
+        ],
+        "quotes_present_and_all_in_body": true,
+        "unverified_quotes_under_fixed_rule": [],
+        "quote_check_failed_original": false,
+        "quote_check_failed_recomputed": false
+      },
+      {
+        "claim_id": "notion:company:2",
+        "verdict": "not_mentioned",
+        "evidence_quotes": [],
+        "quotes_present_and_all_in_body": false,
+        "unverified_quotes_under_fixed_rule": [],
+        "quote_check_failed_original": false,
+        "quote_check_failed_recomputed": false
+      },
+      {
+        "claim_id": "notion:industry:0",
+        "verdict": "not_mentioned",
+        "evidence_quotes": [],
+        "quotes_present_and_all_in_body": false,
+        "unverified_quotes_under_fixed_rule": [],
+        "quote_check_failed_original": false,
+        "quote_check_failed_recomputed": false
+      },
+      {
+        "claim_id": "notion:financial:0",
+        "verdict": "not_mentioned",
+        "evidence_quotes": [],
+        "quotes_present_and_all_in_body": false,
+        "unverified_quotes_under_fixed_rule": [],
+        "quote_check_failed_original": false,
+        "quote_check_failed_recomputed": false
+      }
+    ],
+    "delta_vs_original": [],
+    "verdicts_changed": [],
+    "conclusion": "修复未改变既有 5 条判定的 verdict 与 quote_check_failed 结论"
+  },
+  "known_issues_fixed": [
+    "References 标题不再能冒充正文证据句",
+    "任何 verdict 塞编造引文都会标 quote_check_failed",
+    "schema 缺条目时 status 改为 partial 而非 ok",
+    "前置检查失败写 live_score_failed.json，不覆盖已有成功产物",
+    "新增运行时 fingerprints() 输入/代码指纹"
+  ],
+  "metric_boundary_note": "本审计不产出新指标，不改变 usable_as_resume_metric=false；真实准确率 / 幻觉率 / p95 / 成本单价仍未测"
+}
