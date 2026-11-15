@@ -1,16 +1,20 @@
 {
   "LICENSE": "23fe92d",
-  "docs/ACTION_PLAN.md": "076a992",
+  "docs/ACTION_PLAN.md": "b1fdc84",
+  "docs/LIVE_BATCH.md": "b1fdc84",
   "docs/LIVE_REPORT.md": "6fb301e",
   "docs/UPSTREAM.md": "6e7ce22",
+  "evals/credits_ledger.json": "bbf11c1",
   "evals/golden_live.jsonl": "3e16906",
   "evals/golden_live_review_filled.jsonl": "3e16906",
+  "evals/live_batch.json": "b1fdc84",
   "evals/live_dryrun.json": "0d6247b",
   "evals/live_probe.json": "55f24cb",
   "evals/live_quality.json": "53746f6",
   "evals/live_run.json": "53746f6",
   "evals/live_score.json": "3e16906",
   "evals/live_score_audit.json": "9041beb",
+  "evals/live_score_batch.json": "b1fdc84",
   "evals/llm_probe.json": "53746f6",
   "evals/scorecard.json": "55f24cb"
 }

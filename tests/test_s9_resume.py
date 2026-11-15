@@ -83,20 +83,8 @@ def test_templates_contain_no_bare_numbers() -> None:
 
 
 def _measured_numbers(text: str) -> list[str]:
-    """去掉代码、编号、章节号、指标名后剩下的数字，才是「当作事实写出来的数字」。"""
-    text = re.sub(r"```.*?```", "", text, flags=re.S)
-    text = re.sub(r"`[^`]*`", "", text)
-    text = re.sub(r"\bF\d{2}\b", "", text)
-    text = re.sub(r"\bQ\d+\b", "", text)
-    text = re.sub(r"\bS\d+\b", "", text)
-    text = re.sub(r"§\d+(?:\.\d+)*", "", text)
-    text = re.sub(r"(?m)^#{1,6}\s*[\d.]*\s*", "", text)
-    text = re.sub(r"(?m)^\s*\d+\.\s+", "", text)
-    text = text.replace("Apache-2.0", "")
-    text = re.sub(r"\bp95\b", "", text)
-    for token in r.TEMPLATE_ALLOWED_TOKENS:
-        text = text.replace(token, "")
-    return re.findall(r"\d+(?:\.\d+)?", text)
+    """口径与实现都在 `evals/build_resume.py`，S9 / S11 共用一把尺。"""
+    return r.measured_numbers(text)
 
 
 def test_every_number_in_document_comes_from_the_evidence_table(data: dict, doc: str) -> None:

@@ -56,7 +56,8 @@ BULLETS: tuple[Bullet, ...] = (
     Bullet(
         title="图编排与可恢复的人工复核（LangGraph）",
         paste=(
-            "用 LangGraph 重构公司调研流水线：主图状态机串联「检索 → 结构化抽取 → 证据判定 → 成稿」，"
+            "在上游线性 LangGraph 流水线（一路 `add_edge` 串到底、无分支、无 checkpoint）的基础上重构："
+            "主图状态机串联「检索 → 结构化抽取 → 证据判定 → 成稿」，"
             "检索侧改为 `Send` 动态派发的并行子图，按栏目白名单只重跑证据不足的分支"
             "（输出 Company / Industry / Financial / News {F26} 个栏目）；"
             "全流程落 SQLite checkpoint，成稿前可 `interrupt()` 暂停、换进程 `Command(resume=...)` 续跑。"
@@ -135,26 +136,29 @@ BULLETS: tuple[Bullet, ...] = (
         ),
     ),
     Bullet(
-        title="从真机报告定位 fixture 测不出的问题",
+        title="从真机报告定位并修复合成语料测不出的问题",
         paste=(
-            "真机跑出来的报告暴露了合成语料测不出的三类问题：同一栏目成立年份自相矛盾、"
-            "总部写成伦敦门牌并混入博客来源、"
-            "Financial 栏目整栏是马来西亚上市公司 Notion VTec Berhad 的股票指标（实体混淆）；"
-            "可对答案的只有 {F17} 条（其余 {F18} 条无报告，如实跳过）。"
-            "据此把「引用编号对得上 ≠ 事实对」写进评测口径，真实准确率 / 幻觉率 / 引用可追溯率 / "
-            "p95 / 成本单价一律标为未测。"
+            "真机报告暴露了三类合成语料测不出的问题：同一栏目成立年份自相矛盾、"
+            "总部写成伦敦门牌、Financial 栏目整栏是马来西亚上市公司 Notion VTec Berhad 的股价指标；"
+            "回看原文确认前两处同源——CB Insights 收录的其实是另一家同名公司（`notion.online`）。"
+            "按「标题交易所代码绑定 + 跨文档官网域名一致性」加实体消歧，真实语料触发 {F39} 次拒绝、"
+            "逐篇回放核对全为异实体、无一误杀；同栏目多值冲突改为显式标注，不替读者取舍。"
+            "重跑 {F32} 家公司 / {F33} 条人工核验标准答案：{F34} 条被完整支持、{F35} 条判为反证、"
+            "{F36} 条未写到，引文逐字校验失败 {F37} 条。"
         ),
         detail=(
-            "三类问题的证据分别是：同栏目同时出现两个不同成立年份；总部写成伦敦具体门牌、来源里混入 "
-            "`medium.com`；Financial 栏目整栏是另一家同名公司的股票指标。",
-            "fixture 测不出的原因很具体：合成语料同义自洽、每家公司只有一种实体、没有同名公司干扰，"
-            "所以词法代理指标全绿——这不是「模型很强」，是「语料没埋雷」。",
-            "修复优先级：先做实体消歧（Financial 栏先校验 ticker / 地区），再把同栏目多值冲突前置到"
-            "证据判定阶段直接回退，最后补抓引用页面，把 URL 级回溯升级为内容级。",
+            "不按置信度选一条的理由很具体：真机里那篇错的 score 反而更高，按分数保留会留下错的。"
+            "来源本身就错时，「让读者看见冲突」比「替他选」更诚实。",
+            "隔离器有两道护栏：整栏全被拒时全部放行并留痕（规则在这家公司名上失效，不许清空栏目）；"
+            "开关关闭时单文档规则与跨文档一致性必须同时停（第一版只停了前者，离线回放对照时抓到）。",
+            "修复后瓶颈换了：{F36} 条未写到，说明问题从「说错」变成「没说」，那是检索召回与栏目分配，"
+            "不是消歧能解决的。真实准确率 / 幻觉率 / 引用可追溯率 / p95 / 成本单价仍一律标未测。",
         ),
         code=(
+            "capabilities/entity_guard.py",
+            "capabilities/conflict.py",
             "docs/LIVE_SCORE.md",
-            "docs/LIVE_REPORT.md",
+            "docs/LIVE_BATCH.md",
             "evals/live_quality.json",
         ),
     ),
@@ -319,6 +323,26 @@ def fact_values(data: dict[str, Any]) -> dict[str, str]:
     return {f.fid: ev.show(f.value(data)) for f in ev.facts()}
 
 
+def measured_numbers(text: str) -> list[str]:
+    """去掉代码、编号、章节号、指标名后剩下的数字，才是「当作事实写出来的数字」。
+
+    S9 与 S11 的护栏共用这一份实现：两处各写一份，口径迟早会漂。
+    """
+    text = re.sub(r"```.*?```", "", text, flags=re.S)
+    text = re.sub(r"`[^`]*`", "", text)
+    text = re.sub(r"\bF\d{2}\b", "", text)
+    text = re.sub(r"\bQ\d+\b", "", text)
+    text = re.sub(r"\bS\d+\b", "", text)
+    text = re.sub(r"§\d+(?:\.\d+)*", "", text)
+    text = re.sub(r"(?m)^#{1,6}\s*[\d.]*\s*", "", text)
+    text = re.sub(r"(?m)^\s*\d+\.\s+", "", text)
+    text = text.replace("Apache-2.0", "")
+    text = re.sub(r"\bp95\b", "", text)
+    for token in TEMPLATE_ALLOWED_TOKENS:
+        text = text.replace(token, "")
+    return re.findall(r"\d+(?:\.\d+)?", text)
+
+
 def fill(text: str, values: dict[str, str]) -> str:
     def repl(m: re.Match[str]) -> str:
         fid = f"F{m.group(1)}"
@@ -350,7 +374,8 @@ def render(data: dict[str, Any], blocked: int = 0) -> str:
     add("")
     add("## 1. 可直接粘贴的简历条目")
     add("")
-    add("> 粘贴版不带编号；编号与出处见 §2，面试前按 §3 过一遍。")
+    add("> 粘贴版不带编号；编号与出处见 §2，面试前按 §3 过一遍。"
+        "按 Agent 工程 / RAG / 后端三个方向重排的版本见 `docs/RESUME_VARIANTS.md`。")
     add("")
     for b in BULLETS:
         add(f"- **{b.title}**：{fill(b.paste, values)}")

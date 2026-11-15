@@ -308,7 +308,9 @@ def test_verify_reports_single_failure_instead_of_crashing(data: dict) -> None:
 def test_every_fact_has_four_required_elements() -> None:
     for f in ALL_FACTS:
         assert f.fid and f.label and f.key in m.FILES and f.path and f.resume and f.note
-        assert f.group in {"A", "B", "C"}
+        assert f.group in m.GROUP_IDS, (
+            f"{f.fid} 的分组 {f.group} 没在 GROUPS 里登记，§2 的分表会漏掉它"
+        )
         assert f.command().startswith("uv run python -c '")
         assert f.command().endswith("'")
         assert "import evals" not in f.code()

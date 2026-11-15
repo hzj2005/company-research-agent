@@ -44,6 +44,7 @@ DOC_REFS: tuple[str, ...] = (
     "docs/UPSTREAM.md",
     "docs/ACTION_PLAN.md",
     "docs/LIVE_REPORT.md",
+    "docs/LIVE_BATCH.md",
     "LICENSE",
 )
 
@@ -58,9 +59,23 @@ FILES: dict[str, str] = {
     "llm_probe": "evals/llm_probe.json",
     "golden_live": "evals/golden_live.jsonl",
     "review_filled": "evals/golden_live_review_filled.jsonl",
+    # S10-B 批量真实调研
+    "live_batch": "evals/live_batch.json",
+    "live_score_batch": "evals/live_score_batch.json",
+    "ledger": "evals/credits_ledger.json",
 }
 
 NOT_MEASURED = "未测"
+
+# 分组顺序 = 文档顺序。新增一组必须登记在这里：§2 的分表与 §3 的措辞都由它驱动，
+# 漏登记会让 `Fact.group` 指向表外的字母，测试当场红（S10-B 就漏过一次）。
+GROUPS: tuple[tuple[str, str, str], ...] = (
+    ("A", "真机一次端到端报告", "真机实测"),
+    ("B", "评测工程与数据可信度", "评测工程"),
+    ("C", "额度纪律", "额度纪律"),
+    ("D", "批量真实调研（S10-B）", "批量真实调研"),
+)
+GROUP_IDS = tuple(gid for gid, _, _ in GROUPS)
 
 
 def upstream_commit() -> str:
@@ -294,6 +309,33 @@ def facts() -> list[Fact]:
                  + data["live_run"]["llm_usage"]["successful_requests"]
                  + data["live_score"]["usage"]["successful_requests"]
              )),
+        # --- D. 批量真实调研（S10-B）---
+        Fact("F32", "批量真实调研公司数", "live_batch", "len(companies)",
+             "一次批量真实调研覆盖 {v} 家公司",
+             "Notion 复用 S8.3 磁盘缓存（0 credits），其余为新检索", "D",
+             expr='len(d["companies"])',
+             derive=lambda d: len(d["companies"])),
+        Fact("F33", "可批改标准答案条数", "live_score_batch", "aggregate.scored_claims",
+             "把 {v} 条人工核验标准答案全部对上真实报告",
+             "全部经用户逐条复核；引用层仍未核验，不是准确率的分母", "D"),
+        Fact("F34", "判为支持的条数", "live_score_batch", "aggregate.supported",
+             "其中 {v} 条被报告完整支持",
+             "supported 只表示报告里有这句话，不代表来源 URL 真的支持它", "D"),
+        Fact("F35", "判为反证的条数", "live_score_batch", "aggregate.refuted",
+             "{v} 条被判为与标准答案矛盾",
+             "含 judge 口径偏严的情形（见 `docs/LIVE_BATCH.md` §5），不等于系统答错", "D"),
+        Fact("F36", "判为未提及的条数", "live_score_batch", "aggregate.not_mentioned",
+             "{v} 条报告未写到",
+             "未提及不等于答错；把它算错或排除会得到两个都不该叫准确率的数", "D"),
+        Fact("F37", "引文校验失败条数", "live_score_batch", "aggregate.quote_check_failed",
+             "批改的引文逐字校验失败 {v} 条",
+             "0 说明每条判定都有可核到的原文证据，不是模型凭印象编的", "D"),
+        Fact("F38", "Tavily credits 累计", "ledger", "total_credits",
+             "全部真实检索累计 {v} credits（含一次失败重跑的损失）",
+             "台账在 `evals/credits_ledger.json`；失败的运行也照记", "D"),
+        Fact("F39", "实体消歧拒绝篇次", "live_batch", "summary.entity_guard_rejections",
+             "实体消歧在真实数据上触发 {v} 次拒绝",
+             "是「篇次」不是「篇数」：2 篇不同文档各被首轮与补搜两次判定", "D"),
     ]
 
 
@@ -478,30 +520,34 @@ def render(data: dict[str, Any], blocked: int) -> str:
     add("")
     add("## 2. 可写进简历的数字")
     add("")
-    add("### 2.1 A 组｜真机一次端到端报告")
-    add("")
-    add(f"样本：公司 `{show(field(data['live_run'], 'company'))}`，"
-        f"`app_mode={show(field(data['live_run'], 'config.app_mode'))}`，"
-        f"真实报告 **{show(len({field(data['live_run'], 'company')}))} 份**"
-        "（该文件只记录一次运行）。所有数字来自同一次运行，不得外推成总体表现。")
-    add("")
-    L += fact_table(data, "A")
-    add("")
-    add("### 2.2 B 组｜评测工程与数据可信度")
-    add("")
-    L += fact_table(data, "B")
-    add("")
-    add("### 2.3 C 组｜额度纪律")
-    add("")
-    L += fact_table(data, "C")
-    add("")
+    SAMPLES = {
+        "A": lambda: (
+            f"样本：公司 `{show(field(data['live_run'], 'company'))}`，"
+            f"`app_mode={show(field(data['live_run'], 'config.app_mode'))}`，"
+            f"真实报告 **{show(len({field(data['live_run'], 'company')}))} 份**"
+            "（该文件只记录一次运行）。所有数字来自同一次运行，不得外推成总体表现。"
+        ),
+        "D": lambda: (
+            f"样本：{v('F32')} 家公司、{v('F33')} 条人工核验标准答案（用户逐条复核）；"
+            f"额度以 `evals/credits_ledger.json` 为准，累计 {v('F38')}。"
+            "这批数据是 S10 修复后重跑的，与 A 组的单家报告不可混算。"
+        ),
+    }
+    for i, (gid, title, _) in enumerate(GROUPS, start=1):
+        add(f"### 2.{i} {gid} 组｜{title}")
+        add("")
+        if gid in SAMPLES:
+            add(SAMPLES[gid]())
+            add("")
+        L += fact_table(data, gid)
+        add("")
     add("## 3. 简历可用措辞（按编号）")
     add("")
-    for group, title in [("A", "真机实测"), ("B", "评测工程"), ("C", "额度纪律")]:
+    for gid, _, title in GROUPS:
         add(f"**{title}**")
         add("")
         for x in f:
-            if x.group != group:
+            if x.group != gid:
                 continue
             add(f"- `{x.fid}` {x.resume.format(v=show(x.value(data)))}")
             add(f"  - 边界：{x.note}")

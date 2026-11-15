@@ -69,6 +69,21 @@ uv run pytest -q tests/test_s8_resume_evidence.py      # 护栏：命令、commi
 | `F31` | 单次 advanced 检索计费 | `2` | `evals/live_run.json` → `credits.credits_per_search` | `53746f6` | `uv run python -c 'import json; d=json.load(open("evals/live_run.json", encoding="utf-8")); print(json.dumps(d["credits"]["credits_per_search"], ensure_ascii=False))'` |
 | `F30` | S8 累计真实模型请求 | `6` | `evals/llm_probe.json` + `evals/live_run.json` + `evals/live_score.json` → `llm_probe + live_run + live_score 三处求和` | `53746f6` / `53746f6` / `3e16906` | `uv run python -c 'import json; d0=json.load(open("evals/llm_probe.json", encoding="utf-8")); d1=json.load(open("evals/live_run.json", encoding="utf-8")); d2=json.load(open("evals/live_score.json", encoding="utf-8")); print(json.dumps(d0["usage"]["successful_requests"]+d1["llm_usage"]["successful_requests"]+d2["usage"]["successful_requests"], ensure_ascii=False))'` |
 
+### 2.4 D 组｜批量真实调研（S10-B）
+
+样本：4 家公司、20 条人工核验标准答案（用户逐条复核）；额度以 `evals/credits_ledger.json` 为准，累计 42。这批数据是 S10 修复后重跑的，与 A 组的单家报告不可混算。
+
+| 编号 | 数字 | 值 | 出处（文件 → 字段） | commit | 复现命令 |
+|---|---|---:|---|---|---|
+| `F32` | 批量真实调研公司数 | `4` | `evals/live_batch.json` → `len(companies)` | `b1fdc84` | `uv run python -c 'import json; d=json.load(open("evals/live_batch.json", encoding="utf-8")); print(json.dumps(len(d["companies"]), ensure_ascii=False))'` |
+| `F33` | 可批改标准答案条数 | `20` | `evals/live_score_batch.json` → `aggregate.scored_claims` | `b1fdc84` | `uv run python -c 'import json; d=json.load(open("evals/live_score_batch.json", encoding="utf-8")); print(json.dumps(d["aggregate"]["scored_claims"], ensure_ascii=False))'` |
+| `F34` | 判为支持的条数 | `8` | `evals/live_score_batch.json` → `aggregate.supported` | `b1fdc84` | `uv run python -c 'import json; d=json.load(open("evals/live_score_batch.json", encoding="utf-8")); print(json.dumps(d["aggregate"]["supported"], ensure_ascii=False))'` |
+| `F35` | 判为反证的条数 | `2` | `evals/live_score_batch.json` → `aggregate.refuted` | `b1fdc84` | `uv run python -c 'import json; d=json.load(open("evals/live_score_batch.json", encoding="utf-8")); print(json.dumps(d["aggregate"]["refuted"], ensure_ascii=False))'` |
+| `F36` | 判为未提及的条数 | `10` | `evals/live_score_batch.json` → `aggregate.not_mentioned` | `b1fdc84` | `uv run python -c 'import json; d=json.load(open("evals/live_score_batch.json", encoding="utf-8")); print(json.dumps(d["aggregate"]["not_mentioned"], ensure_ascii=False))'` |
+| `F37` | 引文校验失败条数 | `0` | `evals/live_score_batch.json` → `aggregate.quote_check_failed` | `b1fdc84` | `uv run python -c 'import json; d=json.load(open("evals/live_score_batch.json", encoding="utf-8")); print(json.dumps(d["aggregate"]["quote_check_failed"], ensure_ascii=False))'` |
+| `F38` | Tavily credits 累计 | `42` | `evals/credits_ledger.json` → `total_credits` | `bbf11c1` | `uv run python -c 'import json; d=json.load(open("evals/credits_ledger.json", encoding="utf-8")); print(json.dumps(d["total_credits"], ensure_ascii=False))'` |
+| `F39` | 实体消歧拒绝篇次 | `4` | `evals/live_batch.json` → `summary.entity_guard_rejections` | `b1fdc84` | `uv run python -c 'import json; d=json.load(open("evals/live_batch.json", encoding="utf-8")); print(json.dumps(d["summary"]["entity_guard_rejections"], ensure_ascii=False))'` |
+
 ## 3. 简历可用措辞（按编号）
 
 **真机实测**
@@ -142,6 +157,25 @@ uv run pytest -q tests/test_s8_resume_evidence.py      # 护栏：命令、commi
 - `F30` S8 阶段累计 6 次真实模型请求（兼容性探针 + 端到端报告 + 语义批改）
   - 边界：分项见 F06 / F19 与 `evals/llm_probe.json`；成本仍 null
 
+**批量真实调研**
+
+- `F32` 一次批量真实调研覆盖 4 家公司
+  - 边界：Notion 复用 S8.3 磁盘缓存（0 credits），其余为新检索
+- `F33` 把 20 条人工核验标准答案全部对上真实报告
+  - 边界：全部经用户逐条复核；引用层仍未核验，不是准确率的分母
+- `F34` 其中 8 条被报告完整支持
+  - 边界：supported 只表示报告里有这句话，不代表来源 URL 真的支持它
+- `F35` 2 条被判为与标准答案矛盾
+  - 边界：含 judge 口径偏严的情形（见 `docs/LIVE_BATCH.md` §5），不等于系统答错
+- `F36` 10 条报告未写到
+  - 边界：未提及不等于答错；把它算错或排除会得到两个都不该叫准确率的数
+- `F37` 批改的引文逐字校验失败 0 条
+  - 边界：0 说明每条判定都有可核到的原文证据，不是模型凭印象编的
+- `F38` 全部真实检索累计 42 credits（含一次失败重跑的损失）
+  - 边界：台账在 `evals/credits_ledger.json`；失败的运行也照记
+- `F39` 实体消歧在真实数据上触发 4 次拒绝
+  - 边界：是「篇次」不是「篇数」：2 篇不同文档各被首轮与补搜两次判定
+
 > 措辞里出现的每个数值都由对应编号的字段插值生成；别把两个编号的数字拼成一句未经验证的复合指标（例如「准确率」「提升」）。
 
 ## 4. 禁写清单（同样给出处）
@@ -155,7 +189,7 @@ uv run pytest -q tests/test_s8_resume_evidence.py      # 护栏：命令、commi
 | ❌「准确率 0%（因为 supported=0）」 | AI judge 的 supported 计数是极少量样本的判定分布 | `evals/live_score.json` → `summary.supported` 〔`3e16906`〕 | `usable_as_resume_metric=false`、`is_human_adjudicated=false` |
 | ❌ 把 judge 结果写成人工评测指标 | judge 是 AI 判定，未经人工抽检一致率校准 | `evals/live_score.json` → `is_human_adjudicated` 〔`3e16906`〕 | 样本见 F17 / F18，另有措辞瑕疵记录 |
 | ❌「独立开发 / 从零自研」 | 本项目基于上游仓库二次开发（Apache-2.0） | `docs/UPSTREAM.md` → 落地 commit 〔`6e7ce22`〕；根目录 `LICENSE` 〔`23fe92d`〕 | 必须保留 LICENSE 与上游 commit 归因 |
-| ❌「上线 / 甲方 / 用户量 / 效果提升 X%」 | 本项目是本地个人工程复现，无这些事实 | `docs/ACTION_PLAN.md` → 12.3 硬约束 〔`076a992`〕 | 简历只写「本地实测」 |
+| ❌「上线 / 甲方 / 用户量 / 效果提升 X%」 | 本项目是本地个人工程复现，无这些事实 | `docs/ACTION_PLAN.md` → 12.3 硬约束 〔`b1fdc84`〕 | 简历只写「本地实测」 |
 | ❌「引用可追溯率 X%」 | 最终 URL 多数未在本项目内重新抓取核验 | `evals/golden_live.jsonl` → `0.citation_layer_usable_as_metric` 〔`3e16906`〕 | 引用层指标明确不可用 |
 
 ## 5. 未测清单（一律不得写进简历）
@@ -170,7 +204,7 @@ uv run pytest -q tests/test_s8_resume_evidence.py      # 护栏：命令、commi
 1. `evals/build_resume_evidence.py` 的 `Fact` 持有 `key/path`；`expr_from_path()` 把同一路径翻译成 `d["a"]["b"]`，拼成独立的 `python -c` 命令。
 2. `--verify` 对每条数字**真的起一个进程执行该命令**，把 stdout 与产物取值逐字比对（两边都用 `json.dumps`，bool/null 不会走样）。
 3. `tests/test_s8_resume_evidence.py` 再做一遍同样的事，并逐条用 `git show <commit>:<文件>` 回到台账标注的版本重算该字段——「这个数字在那个 commit 里就有」能被机器验证，而不只是写着一行 hash。
-4. 当前共 **31** 条可复现数字、**9** 条禁写规则；这两个计数也由列表长度生成，不是手填。
+4. 当前共 **39** 条可复现数字、**9** 条禁写规则；这两个计数也由列表长度生成，不是手填。
 
 ## 7. 状态
 
