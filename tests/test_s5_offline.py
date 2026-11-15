@@ -38,7 +38,7 @@ def test_full_graph_makes_zero_external_connections() -> None:
             )
 
     assert external_attempts == [], "任何外部连接都意味着消耗了 Tavily/模型额度"
-    assert len(state["report"]) == 822
+    assert len(state["report"]) == 772
     assert trace.count("research") == 1
     assert socket.socket.connect is original, "守卫必须被还原"
 
@@ -83,6 +83,6 @@ def test_research_endpoint_makes_zero_external_connections(
                 time.sleep(0.1)
 
     assert state.get("status") == "completed", state
-    assert len(state["report"]) == 822
+    assert len(state["report"]) == 772
     assert attempts == [], "任何外部连接都意味着消耗了 Tavily/模型额度"
     assert socket.socket.connect is original_connect, "守卫必须被还原"

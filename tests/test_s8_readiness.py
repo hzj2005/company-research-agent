@@ -80,7 +80,7 @@ def test_dry_run_query_list_comes_from_production_code() -> None:
         expected = build_live_query("Notion", "financial", round_no)
         assert q["query"] == expected
         assert q["cache_key"] == cache_key(
-            expected, section="financial", max_results=3,
+            expected, section="financial", max_results=5,
             search_depth="advanced", topic="finance",
         )
         assert q["section"] == "financial"

@@ -105,8 +105,8 @@ def test_golden_derivation_follows_retry_rules(golden) -> None:
 
 def test_parse_report_maps_inline_marker_to_reference_url(golden) -> None:
     report = (
-        "# Acme Research Report\n\n"
-        "## Company Overview\n\n"
+        "# Acme 研究报告\n\n"
+        "## 公司概况\n\n"
         "- Acme 成立于 2001 年。 [1]\n\n"
         "## References\n\n"
         "[1] 关于我们 — https://example.org/acme/about\n"

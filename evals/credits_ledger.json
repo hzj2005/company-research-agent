@@ -43,7 +43,21 @@
       "calls": 0,
       "artifact": "docs/samples/figma_live_report.md",
       "note": "8 条 query 全部命中 S10-B 留下的磁盘缓存（budget=0/16, cache_hits=4），0 credits"
+    },
+    {
+      "stage": "S13 中文输出：英伟达（live，首次抓取）",
+      "credits": 24,
+      "calls": 12,
+      "artifact": "docs/samples/nvidia_live_report_zh.md",
+      "note": "max_results 提到 5 后 cache key 全变，8 条 query 重抓 + 4 条补搜 = 12 次；输出仍为英文"
+    },
+    {
+      "stage": "S13 中文输出：英伟达（live，缓存重放）",
+      "credits": 0,
+      "calls": 0,
+      "artifact": "docs/samples/nvidia_live_report_zh.md",
+      "note": "提示词与 schema 加中文约束后重跑，budget=0/16 cache_hits=4，四栏 5 篇/栏，输出中文"
     }
   ],
-  "total_credits": 50
+  "total_credits": 74
 }

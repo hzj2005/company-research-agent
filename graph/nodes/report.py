@@ -79,7 +79,7 @@ def _render_template(
     index: dict[str, int],
 ) -> tuple[list[str], dict[str, dict[str, Any]], list[dict[str, Any]]]:
     """S4 基线实现，逐字保留，供 A/B 关闭开关时对照。"""
-    lines: list[str] = [f"# {state['company']} Research Report", ""]
+    lines: list[str] = [f"# {state['company']} 研究报告", ""]
     briefings: dict[str, dict[str, Any]] = {}
     for heading, section in zip(settings.report.headings, settings.graph.sections):
         lines.extend([f"## {heading}", ""])
@@ -110,7 +110,7 @@ async def _render_structured(
     norm_index: dict[str, int],
     backend: BriefingBackend,
 ) -> tuple[list[str], dict[str, dict[str, Any]], list[dict[str, Any]]]:
-    lines: list[str] = [f"# {state['company']} Research Report", ""]
+    lines: list[str] = [f"# {state['company']} 研究报告", ""]
     briefings: dict[str, dict[str, Any]] = {}
     notes: list[dict[str, Any]] = []
 

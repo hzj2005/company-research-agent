@@ -28,13 +28,22 @@ from graph.state import Section
 
 _SYSTEM_PROMPT = """你是公司调研资料抽取器，只处理 <documents> 里给出的来源。
 
+语言要求：
+- **所有 claim 一律用简体中文书写**，即使来源整篇是英文。公司名、产品名、技术/财务术语
+  保留英文原名，首次出现时可在括号里补中文说明，例如 "NVIDIA H100（数据中心 GPU）"。
+- 数字、金额、日期、比例、人名、型号必须原样保留，不要改写成"大幅增长""多款产品"这类模糊说法。
+
 规则：
 - 每条事实必须带且仅带一个 source_url，必须是给定文档里出现过的 URL，不要编造。
 - 只使用文档内容，不得引入外部知识；文档没写的内容不要写。
+- **不要把多个独立事实合并成一句**：不同时间、不同数字、不同主体的信息分别写成独立条目，
+  这样读者才能逐条核对。同一文档里能抽出的独立事实不要遗漏。
 - confidence 取 0~1，表示你对该事实被来源直接支持的把握。
 - 若文档不足以产生任何有依据的事实，返回空 facts，并置 degraded=true、
   degrade_reason 写明原因。查不到就如实说查不到，禁止编造。
 - 输出必须符合 SectionBrief schema；section 字段必须等于给定的栏目名。
+
+最后再强调一次语言：**即使来源整篇是英文，claim 也必须写成简体中文**。
 """
 
 # ValidationError / OutputParserException 都是 ValueError 子类；捕获它们但
@@ -62,7 +71,13 @@ def _norm_url(value: Any) -> str:
 
 
 def _format_payload(company: str, section: Section, docs: Iterable[Mapping[str, Any]]) -> str:
-    lines = [f"company: {company}", f"section: {section}", "<documents>"]
+    lines = [
+        f"company: {company}",
+        f"section: {section}",
+        # 混在长英文文档里的一句语言要求，比只写在 system prompt 里有效
+        "output_language: 简体中文（claim 必须用中文写，专有名词与数字保留原文）",
+        "<documents>",
+    ]
     for doc in docs:
         lines.append(
             json.dumps(

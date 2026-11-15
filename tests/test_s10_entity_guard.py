@@ -206,6 +206,9 @@ def test_partial_rejection_does_not_trigger_fallback() -> None:
 
 CACHE_DIR = Path(__file__).resolve().parents[1] / "evals" / "cache" / "tavily"
 
+# 那次真实抓取用的参数（回放时按它重算 cache key）
+CAPTURE_MAX_RESULTS = 3
+
 
 def notion_cache_files() -> list[Path]:
     """精确定位 Notion 那 4 条 query 对应的缓存文件。
@@ -220,7 +223,9 @@ def notion_cache_files() -> list[Path]:
         key = cache_key(
             build_live_query(COMPANY, section, 0),
             section=section,
-            max_results=settings.retrieval.max_results_per_query,
+            # 必须用**抓取时**的参数重算 key：这份缓存是 max_results=3 时抓的，
+            # 后来默认值改成 5，用当前值算就找不到文件、用例会静默跳过。
+            max_results=CAPTURE_MAX_RESULTS,
             search_depth=settings.retrieval.search_depth,
             topic=settings.retrieval.topics.get(f"{section}_analyzer", "general"),
         )

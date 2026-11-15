@@ -33,7 +33,8 @@ graph:
 retrieval:
   # 每栏每轮生成几条 query。默认 2，与上游一致；额度紧张时可临时调 1
   queries_per_analyst: ${QUERIES_PER_ANALYST:-2}
-  max_results_per_query: ${MAX_RESULTS_PER_QUERY:-3}
+  # 每个 query 取几条结果。**不影响 credits**（按检索次数计费），只影响素材量与 token
+  max_results_per_query: ${MAX_RESULTS_PER_QUERY:-5}
   search_depth: ${SEARCH_DEPTH:-advanced}
   topics:
     financial_analyzer: finance
@@ -78,10 +79,11 @@ features:
 
 report:
   # 报告结构保持与原版一致，便于做前后对比
+  # 前四个渲染成正文栏目标题；最后一个 References 不参与 zip，仅作约定保留
   headings:
-    - Company Overview
-    - Industry Overview
-    - Financial Overview
-    - News
+    - 公司概况
+    - 行业概况
+    - 财务概况
+    - 新闻动态
     - References
   max_references: 10             # 每栏目最多输出的结论条数；每条结论必须带行内引用

@@ -242,3 +242,16 @@ def test_contracts_forbid_extra_fields() -> None:
 def test_make_chat_model_rejects_unknown_role() -> None:
     with pytest.raises(ValueError, match="未知模型角色"):
         make_chat_model(get_settings(), "not_a_role", credentials=CREDS)
+
+
+def test_extraction_prompt_requires_chinese_and_separate_facts() -> None:
+    """两个容易回退的要求：中文输出、不把多个事实揉成一句。
+
+    同时守住原有红线（禁止编造、只能引用给定 URL），防止改提示词时顺手删掉。
+    """
+    from capabilities.structured import _SYSTEM_PROMPT
+
+    assert "简体中文" in _SYSTEM_PROMPT
+    assert "合并" in _SYSTEM_PROMPT
+    assert "禁止编造" in _SYSTEM_PROMPT
+    assert "source_url" in _SYSTEM_PROMPT

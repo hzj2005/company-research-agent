@@ -19,9 +19,14 @@ class _Contract(BaseModel):
 
 
 class Fact(_Contract):
-    claim: str = Field(min_length=1)
-    source_url: HttpUrl
-    confidence: float = Field(ge=0.0, le=1.0)
+    # 字段描述会随 function_calling 的 schema 一起送给模型，比 system prompt 更管用：
+    # 只在 system prompt 里写「用中文」，长英文文档一压，模型还是会照抄英文。
+    claim: str = Field(
+        min_length=1,
+        description="用简体中文写的一句话事实；公司名/产品名/数字保留原文，不要翻译掉",
+    )
+    source_url: HttpUrl = Field(description="该事实的出处 URL，必须来自给定文档")
+    confidence: float = Field(ge=0.0, le=1.0, description="该事实被来源直接支持的把握，0~1")
 
 
 class SectionBrief(_Contract):
