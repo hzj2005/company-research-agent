@@ -30,3 +30,20 @@ export type ServerInfo = {
   openai_configured?: boolean;
   tavily_configured?: boolean;
 };
+
+/** HITL 人工复核时后端通过 SSE review_required 事件推给前端的决策上下文 */
+export type ReviewPayload = {
+  prompt: string;
+  company: string;
+  sections: string[];
+  reference_count: number;
+  degraded_sections: string[];
+  decision_schema?: Record<string, string>;
+};
+
+/** 提交给 POST /research/{id}/review 的决策 */
+export type ReviewDecision = {
+  approved: boolean;
+  rejected_sections: string[];
+  note: string;
+};

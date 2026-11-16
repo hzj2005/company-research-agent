@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from "react";
-import { Header, ResearchStatus, ResearchReport, ResearchForm } from "./components";
-import type { ResearchStatusType, ServerInfo } from "./types";
+import { Header, ResearchStatus, ResearchReport, ResearchForm, ReviewPanel } from "./components";
+import type { ResearchStatusType, ServerInfo, ReviewPayload } from "./types";
 import { glassStyle } from "./styles";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 /**
- * 后端 SSE 只推三种事件：progress（带节点名）/ complete（整篇报告）/ error。
+ * 后端 SSE 推四种事件：progress（带节点名）/ complete（整篇报告）/ error /
+ * review_required（HITL 人工复核，仅在开了 human_review 且不自动批准时发出）。
  * 上游那套 query_generating、curation、briefing_start、report_chunk 等
  * 在新图里从来不会发出，对应面板已一并删除。
  */
@@ -31,6 +32,9 @@ function App() {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const [server, setServer] = useState<ServerInfo | null>(null);
+  const [reviewPayload, setReviewPayload] = useState<ReviewPayload | null>(null);
+  const [reviewJobId, setReviewJobId] = useState<string | null>(null);
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
@@ -60,6 +64,7 @@ function App() {
   const blocked = missing.length > 0;
 
   const streamResults = (jobId: string) => {
+    setReviewJobId(jobId);
     const source = new EventSource(`${API_URL}/research/${jobId}/stream`);
     eventSourceRef.current = source;
 
@@ -69,6 +74,7 @@ function App() {
         step?: string;
         report?: string;
         error?: string;
+        payload?: ReviewPayload;
       };
       try {
         data = JSON.parse(event.data);
@@ -86,9 +92,16 @@ function App() {
         setStatus({ step: "完成", message: "报告已生成" });
         setIsComplete(true);
         setIsResearching(false);
+        setReviewPayload(null);
         source.close();
       } else if (data.type === "error") {
         setError(data.error || "调研失败");
+        setIsResearching(false);
+        source.close();
+      } else if (data.type === "review_required") {
+        // HITL：停在成稿前，弹出审批面板。SSE 会在此 break，连接正常关闭。
+        setReviewPayload(data.payload ?? null);
+        setStatus({ step: "人工复核", message: "请确认是否批准出稿，或指定要拒答的栏目" });
         setIsResearching(false);
         source.close();
       }
@@ -107,6 +120,8 @@ function App() {
     setIsComplete(false);
     setIsResearching(true);
     setCompany(name);
+    setReviewPayload(null);
+    setReviewJobId(null);
     setStatus({ step: "准备中", message: "正在创建调研任务…" });
 
     eventSourceRef.current?.close();
@@ -127,6 +142,41 @@ function App() {
       setError(err instanceof Error ? err.message : "无法发起调研");
       setStatus(null);
       setIsResearching(false);
+    }
+  };
+
+  const handleReviewSubmit = async (
+    approved: boolean,
+    rejectedSections: string[],
+    note: string,
+  ) => {
+    if (!reviewJobId || isSubmittingReview) return;
+    setIsSubmittingReview(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_URL}/research/${reviewJobId}/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          approved,
+          rejected_sections: rejectedSections,
+          note,
+        }),
+      });
+      if (!response.ok) {
+        const detail = await response.json().catch(() => null);
+        throw new Error(detail?.detail || `提交复核失败（HTTP ${response.status}）`);
+      }
+      // 后端续跑已把报告写回台账，但 SSE 那条流只认内存、且此刻已关闭；
+      // 这里直接重开一条流等 complete（或干脆轮询 GET），两条都行——重开 SSE 最省事。
+      setReviewPayload(null);
+      setIsResearching(true);
+      setStatus({ step: "生成中", message: "复核通过，正在生成报告…" });
+      streamResults(reviewJobId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "提交复核失败");
+    } finally {
+      setIsSubmittingReview(false);
     }
   };
 
@@ -188,6 +238,14 @@ function App() {
         <ResearchForm onSubmit={handleSubmit} isResearching={isResearching} blocked={blocked} />
 
         <ResearchStatus status={status} error={error} isComplete={isComplete} />
+
+        {reviewPayload && (
+          <ReviewPanel
+            payload={reviewPayload}
+            isSubmitting={isSubmittingReview}
+            onSubmit={handleReviewSubmit}
+          />
+        )}
 
         {report && (
           <ResearchReport
