@@ -2055,3 +2055,40 @@ dev server，headless Edge 真点：审批面板出现（含引用数 8、四栏
 这类假失败如果不追到底，就会被当成真 bug 去改产品代码。）
 
 新增文件：`evals/verify_ui_review_reject.py`（勾选拒答分支的 CDP 回归脚本）。
+
+#### 12.35.8 用户提问引出的真缺陷：复核面板是「盲批」（2026-11-16 12:05）
+
+用户问「我批不批准有啥用？我又看不到内容？」——**这句话直接点破了设计缺陷**：
+面板只显示「共检索 N 条引用」，不给内容。那人既判断不了证据够不够，也定不了该拒答哪一栏，
+点「批准」等于闭眼签字，这个闸门毫无意义。补做：
+
+- **payload 带证据摘要**（`graph/nodes/human_review.py`）：新增 `_build_evidence_preview()`，
+  按栏目从 `curated_data` 里取已过阈值与实体消歧、且**真会被写进报告**的文档
+  （口径与 report 节点一致：`in references` 才算数），每栏最多 4 条，每条含
+  `title / url / score / snippet`（正文截 220 字）。
+  为什么不截断：payload 会进 checkpoint、还要过 SSE，全文塞进去会失控。
+- **前端展示证据**（`ReviewPanel.tsx`）：每栏一行，右侧显示「N 条证据」，点开展开
+  标题（可点链接）+ 相关度分数 + 正文摘录；已因证据不足拒答的栏目标注出来。
+- **`review_payload` 落库**（真缺陷 2）：原来只放内存，Postgres 模式下
+  `GET /research/{id}` 拿不到 → 刷新页面就看不到待审内容。`jobs` 表加
+  `review_payload jsonb` 列（`alter table ... add column if not exists`，幂等），
+  `update_job` 对该列用 `Json()` 包装。
+- **刷新恢复**（真缺陷 3）：前端把 job_id 存 `localStorage`，页面加载时读
+  `GET /research/{id}`，若 `waiting_review` 就重画审批面板（含证据），若 `completed`
+  就直接渲染报告。
+
+真机验证（headless Edge + fixture，不烧额度）：
+- 面板出现且四栏各显示「2 条证据」，展开后有标题/链接/相关度/摘录
+- Postgres 模式落库 → `GET` 读回 `review_payload` 完整
+- 写入 `lastJobId` 后刷新页面 → 审批面板与证据详情自动恢复（相关度 0.93 / 0.88）
+- `npm run lint` 0 问题、`npm run build` 通过；全量 `pytest` **519 passed**（+3）
+
+新增测试：`test_review_payload_carries_evidence_to_decide_on`（payload 必须带证据）、
+`test_review_payload_evidence_matches_what_would_be_reported`（面板证据与报告口径一致）、
+`test_review_payload_survives_in_the_ledger`（PG 落库往返）。
+
+提交 `6381e1f`。
+
+**这一节的教训**：功能做完 ≠ 功能有用。HITL 的「暂停—恢复—决策」链路全绿，
+但复核人拿不到依据，闸门就是摆设。**评审类功能必须回答「人凭什么做这个决定」**，
+否则只是把状态机跑通了而已。
