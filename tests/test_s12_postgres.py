@@ -481,3 +481,45 @@ def test_interrupt_stale_closes_orphans_but_never_rewrites_finished_rows() -> No
             await store.close()
 
     asyncio.run(flow())
+
+
+@requires_pg
+def test_review_payload_survives_in_the_ledger() -> None:
+    """待审的证据摘要必须落库：只放内存的话，用户刷新页面就看不到待审内容了。"""
+    import asyncio
+
+    from persistence.job_store import PostgresJobStore
+
+    tag = uuid.uuid4().hex[:8]
+    jid = f"review-payload-{tag}"
+    payload = {
+        "company": "Notion",
+        "sections": ["company", "industry", "financial", "news"],
+        "evidence": {
+            "company": [
+                {"title": "Notion 产品概览", "url": "https://example.org/a",
+                 "score": 0.93, "snippet": "提供笔记与协作工作区。"},
+            ],
+        },
+    }
+
+    async def flow() -> None:
+        store = await PostgresJobStore(DSN).open()
+        try:
+            await store.create_job(jid, {"company": "Notion"})
+            await store.update_job(
+                jid, status="waiting_review", current_step="human_review",
+                review_payload=payload,
+            )
+            row = await store.get_job(jid)
+            assert row["review_payload"] == payload, "证据摘要必须原样落库"
+            assert row["status"] == "waiting_review"
+            # 再取一次，确认不是只在内存里
+            again = await store.get_job(jid)
+            assert again["review_payload"]["evidence"]["company"][0]["url"] == "https://example.org/a"
+        finally:
+            async with store.pool.connection() as conn:
+                await conn.execute("delete from jobs where job_id = %s", (jid,))
+            await store.close()
+
+    asyncio.run(flow())

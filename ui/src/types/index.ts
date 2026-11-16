@@ -31,6 +31,14 @@ export type ServerInfo = {
   tavily_configured?: boolean;
 };
 
+/** 复核面板里单条证据的摘要：够判断「证据够不够」，不必把全文塞进 SSE */
+export type ReviewEvidenceItem = {
+  title: string;
+  url: string;
+  score: number;
+  snippet: string;
+};
+
 /** HITL 人工复核时后端通过 SSE review_required 事件推给前端的决策上下文 */
 export type ReviewPayload = {
   prompt: string;
@@ -38,6 +46,8 @@ export type ReviewPayload = {
   sections: string[];
   reference_count: number;
   degraded_sections: string[];
+  /** 按栏目分组的证据摘要：没有它就只是盲批 */
+  evidence?: Record<string, ReviewEvidenceItem[]>;
   decision_schema?: Record<string, string>;
 };
 

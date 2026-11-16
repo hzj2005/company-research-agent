@@ -21,6 +21,7 @@ from typing import Any, TypeVar
 
 import psycopg
 from psycopg.rows import dict_row
+from psycopg.types.json import Json
 from psycopg_pool import AsyncConnectionPool
 
 T = TypeVar("T")
@@ -52,6 +53,9 @@ create table if not exists jobs (
     created_at   timestamptz not null default now(),
     updated_at   timestamptz not null default now()
 );
+-- review_payload：HITL 停在人工复核时，把「给复核人看的证据摘要」存下来。
+-- 只放内存的话，刷新页面就看不到待审内容了（前端还得靠 GET 恢复界面）。
+alter table jobs add column if not exists review_payload jsonb;
 create index if not exists jobs_created_at_idx on jobs (created_at desc);
 create index if not exists jobs_status_idx on jobs (status);
 
@@ -63,7 +67,10 @@ create table if not exists reports (
 """
 
 # update_job 允许改的字段；白名单外的一律拒绝，避免拼 SQL 时被注入
-_UPDATABLE = {"status", "current_step", "error", "company"}
+_UPDATABLE = {"status", "current_step", "error", "company", "review_payload"}
+
+# jsonb 列：值要包成 Json()，否则 psycopg 不知道这是 jsonb 而不是普通字符串
+_JSONB_COLUMNS = {"review_payload"}
 
 REQUIRED_TABLES = ("jobs", "reports")
 
@@ -121,7 +128,10 @@ class PostgresJobStore:
         if not fields:
             return
         assignments = ", ".join(f"{name} = %s" for name in fields)
-        values = list(fields.values())
+        values = [
+            Json(fields[name]) if name in _JSONB_COLUMNS else fields[name]
+            for name in fields
+        ]
 
         async def op() -> None:
             async with self.pool.connection() as conn:
@@ -137,7 +147,7 @@ class PostgresJobStore:
             async with self.pool.connection() as conn:
                 cur = await conn.execute(
                     "select job_id, company, status, current_step, error, inputs,"
-                    " created_at, updated_at from jobs where job_id = %s",
+                    " review_payload, created_at, updated_at from jobs where job_id = %s",
                     (job_id,),
                 )
                 return await cur.fetchone()

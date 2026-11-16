@@ -46,6 +46,48 @@ def _normalize_decision(raw: Any, sections: list[str]) -> dict[str, Any]:
     }
 
 
+# 复核面板每个栏目最多展示几条证据、正文摘录截断多少字。
+# 面板是给人看证据的：只给一个「共 8 条引用」的数字，人根本没法判断该不该批准，
+# 审批就成了盲批。截断是为了不让 payload 无限大（它会进 checkpoint、还要过 SSE）。
+EVIDENCE_PREVIEW_PER_SECTION = 4
+SNIPPET_CHARS = 220
+
+
+def _build_evidence_preview(
+    state: ResearchState, sections: list[str]
+) -> dict[str, list[dict[str, Any]]]:
+    """按栏目整理证据摘要，供复核人判断「这一栏证据够不够」。
+
+    只取 `curated_data` 里已通过相关性阈值与实体消歧的文档，且只取真正会被写进
+    报告的那些（与 report 节点的筛选口径一致：`in references` 才算数）。排序也按
+    分数从高到低，保证人看到的是最可能进正文的那几条。
+    """
+    curated = state.get("curated_data", {}) or {}
+    references = state.get("references", {}) or {}
+    preview: dict[str, list[dict[str, Any]]] = {}
+
+    for section in sections:
+        docs = sorted(
+            (
+                d
+                for d in curated.values()
+                if d.get("section") == section and d.get("url") in references
+            ),
+            key=lambda d: (-float(d.get("score", 0) or 0.0), str(d.get("url", ""))),
+        )
+        items: list[dict[str, Any]] = []
+        for doc in docs[:EVIDENCE_PREVIEW_PER_SECTION]:
+            content = str(doc.get("content") or "").strip()
+            items.append({
+                "title": str(doc.get("title") or "")[:200],
+                "url": str(doc.get("url") or ""),
+                "score": round(float(doc.get("score", 0) or 0.0), 4),
+                "snippet": content[:SNIPPET_CHARS] + ("…" if len(content) > SNIPPET_CHARS else ""),
+            })
+        preview[section] = items
+    return preview
+
+
 def make_human_review_node(settings: Settings) -> Node:
     sections = list(settings.graph.sections)
 
@@ -66,6 +108,9 @@ def make_human_review_node(settings: Settings) -> Node:
             "sections": sections,
             "reference_count": len(state.get("references", {})),
             "degraded_sections": list(state.get("degraded_sections", [])),
+            # 给人看的证据摘要：没有它，复核人只能看到一个引用总数，
+            # 既判断不了证据够不够，也定不了该拒答哪一栏 —— 那就只是盲批。
+            "evidence": _build_evidence_preview(state, sections),
             "decision_schema": {
                 "approved": "bool —— false 表示整份报告拒答",
                 "rejected_sections": "list[str] —— 只拒答这些栏目，必须在 sections 内",

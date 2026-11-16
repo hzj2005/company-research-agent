@@ -5,6 +5,9 @@ import { glassStyle } from "./styles";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
+/** 最近一次任务 id：刷新页面后用它把「待人工复核」的状态恢复出来 */
+const LAST_JOB_KEY = "cra:lastJobId";
+
 /**
  * 后端 SSE 推四种事件：progress（带节点名）/ complete（整篇报告）/ error /
  * review_required（HITL 人工复核，仅在开了 human_review 且不自动批准时发出）。
@@ -43,6 +46,28 @@ function App() {
       .then(setServer)
       .catch(() => setServer(null));
 
+    // 刷新恢复：SSE 的 review_required 是一次性事件，刷新就没了。
+    // 后端把待审任务的 job_id 和证据摘要留在台账里，这里读回来重画审批面板。
+    const lastJobId = localStorage.getItem(LAST_JOB_KEY);
+    if (!lastJobId) return;
+    fetch(`${API_URL}/research/${lastJobId}`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((job) => {
+        if (!job) return;
+        if (job.status === "waiting_review" && job.review_payload) {
+          setReviewJobId(lastJobId);
+          setReviewPayload(job.review_payload);
+          setCompany(job.company || "");
+          setStatus({ step: "人工复核", message: "请确认是否批准出稿，或指定要拒答的栏目" });
+        } else if (job.status === "completed" && job.report) {
+          setReport(job.report);
+          setCompany(job.company || "");
+          setIsComplete(true);
+          setStatus({ step: "完成", message: "报告已生成" });
+        }
+      })
+      .catch(() => undefined);
+
     return () => {
       eventSourceRef.current?.close();
       eventSourceRef.current = null;
@@ -65,6 +90,7 @@ function App() {
 
   const streamResults = (jobId: string) => {
     setReviewJobId(jobId);
+    localStorage.setItem(LAST_JOB_KEY, jobId);
     const source = new EventSource(`${API_URL}/research/${jobId}/stream`);
     eventSourceRef.current = source;
 

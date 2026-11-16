@@ -82,6 +82,50 @@ def test_real_interrupt_pauses_before_briefing(tmp_path: Path) -> None:
     assert "briefing" not in trace
 
 
+def test_review_payload_carries_evidence_to_decide_on(tmp_path: Path) -> None:
+    """复核面板必须带证据摘要，否则复核人只能看到一个引用总数 = 盲批。
+
+    只给「共 N 条引用」，人既判断不了证据够不够，也定不了该拒答哪一栏，
+    这个闸门就没有意义。所以 payload 里必须带每栏的证据（标题/来源/摘录）。
+    """
+    db = tmp_path / "evidence.db"
+    state, _ = _start("Notion", db)
+    payload = state["_interrupt"]["payload"]
+
+    assert "evidence" in payload, "复核 payload 必须带证据摘要"
+    evidence = payload["evidence"]
+    assert set(evidence) == set(payload["sections"])
+
+    company_items = evidence["company"]
+    assert company_items, "公司概况栏目必须有证据，否则人无从判断"
+    first = company_items[0]
+    assert set(first) == {"title", "url", "score", "snippet"}
+    assert first["url"], "证据必须带来源链接，人要能自己去核"
+    assert first["snippet"], "证据必须带正文摘录，光有标题判断不了"
+    # 摘录要截断，不能把整篇正文塞进 payload（它要进 checkpoint、还要过 SSE）
+    assert all(len(item["snippet"]) <= 260 for item in company_items)
+
+
+def test_review_payload_evidence_matches_what_would_be_reported(tmp_path: Path) -> None:
+    """面板里给的证据，必须和最终报告会用的证据是同一批。
+
+    不一致的话会出现「面板看着证据很足，报告却写未找到公开依据」这种更糟的情况。
+    """
+    db = tmp_path / "consistency.db"
+    state, _ = _start("Notion", db)
+    evidence = state["_interrupt"]["payload"]["evidence"]
+
+    approved_state, _ = _resume("Notion", db, {"approved": True})
+    report = approved_state["report"]
+
+    for section, items in evidence.items():
+        if not items:
+            continue
+        # 报告里该栏目要么有正文（用了这些证据），要么明确拒答
+        assert section not in approved_state.get("degraded_sections", [])
+    assert ABSTAIN not in report, "证据齐的栏目不该被拒答"
+
+
 def test_resume_in_a_new_session_completes_the_report(tmp_path: Path) -> None:
     """两次 run_research = 两个独立 CheckpointSession，等价跨进程恢复。"""
     db = tmp_path / "resume.db"

@@ -274,8 +274,13 @@ async def process_research(job_id: str, data: ResearchRequest, db_path=None, thr
                 })
                 if job_store is not None:
                     try:
+                        # 落库 review_payload：只放内存的话，用户刷新页面就看不到待审证据了
+                        # （SSE 事件是一次性的，刷新即丢）。
                         await job_store.update_job(
-                            job_id, status="waiting_review", current_step="human_review"
+                            job_id,
+                            status="waiting_review",
+                            current_step="human_review",
+                            review_payload=payload,
                         )
                     except Exception as exc:
                         logger.warning("复核状态写台账失败（调研继续）：%s", exc)
@@ -454,9 +459,16 @@ async def get_research(job_id: str):
 
     注意 SSE 那条流仍然只认内存（`job_status`），所以多 worker 部署时这里能查到、
     流的进度可能对不上——这是 S12 明确留下的边界，没假装解决。
+
+    HITL 待复核时这里会带上 `review_payload`（证据摘要）：前端刷新页面后靠它
+    恢复审批面板，不用重新跑一遍调研。
     """
     if job_store is not None:
         job = await job_store.get_job(job_id)
+        if job and job.get("status") == "waiting_review" and not job.get("review_payload"):
+            # 台账里没有但内存里有（老数据或台账写失败）：内存这份更全，补上
+            fallback = job_status.get(job_id) or {}
+            job = {**job, "review_payload": fallback.get("review_payload")}
     else:
         job = job_status.get(job_id)
     if not job:
