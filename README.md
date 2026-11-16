@@ -1,4 +1,7 @@
-# Company Research Agent
+# 企业调研简报系统 / Company Research Briefing
+
+**v1.0.0** — 基于 LangGraph 的公司调研工作流：证据充分性判定、有界自纠正、栏目级拒答、
+可插拔人工复核，以及历史结果复用。
 
 > **二次开发声明 / Attribution**
 > 本仓库**基于** [guy-hartstein/company-research-agent](https://github.com/guy-hartstein/company-research-agent)（Apache-2.0）**二次开发**，落地 commit `23fe92d`。原版的四路并行检索、Tavily 相关性筛选、PDF 导出、SSE 进度与多语言 README **均不是本项目的独立设计**；`LICENSE` 与上游 commit 历史完整保留。详见 [`docs/UPSTREAM.md`](docs/UPSTREAM.md)。
@@ -19,7 +22,8 @@ An agentic research tool that turns a company name into a structured, source-bac
   chosen **on the server** with `LLM_PROVIDER` / `LLM_MODEL`; there is no in-browser model picker or
   key input, because `/research` only reads `company` from the request body.
 - Streams research progress to the browser and supports PDF export.
-- Optionally persists jobs and reports in MongoDB.
+- Persists jobs, reports and the underlying evidence in Postgres (upstream used MongoDB; replaced by
+  `persistence/job_store.py`), so past results survive restarts and can be reused.
 - **This fork also adds** a LangGraph workflow (`graph/`) with evidence-sufficiency checks, a bounded self-correction loop, per-section abstention instead of fabrication, structured output with URL-level traceability, and SQLite checkpointing. It runs today from the CLI, `/research` and LangGraph Studio in `fixture` mode with no API key and zero external calls.
 
 ## Architecture
@@ -233,8 +237,10 @@ This exposes the API on port `8000` and the UI on port `5174`.
 | `GET` | `/config` | `app_mode`, `requires_llm_key`, which credentials are configured. |
 | `GET` | `/models` | Upstream OpenRouter catalog (kept for compatibility; unused by this UI). |
 | `GET` | `/research` | Recent jobs, optional `company` filter (Postgres only). |
-| `GET` | `/research/{job_id}` | Job status, including `current_step`. |
-| `GET` | `/research/{job_id}/stream` | SSE `progress` / `complete` / `error` events. |
+| `GET` | `/research/history` | Fuzzy-match a company's past results (report + evidence text). See below. |
+| `GET` | `/research/{job_id}` | Job status, including `current_step`; carries `review_payload` while paused for human review. |
+| `GET` | `/research/{job_id}/stream` | SSE `progress` / `complete` / `error` / `review_required` events. |
+| `POST` | `/research/{job_id}/review` | HITL: submit `{approved, rejected_sections, note}` and resume a paused job. |
 | `GET` | `/research/{job_id}/report` | Retrieve a completed report. |
 | `POST` | `/generate-pdf` | Generate a PDF from report Markdown. |
 | `GET` | `/research/pdf/{filename}` | Download a generated PDF. |
@@ -252,6 +258,22 @@ curl -X POST http://localhost:8000/research \
 are declared only for upstream client compatibility: nothing reads them, and keys must come from
 environment variables, never from a request body. The report arrives over the SSE stream, not in
 the POST response. A mode badge in the UI shows whether you are in `live` or `fixture` mode.
+
+### Reusing stored results
+
+Every finished job persists the report **and the original page text behind each claim**
+(`evidence` table). `GET /research/history?company=Meta` fuzzy-matches (`ilike`) past runs for that
+company and returns the report plus evidence, so the UI can show previous results first and only
+spend retrieval credits when you explicitly ask for a fresh query.
+
+### Human review (optional, off by default)
+
+With `FEATURES_HUMAN_REVIEW=true` and `AUTO_APPROVE_REVIEW=false`, the graph pauses before the
+briefing step and emits a `review_required` SSE event carrying per-section evidence
+(title / URL / relevance / excerpt). The reviewer either approves, or rejects specific sections
+(which then render as "no public evidence found"). `POST /research/{job_id}/review` resumes the
+job from its checkpoint — including from a different process, since `thread_id` is stored in the
+job ledger. The default graph is strictly 7 nodes; the review node is only registered when enabled.
 
 ## Configuration reference
 
