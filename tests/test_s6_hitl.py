@@ -232,9 +232,26 @@ def test_api_review_rejects_on_bad_state(tmp_path: Path, monkeypatch) -> None:
     from fastapi.testclient import TestClient
 
     import application
+    from backend.classes.state import job_status
 
     monkeypatch.setattr(application, "get_settings", lambda: _review_settings())
 
     with TestClient(application.app) as client:
         # 不存在的任务 → 404
         assert client.post("/research/nope/review", json={"approved": True}).status_code == 404
+
+        # 已完成的任务 → 409（不是 waiting_review，不能重复提交）
+        job_status["done-job"] = {
+            "status": "completed", "company": "Notion", "thread_id": "tid",
+        }
+        assert client.post(
+            "/research/done-job/review", json={"approved": True}
+        ).status_code == 409
+
+        # 还在跑（processing）的任务 → 409，还没到复核点
+        job_status["busy-job"] = {
+            "status": "processing", "company": "Notion", "thread_id": "tid",
+        }
+        assert client.post(
+            "/research/busy-job/review", json={"approved": True}
+        ).status_code == 409

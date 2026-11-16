@@ -172,6 +172,7 @@ async def research(data: ResearchRequest):
         job_status[job_id].update({
             "status": "pending",
             "company": data.company,
+            "thread_id": thread_id,
             "last_update": datetime.now().isoformat(),
         })
         if job_store is not None:
@@ -499,8 +500,13 @@ async def review_research(job_id: str, data: ReviewRequest):
     if not thread_id:
         raise HTTPException(status_code=409, detail="该任务没有可恢复的 checkpoint")
 
-    if job.get("status") == "completed":
-        raise HTTPException(status_code=409, detail="任务已完成，无需复核")
+    # 只有停在 waiting_review 的任务才接受复核：completed/failed 是终态，pending/processing
+    # 还没跑到复核点，续跑会拿到错误的 checkpoint 快照。
+    if job.get("status") != "waiting_review":
+        raise HTTPException(
+            status_code=409,
+            detail=f"任务当前状态为 {job.get('status')}，只有 waiting_review 才能提交复核",
+        )
 
     decision = data.model_dump()
     logger.info(f"Resuming {job_id} with review decision: approved={decision['approved']}")
