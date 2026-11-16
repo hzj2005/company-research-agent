@@ -59,8 +59,8 @@ def test_research_endpoint_makes_zero_external_connections(
     original_process = application.process_research
     attempts: list[object] = []
 
-    async def _with_temp_db(job_id: str, data: object, db_path: Path | None = None) -> None:
-        await original_process(job_id, data, db_path=tmp_path / "api.db")
+    async def _with_temp_db(job_id: str, data: object, db_path: Path | None = None, **kw: object) -> None:
+        await original_process(job_id, data, db_path=tmp_path / "api.db", **kw)
 
     def guarded(self: socket.socket, address: object, *args: object, **kwargs: object) -> object:
         host = str(address[0]) if isinstance(address, tuple) and address else str(address)

@@ -169,3 +169,72 @@ def test_review_mode_still_makes_zero_external_calls(tmp_path: Path) -> None:
     assert len(state["report"]) == 772
     assert attempts == []
     assert socket.socket.connect is original
+
+
+def test_api_review_end_to_end(tmp_path: Path, monkeypatch) -> None:
+    """API 级 HITL 闭环：POST /research 停在 waiting_review，POST /review 续跑成稿。
+
+    这是 S13 接通前端的后端护栏——之前开开关从前端发起会直接 failed（缺 resume 接口），
+    这条用例钉死「能暂停、能提交决定、能落库」三段都不再退化。
+    """
+    import time
+
+    from fastapi.testclient import TestClient
+
+    import application
+    from backend.classes.state import job_status
+
+    review_settings = _review_settings()
+
+    # 两个进程内入口（research 后台任务 / review 续跑）必须读同一份 HITL 配置、
+    # 落同一个临时 checkpoint，否则续跑拿不到存档。
+    monkeypatch.setattr(application, "get_settings", lambda: review_settings)
+    monkeypatch.setattr(application, "review_db_path", str(tmp_path / "api.db"))
+
+    original = application.process_research
+    async def _with_temp_db(job_id: str, data: object, **kw: object) -> None:
+        await original(job_id, data, db_path=tmp_path / "api.db", **kw)
+
+    monkeypatch.setattr(application, "process_research", _with_temp_db)
+
+    with TestClient(application.app) as client:
+        resp = client.post("/research", json={"company": "Notion"})
+        assert resp.status_code == 200, resp.text
+        jid = resp.json()["job_id"]
+
+        # 等它停在人工复核，而不是一路跑完或失败
+        state: dict = {}
+        for _ in range(80):
+            state = dict(job_status.get(jid, {}))
+            if state.get("status") in ("waiting_review", "completed", "failed"):
+                break
+            time.sleep(0.1)
+        assert state.get("status") == "waiting_review", state
+        assert state.get("current_step") == "human_review"
+        assert state.get("review_payload", {}).get("company") == "Notion"
+        assert not state.get("report"), "中断时绝不能已经成稿"
+
+        # 提交批准决定 → 续跑成稿
+        resp = client.post(
+            f"/research/{jid}/review",
+            json={"approved": True, "rejected_sections": [], "note": "通过"},
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["status"] == "completed"
+
+        final = dict(job_status.get(jid, {}))
+        assert final["status"] == "completed"
+        assert len(final["report"]) == 772, "批准后报告应与默认一致"
+
+
+def test_api_review_rejects_on_bad_state(tmp_path: Path, monkeypatch) -> None:
+    """review 接口对「已完成 / 不存在的任务」必须明确拒绝，不能静默续跑。"""
+    from fastapi.testclient import TestClient
+
+    import application
+
+    monkeypatch.setattr(application, "get_settings", lambda: _review_settings())
+
+    with TestClient(application.app) as client:
+        # 不存在的任务 → 404
+        assert client.post("/research/nope/review", json={"approved": True}).status_code == 404

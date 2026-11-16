@@ -77,8 +77,8 @@ def test_research_endpoint_end_to_end(tmp_path: Path, monkeypatch: pytest.Monkey
 
     original = application.process_research
 
-    async def _with_temp_db(job_id: str, data: object) -> None:
-        await original(job_id, data, db_path=tmp_path / "api.db")
+    async def _with_temp_db(job_id: str, data: object, **kw: object) -> None:
+        await original(job_id, data, db_path=tmp_path / "api.db", **kw)
 
     monkeypatch.setattr(application, "process_research", _with_temp_db)
     with TestClient(application.app) as client:

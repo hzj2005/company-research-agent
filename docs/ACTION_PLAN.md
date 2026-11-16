@@ -1953,3 +1953,38 @@ Tavily key（必填！）、Company URL、HQ、Industry 四栏，以及一个模
 - `setup.sh` 本体未改，只在 README 标注为上游遗留、不推荐。
 - 18:26 记录的 CLI/批量评测路径缺陷仍在：`thread_id={company}:{date}` 配合 merge reducer，
   同公司同天重跑会残留旧数据。API 路径因 thread 拼了 `job_id` 不受影响。**待用户拍板是否修**。
+
+### 12.35 HITL 后端接通：前端发起的调研也能暂停→复核→续跑（2026-11-16，0 调用 / 0 credits）
+
+之前 `interrupt()` + `Command(resume)` 只在 CLI（`graph/run.py`）里闭环，从前端 `/research`
+发起时开关一开就 `failed`——缺「把人的决定送回图里」的 HTTP 通道。本轮把后端接通，前端接入留作下一步。
+
+#### 12.35.1 改动（4 个文件，不碰图结构 / reducer / 默认开关）
+
+- `application.py`：
+  - `research()` 里提前算 `thread_id`（`build_thread_id(f"{company}:{job_id}")`），塞进台账 `inputs` jsonb，
+    使任务结束后仍能取回（`get_job` 用 `dict_row`，`inputs` 本来存整个 payload，**不改表结构**）。
+  - `process_research` 增加 `thread_id` 参数；`astream` 循环后从 `snapshot.tasks` 读 interrupts，
+    命中且无报告时状态改 `waiting_review`、`current_step=human_review`、把 `review_payload` 存内存，
+    **不再走 failed 分支**。
+  - 新增 `POST /research/{job_id}/review`：收 `{approved, rejected_sections, note}`，取回 thread_id，
+    新开 `CheckpointSession`，`Command(resume=decision)` 续跑，结果写回 `jobs`/`reports`（先正文后状态）。
+    已完成/无 checkpoint 的任务返回 409，不存在的 404。
+  - SSE 流加第 4 种事件 `review_required`（带 `payload`），前端据此弹审批面板。
+- `tests/test_s6_hitl.py` 补 2 条 API 级护栏；`test_s5_entrypoints.py` / `test_s5_offline.py` 的
+  monkeypatch 包装函数补 `**kw` 以兼容新增的 `thread_id` 关键字参数。
+
+#### 12.35.2 真机验证（不是只看测试绿）
+
+- `pytest` **505 passed / 11 skipped**（+2 条 HITL 端到端）。
+- fixture 开 HITL 开关，`TestClient` 真跑：SSE 依次吐 `progress → review_required`，
+  `POST /review {"approved":true}` → `200 completed`，最终报告 772 字符。**0 credits**。
+
+#### 12.35.3 边界（照旧明确，不混进「已完成」）
+
+- 前端还没接审批面板：SSE 的 `review_required` 事件已就绪，`ui/src/App.tsx` 尚未消费它（下一步）。
+- `job_status` / SSE 仍是单 worker 内存；审批期间进程重启，checkpoint 落盘 + thread_id 落库后，
+  `POST /review` 换进程仍可续跑，但前端「待复核」界面需从 `GET /research/{id}` 恢复（`waiting_review`
+  状态可见）。
+- `interrupt_stale()` 只收 `pending`/`processing`，不会误杀 `waiting_review`；但重启后也不会自动唤醒，
+  靠用户重新提交决定。

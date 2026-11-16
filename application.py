@@ -15,6 +15,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
+from langgraph.types import Command
 
 from backend.llm import DEFAULT_OPENROUTER_MODEL, OPENROUTER_BASE_URL
 
@@ -44,6 +45,11 @@ logger.addHandler(console_handler)
 
 # S12.2：任务台账后端。None = 用进程内 job_status（测试/离线默认）。
 job_store: PostgresJobStore | None = None
+
+# HITL review 续跑用的 checkpoint 路径注入点。默认 None = 走 settings 配置
+# （sqlite 落到 data/checkpoints.db 或 postgres）；测试用它把存档钉在临时目录，
+# 与 process_research 的 db_path 对称，避免污染项目 data/。
+review_db_path: str | None = None
 
 
 @asynccontextmanager
@@ -155,6 +161,11 @@ async def research(data: ResearchRequest):
         logger.info(f"Received research request for {data.company}")
         job_id = str(uuid.uuid4())
 
+        # HITL 的恢复前提：thread_id 必须在任务结束后仍可查。它和 job_id 一一对应，
+        # 这里先算好放进台账 inputs，`POST /research/{id}/review` 就能取回续跑。
+        settings = get_settings()
+        thread_id = build_thread_id(f"{data.company}:{job_id}", settings=settings)
+
         # Create the job before starting the background task. The SSE endpoint
         # begins polling immediately after this response; without this entry it
         # can time out while initial research work is still running.
@@ -167,13 +178,13 @@ async def research(data: ResearchRequest):
             # 先落库再排队：前端立刻查 /research/{id} 就能看到 pending。
             # 落库失败就把内存里那条也撤掉——否则库和内存各说一套。
             try:
-                await job_store.create_job(
-                    job_id, data.model_dump(exclude={"tavily_api_key", "openrouter_api_key"})
-                )
+                payload = data.model_dump(exclude={"tavily_api_key", "openrouter_api_key"})
+                payload["thread_id"] = thread_id
+                await job_store.create_job(job_id, payload)
             except Exception:
                 job_status.pop(job_id, None)
                 raise
-        asyncio.create_task(process_research(job_id, data))
+        asyncio.create_task(process_research(job_id, data, thread_id=thread_id))
 
         response = JSONResponse(content={
             "status": "accepted",
@@ -189,7 +200,7 @@ async def research(data: ResearchRequest):
         logger.error(f"Error initiating research: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
-async def process_research(job_id: str, data: ResearchRequest, db_path=None):
+async def process_research(job_id: str, data: ResearchRequest, db_path=None, thread_id: str | None = None):
     """Process research request asynchronously and store results.
 
     S5-B：用新图（7 节点 + research 子图）替代原版线性 DAG。
@@ -204,8 +215,12 @@ async def process_research(job_id: str, data: ResearchRequest, db_path=None):
 
         logger.info(f"Starting research for {data.company}")
         settings = get_settings()
-        # job_id 保证并发请求各有独立 checkpoint 线程，不互相覆盖
-        thread_id = build_thread_id(f"{data.company}:{job_id}", settings=settings)
+        # job_id 保证并发请求各有独立 checkpoint 线程，不互相覆盖。
+        # 调用方（research()）会提前算好并落库，这里复用以保证续跑拿到同一个 thread。
+        if thread_id is None:
+            thread_id = build_thread_id(f"{data.company}:{job_id}", settings=settings)
+        # 内存台账也要能取回 thread_id，否则 JOB_STORE=memory 时 review 接口没法续跑
+        job_status[job_id]["thread_id"] = thread_id
 
         # 简报后端的 httpx client 归本次请求所有：长驻服务里不关会每请求泄漏一个
         async with (
@@ -240,6 +255,31 @@ async def process_research(job_id: str, data: ResearchRequest, db_path=None):
 
             snapshot = await compiled.aget_state(config)
             final_state = dict(snapshot.values)
+
+            # S13 HITL：图停在 interrupt() 时没有 report，snapshot.tasks 里带 interrupts。
+            # 不能像以前那样直接判 failed——要转成「待人工复核」，把 payload 存起来等人提交。
+            interrupts = [
+                item.value
+                for task in (snapshot.tasks or ())
+                for item in (getattr(task, "interrupts", None) or ())
+            ]
+            if interrupts and not final_state.get("report"):
+                payload = interrupts[0]
+                job_status[job_id].update({
+                    "status": "waiting_review",
+                    "current_step": "human_review",
+                    "review_payload": payload,
+                    "last_update": datetime.now().isoformat(),
+                })
+                if job_store is not None:
+                    try:
+                        await job_store.update_job(
+                            job_id, status="waiting_review", current_step="human_review"
+                        )
+                    except Exception as exc:
+                        logger.warning("复核状态写台账失败（调研继续）：%s", exc)
+                logger.info(f"Research paused for human review: {data.company}")
+                return
 
         report_content = final_state.get('report')
         
@@ -422,6 +462,98 @@ async def get_research(job_id: str):
         raise HTTPException(status_code=404, detail="Research job not found")
     return job
 
+class ReviewRequest(BaseModel):
+    """HITL 成稿前人工复核的决策。
+
+    `rejected_sections` 只能填 `settings.yaml` 里注册的栏目，图内 `human_review`
+    节点会再做一次白名单过滤（`_normalize_decision`），非法栏目一律丢弃、按
+    fail-safe 处理，所以这里不重复校验，只保证类型正确。
+    """
+    approved: bool = Field(default=True)
+    rejected_sections: list[str] = Field(default_factory=list)
+    note: str = Field(default="")
+
+@app.post("/research/{job_id}/review")
+async def review_research(job_id: str, data: ReviewRequest):
+    """把人的复核决定送回图里，从磁盘 checkpoint 续跑。
+
+    流程：取回 thread_id → 新建 CheckpointSession → `Command(resume=decision)`
+    续跑 → 结果写回 `jobs` / `reports`。CLI（graph/run.py）已经证明「新进程恢复」
+    可行，这里只是把触发方式从命令行换成 HTTP。
+
+    只有停在 `waiting_review` 的任务才接受这个调用；已完成的直接 409，避免重复提交。
+    """
+    # 取 thread_id：优先台账（跨重启），退回内存（单 worker / 测试）
+    thread_id: str | None = None
+    if job_store is not None:
+        job = await job_store.get_job(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="Research job not found")
+        thread_id = (job.get("inputs") or {}).get("thread_id")
+    else:
+        job = job_status.get(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="Research job not found")
+        thread_id = job.get("thread_id")
+
+    if not thread_id:
+        raise HTTPException(status_code=409, detail="该任务没有可恢复的 checkpoint")
+
+    if job.get("status") == "completed":
+        raise HTTPException(status_code=409, detail="任务已完成，无需复核")
+
+    decision = data.model_dump()
+    logger.info(f"Resuming {job_id} with review decision: approved={decision['approved']}")
+
+    # 续跑结果写回台账，复用 process_research 里那套「先正文后状态」的落库逻辑
+    async def _run_and_persist():
+        settings = get_settings()
+        async with (
+            briefing_backend_scope(settings) as backend,
+            CheckpointSession(settings=settings, path=review_db_path) as session,
+        ):
+            compiled = session.compile(
+                build_graph(settings, make_document_tool(settings), briefing_backend=backend)
+            )
+            config = session.config_for(thread_id)
+            async for _event in compiled.astream(
+                Command(resume=decision), config=config, stream_mode="updates"
+            ):
+                pass
+            snapshot = await compiled.aget_state(config)
+            return dict(snapshot.values)
+
+    try:
+        final_state = await asyncio.create_task(_run_and_persist())
+    except Exception as e:
+        logger.error(f"Review resume failed for {job_id}: {str(e)}", exc_info=True)
+        if job_store is not None:
+            await job_store.update_job(job_id, status="failed", error=str(e))
+        job_status[job_id].update({"status": "failed", "error": str(e)})
+        raise HTTPException(status_code=500, detail=str(e))
+
+    report_content = final_state.get("report")
+    if not report_content:
+        # 理论上恢复后必然成稿；留个兜底，别让「状态 completed 但查不到报告」出现
+        err = "No report generated after review"
+        if job_store is not None:
+            await job_store.update_job(job_id, status="failed", error=err)
+        job_status[job_id].update({"status": "failed", "error": err})
+        raise HTTPException(status_code=500, detail=err)
+
+    job_status[job_id].update({
+        "status": "completed",
+        "report": report_content,
+        "company": job.get("company"),
+        "last_update": datetime.now().isoformat(),
+    })
+    if job_store is not None:
+        await job_store.store_report(job_id, report_content)
+        await job_store.update_job(job_id, status="completed")
+    return {"status": "completed", "job_id": job_id}
+
+
+
 @app.get("/research/{job_id}/stream")
 async def stream_research(job_id: str):
     """Stream research progress via SSE"""
@@ -460,6 +592,14 @@ async def stream_research(job_id: str):
                     break
                 elif status == "failed":
                     data = json.dumps({"type": "error", "error": result.get("error", "Unknown error")})
+                    yield f"data: {data}\n\n"
+                    break
+                elif status == "waiting_review":
+                    # HITL：通知前端弹出复核面板，并附上决策所需字段
+                    data = json.dumps({
+                        "type": "review_required",
+                        "payload": result.get("review_payload"),
+                    })
                     yield f"data: {data}\n\n"
                     break
                 
