@@ -1988,3 +1988,15 @@ Tavily key（必填！）、Company URL、HQ、Industry 四栏，以及一个模
   状态可见）。
 - `interrupt_stale()` 只收 `pending`/`processing`，不会误杀 `waiting_review`；但重启后也不会自动唤醒，
   靠用户重新提交决定。
+
+#### 12.35.4 复查补漏（2026-11-16 10:12，0 调用 / 0 credits）
+
+复查 review 接口状态机时补 3 处：
+
+- **只接受 `waiting_review`**：原实现只挡了 `completed`，`pending`/`processing`/`failed` 也会被
+  误接受并拿到错误 checkpoint 快照。改成 `status != "waiting_review"` 一律 409。
+- **thread_id 提前写内存台账**：`research()` 建 `job_status[job_id]` 时同步写 `thread_id`，消除
+  「process_research 后台任务还没跑到写 thread_id、review 先到」的时序窗口（memory 模式）。
+- **测试补状态拒绝**：`test_api_review_rejects_on_bad_state` 增 completed/processing 两档 409 断言。
+
+回归：HITL + S5 相关 22 条全过，全量 `pytest` 复跑确认。提交 `fc572af`。
