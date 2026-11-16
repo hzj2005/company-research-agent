@@ -2000,3 +2000,26 @@ Tavily key（必填！）、Company URL、HQ、Industry 四栏，以及一个模
 - **测试补状态拒绝**：`test_api_review_rejects_on_bad_state` 增 completed/processing 两档 409 断言。
 
 回归：HITL + S5 相关 22 条全过，全量 `pytest` 复跑确认。提交 `fc572af`。
+
+#### 12.35.5 前端审批面板接通（2026-11-16 10:30，0 调用 / 0 credits）
+
+- `ui/src/App.tsx` 的 `onmessage` 加 `review_required` 分支：存 `reviewPayload` + `reviewJobId`，
+  渲染审批面板；`streamResults` 记录 jobId 供审批提交复用。
+- 新增 `ui/src/components/ReviewPanel.tsx`：显示引用数、四栏可勾选拒答、备注框、两个动作
+  「批准出稿 / 整体拒答」；勾选的栏目用「未找到公开依据」代替正文。
+- `handleReviewSubmit` → `POST /research/{id}/review` → 重开 SSE 等 complete。
+- 类型：`types/index.ts` 增 `ReviewPayload` / `ReviewDecision`。
+- 新增 `evals/verify_ui_review.py`：CDP 驱动 headless Edge 跑完整交互流（输入 → 审批面板 →
+  点批准 → 报告渲染），可复用的 UI 回归工具。
+
+真机验证：`npm run lint` 0 问题、`npm run build` 1710 modules；起后端（fixture + HITL 开）+ 前端
+dev server，headless Edge 真点：审批面板出现（含引用数 8、四栏勾选、批准/整体拒答按钮），点
+「批准出稿」后报告渲染；另用 API 验证勾选「拒答 news」后报告含「未找到公开依据」且其余栏照常。
+提交 `174f6e5`。
+
+#### 12.35.6 仍剩边界（HITL 这条线的收尾）
+
+- 审批期间进程重启，前端「待复核」界面不会自动恢复——需从 `GET /research/{id}` 读
+  `waiting_review` 状态回显（现在是 SSE 一次性事件，刷新即丢）。要补的话是「前端刷新恢复」
+  一个小功能，非阻断。
+- `job_status` / SSE 多 worker 限制依旧（见 12.35.3）。
