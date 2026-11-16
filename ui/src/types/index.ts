@@ -57,3 +57,32 @@ export type ReviewDecision = {
   rejected_sections: string[];
   note: string;
 };
+
+/** 历史结果里的一条证据（含正文原文） */
+export type HistoryEvidence = {
+  url: string;
+  section: string;
+  title: string;
+  score: number;
+  content: string;
+  truncated: boolean;
+};
+
+/** 该公司之前某一次调研的完整结果 */
+export type HistoryEntry = {
+  job_id: string;
+  company: string;
+  status: string;
+  created_at: string;
+  report: string;
+  report_chars: number;
+  evidence_count: number;
+  evidence?: HistoryEvidence[];
+};
+
+/** GET /research/history 的返回 */
+export type HistoryResponse = {
+  source: string;
+  company: string;
+  matches: HistoryEntry[];
+};

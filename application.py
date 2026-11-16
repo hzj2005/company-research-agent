@@ -303,6 +303,16 @@ async def process_research(job_id: str, data: ResearchRequest, db_path=None, thr
                 # 先存正文再改状态：反过来的话，store_report 失败会留下
                 # 「状态 completed 但查不到报告」的假成功。
                 await job_store.store_report(job_id, report_content)
+                # 证据原文也一并存下来：下次搜同一个公司时，要能展示「上次查到了什么」，
+                # 光有报告正文不够——结论从哪来要看原文。
+                try:
+                    curated = final_state.get("curated_data") or {}
+                    if curated:
+                        saved = await job_store.store_evidence(job_id, curated)
+                        logger.info("已保存 %d 条证据原文", saved)
+                except Exception as exc:
+                    # 证据存失败不该让整次调研算失败：报告已经成了。
+                    logger.warning("证据原文写台账失败（报告已成稿）：%s", exc)
                 await job_store.update_job(job_id, status="completed")
             
             logger.info(f"Research completed successfully for {data.company}")
@@ -451,6 +461,31 @@ async def list_research(limit: int = 20, company: str | None = None):
         })
     rows.sort(key=lambda r: str(r.get("created_at") or ""), reverse=True)
     return {"source": "memory", "jobs": rows[:limit]}
+
+
+@app.get("/research/history")
+async def research_history(company: str, limit: int = 5, include_evidence: bool = True):
+    """查某家公司之前查过的结果（模糊匹配），供前端「先看历史、要不要重新查」用。
+
+    公司名用 ilike 模糊匹配：搜 `Meta` 能命中 `Meta Platforms`、`Meta Platforms, Inc.`，
+    搜 `英伟达` 也能命中 `Nvidia`。每条历史带报告正文和证据条数；带
+    `include_evidence=true` 时连证据原文一起返回，省得前端再逐条查。
+
+    只返回**有报告**的记录：没跑完的任务不算「历史结果」。
+    """
+    company = company.strip()
+    if not company:
+        raise HTTPException(status_code=400, detail="company 不能为空")
+
+    if job_store is None:
+        # 没有落库台账时只剩进程内字典，重启即失。照实返回空，不假装有历史。
+        return {"source": "memory", "company": company, "matches": []}
+
+    matches = await job_store.find_history(company, limit=limit)
+    if include_evidence:
+        for item in matches:
+            item["evidence"] = await job_store.get_evidence(item["job_id"])
+    return {"source": "postgres", "company": company, "matches": matches}
 
 
 @app.get("/research/{job_id}")

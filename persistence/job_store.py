@@ -64,6 +64,23 @@ create table if not exists reports (
     report     text not null,
     created_at timestamptz not null default now()
 );
+
+-- evidence：每次调研检索到的原始证据（含正文原文）。
+-- 报告正文存在 reports 里，但「结论从哪来」要看证据原文——只存报告等于把依据丢了。
+-- 单条正文不做硬截断（Tavily 返回的就是页面正文片段，量级在 KB 级），
+-- 只有超过 EVIDENCE_CONTENT_LIMIT 才截断并置 truncated=true，避免个别超长页面把库撑爆。
+create table if not exists evidence (
+    job_id     text not null references jobs(job_id) on delete cascade,
+    url        text not null,
+    section    text not null,
+    title      text,
+    score      double precision,
+    content    text,
+    truncated  boolean not null default false,
+    created_at timestamptz not null default now(),
+    primary key (job_id, url)
+);
+create index if not exists evidence_job_idx on evidence (job_id);
 """
 
 # update_job 允许改的字段；白名单外的一律拒绝，避免拼 SQL 时被注入
@@ -72,7 +89,11 @@ _UPDATABLE = {"status", "current_step", "error", "company", "review_payload"}
 # jsonb 列：值要包成 Json()，否则 psycopg 不知道这是 jsonb 而不是普通字符串
 _JSONB_COLUMNS = {"review_payload"}
 
-REQUIRED_TABLES = ("jobs", "reports")
+REQUIRED_TABLES = ("jobs", "reports", "evidence")
+
+# 单条证据正文的兜底上限。正常检索到的页面正文片段远小于这个数，
+# 真遇到超长页面时截断并记 truncated=True，不静默丢数据。
+EVIDENCE_CONTENT_LIMIT = 32_000
 
 
 class PostgresJobStore:
@@ -173,6 +194,89 @@ class PostgresJobStore:
                 )
                 row = await cur.fetchone()
             return {"report": row["report"]} if row else None
+
+        return await _retry_once(op)
+
+    async def store_evidence(self, job_id: str, items: list[dict[str, Any]]) -> int:
+        """把一次调研检索到的证据原文写进 evidence 表。
+
+        `items` 就是图里的 `curated_data`（url → doc）。同一任务里 url 唯一
+        （curate 节点本来就按 url 去重），所以用 (job_id, url) 做主键，重复写入覆盖。
+        返回实际写入的条数。
+        """
+        rows: list[tuple[Any, ...]] = []
+        for url, doc in items.items():
+            content = str(doc.get("content") or "")
+            truncated = len(content) > EVIDENCE_CONTENT_LIMIT
+            if truncated:
+                content = content[:EVIDENCE_CONTENT_LIMIT]
+            rows.append((
+                job_id,
+                str(url),
+                str(doc.get("section") or ""),
+                str(doc.get("title") or ""),
+                float(doc.get("score", 0) or 0.0),
+                content,
+                truncated,
+            ))
+        if not rows:
+            return 0
+
+        async def op() -> int:
+            async with self.pool.connection() as conn:
+                # psycopg3 的 AsyncConnection 没有 executemany，得走 cursor；
+                # cursor() 本身是同步的，返回的 AsyncCursor 才要 await。
+                cur = conn.cursor()
+                await cur.executemany(
+                    "insert into evidence (job_id, url, section, title, score, content, truncated)"
+                    " values (%s, %s, %s, %s, %s, %s, %s)"
+                    " on conflict (job_id, url) do update set"
+                    " section = excluded.section, title = excluded.title,"
+                    " score = excluded.score, content = excluded.content,"
+                    " truncated = excluded.truncated",
+                    rows,
+                )
+            return len(rows)
+
+        return await _retry_once(op)
+
+    async def get_evidence(self, job_id: str) -> list[dict[str, Any]]:
+        """按栏目取回这次调研的证据原文。"""
+        async def op() -> list[dict[str, Any]]:
+            async with self.pool.connection() as conn:
+                cur = await conn.execute(
+                    "select url, section, title, score, content, truncated"
+                    " from evidence where job_id = %s order by section, score desc",
+                    (job_id,),
+                )
+                return list(await cur.fetchall())
+
+        return await _retry_once(op)
+
+    async def find_history(
+        self, company: str, limit: int = 10
+    ) -> list[dict[str, Any]]:
+        """模糊匹配公司名，返回该公司**有报告**的历史调研。
+
+        用 ilike %公司名%：搜 `Meta` 能命中 `Meta Platforms`、`Meta Platforms, Inc.`，
+        搜 `英伟达` 也能命中 `Nvidia`（只要库里有那次记录）。大小写不敏感。
+        每条带上报告正文和证据条数——历史面板要一次把内容取全，别让前端再逐条查。
+        """
+        limit = max(1, min(int(limit), 50))
+        pattern = f"%{company.strip()}%"
+
+        async def op() -> list[dict[str, Any]]:
+            async with self.pool.connection() as conn:
+                cur = await conn.execute(
+                    "select j.job_id, j.company, j.status, j.created_at,"
+                    " r.report, length(r.report) as report_chars,"
+                    " (select count(*) from evidence e where e.job_id = j.job_id) as evidence_count"
+                    " from jobs j join reports r on r.job_id = j.job_id"
+                    " where j.company ilike %s"
+                    " order by j.created_at desc limit %s",
+                    (pattern, limit),
+                )
+                return list(await cur.fetchall())
 
         return await _retry_once(op)
 

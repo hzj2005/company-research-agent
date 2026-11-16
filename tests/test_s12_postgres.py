@@ -26,6 +26,7 @@ from config.loader import build_thread_id, load_settings, resolve_postgres_dsn
 from graph.builder import build_graph
 from graph.state import ResearchState, initial_state
 from persistence.checkpointer import CheckpointSession
+from persistence.job_store import REQUIRED_TABLES
 
 # 用 127.0.0.1 而不是 localhost：Windows 上 localhost 先解析到 ::1，每条连接白等约 8 秒，
 # 十几个用例串起来能慢好几分钟（文档 docs/POSTGRES.md 里对服务端也是一样的口径）。
@@ -352,7 +353,8 @@ def test_missing_tables_tells_you_to_run_setup() -> None:
         try:
             store = await PostgresJobStore(temp_dsn).open()
             try:
-                assert await missing_tables(store) == ["jobs", "reports"]
+                # 跟着 REQUIRED_TABLES 走：以后加表不用再改这里（写死过时的表名会漏检）
+                assert await missing_tables(store) == list(REQUIRED_TABLES)
                 await setup_schema(store)
                 assert await missing_tables(store) == []
             finally:
@@ -517,6 +519,66 @@ def test_review_payload_survives_in_the_ledger() -> None:
             # 再取一次，确认不是只在内存里
             again = await store.get_job(jid)
             assert again["review_payload"]["evidence"]["company"][0]["url"] == "https://example.org/a"
+        finally:
+            async with store.pool.connection() as conn:
+                await conn.execute("delete from jobs where job_id = %s", (jid,))
+            await store.close()
+
+    asyncio.run(flow())
+
+
+@requires_pg
+def test_evidence_roundtrip_and_fuzzy_history() -> None:
+    """证据原文要能原样存回，并且模糊匹配能找出这家公司的历史结果。"""
+    import asyncio
+
+    from persistence.job_store import PostgresJobStore
+
+    tag = uuid.uuid4().hex[:8]
+    jid = f"evidence-{tag}"
+
+    async def flow() -> None:
+        store = await PostgresJobStore(DSN).open()
+        try:
+            await store.create_job(jid, {"company": "Meta Platforms, Inc."})
+            docs = {
+                "https://example.org/a": {
+                    "section": "company", "title": "Meta 概览", "score": 0.93,
+                    "content": "Meta 是社交与广告平台。" * 10,
+                },
+                "https://example.org/b": {
+                    "section": "financial", "title": "Meta 财报", "score": 0.81,
+                    "content": "季度营收与利润如下。" * 10,
+                },
+            }
+            saved = await store.store_evidence(jid, docs)
+            assert saved == 2
+
+            rows = await store.get_evidence(jid)
+            assert len(rows) == 2
+            by_url = {r["url"]: r for r in rows}
+            assert by_url["https://example.org/a"]["section"] == "company"
+            assert by_url["https://example.org/a"]["content"] == docs["https://example.org/a"]["content"]
+            assert by_url["https://example.org/a"]["truncated"] is False
+            assert by_url["https://example.org/b"]["section"] == "financial"
+
+            # 超长正文要截断并标 truncated，不能静默存半个
+            long_doc = {"https://example.org/long": {
+                "section": "company", "title": "长文", "score": 0.5,
+                "content": "x" * 40_000,
+            }}
+            await store.store_evidence(jid, long_doc)
+            long_row = next(r for r in await store.get_evidence(jid) if r["url"].endswith("/long"))
+            assert long_row["truncated"] is True
+            assert len(long_row["content"]) == 32_000
+
+            # 模糊匹配：搜 "Meta" 要能命中 "Meta Platforms, Inc."
+            await store.store_report(jid, "# Meta 研究报告\n\n内容")
+            found = await store.find_history("meta")
+            assert any(f["job_id"] == jid for f in found), "小写 meta 应能命中 Meta Platforms"
+            found2 = await store.find_history("Meta Platforms")
+            assert any(f["job_id"] == jid for f in found2)
+            assert all("evidence_count" in f for f in found)
         finally:
             async with store.pool.connection() as conn:
                 await conn.execute("delete from jobs where job_id = %s", (jid,))

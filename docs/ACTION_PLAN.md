@@ -2092,3 +2092,43 @@ dev server，headless Edge 真点：审批面板出现（含引用数 8、四栏
 **这一节的教训**：功能做完 ≠ 功能有用。HITL 的「暂停—恢复—决策」链路全绿，
 但复核人拿不到依据，闸门就是摆设。**评审类功能必须回答「人凭什么做这个决定」**，
 否则只是把状态机跑通了而已。
+
+### 12.36 历史结果复用：搜同一公司先看存档，再问要不要重新联网（2026-11-16 19:45，0 调用 / 0 credits）
+
+需求：每次调研的结果都存下来；下次搜同一公司时**先展示历史内容**，再问是否需要在线最新查询。
+三个关键选择（用户确认）：① 先展示历史全部结果再问；② 公司名**模糊匹配**；③ 存**报告 + 完整证据原文**。
+
+#### 12.36.1 后端
+
+- **新表 `evidence`**（`persistence/job_store.py`）：`job_id/url/section/title/score/content/truncated`，
+  主键 `(job_id, url)`（curate 节点本来就按 url 去重）。存的是**网页正文原文**，不是摘要。
+  单条兜底上限 `EVIDENCE_CONTENT_LIMIT = 32000` 字符，超了截断并置 `truncated=true`——
+  正常检索到的页面正文片段在 KB 级，这个上限只为防个别超长页面把库撑爆。
+- `store_evidence` / `get_evidence` / `find_history(company, limit)` 三个接口；
+  `find_history` 用 `ilike %公司名%` 模糊匹配（搜 `Meta` 命中 `Meta Platforms`、搜 `英伟达` 命中 `Nvidia`），
+  只返回**有报告**的记录，并带上报告正文与证据条数。
+- `process_research` 完成后自动把 `curated_data` 原文写进 evidence 表；
+  **证据存失败不让整次调研算失败**（报告已经成了）。
+- 新接口 `GET /research/history?company=xxx&limit=5&include_evidence=true`。
+
+#### 12.36.2 前端
+
+- 新组件 `ui/src/components/HistoryPanel.tsx`：列出该公司的历次结果，每条可展开
+  「报告全文」和「各栏目证据原文」（带来源链接、相关度、正文，截断的标注出来）。
+  超过 30 天的记录会提示「内容可能已经过时」。
+- `App.tsx` 流程改为：**先查历史 → 有历史就摆出来、等你点「在线重新查询」→ 没有历史才直接开跑**。
+  这样重复调研不会白烧检索额度。
+
+#### 12.36.3 真机验证（headless + PG，0 credits）
+
+- 搜 `Notion` → 历史面板出现（4 条记录）、**没有自动发起调研** ✅
+- 展开「条原文」→ 看到标题/相关度/正文 ✅
+- 真实鼠标点「在线重新查询」→ 才发起调研 → 报告渲染 ✅
+- 新调研完成后 `evidence` 表落库 8 条（每栏 2 条，含标题与正文）✅
+- `pytest` 全量通过；`npm run lint` 0 问题、`npm run build` 通过。
+
+新增测试：`test_evidence_roundtrip_and_fuzzy_history`（证据往返 + 截断标记 + 模糊匹配）。
+
+**排查插曲（值得记）**：headless 里用 DOM `.click()` 点 React 按钮**不触发** onClick，
+一度误判成功能没接上；换成 CDP 的 `Input.dispatchMouseEvent` 真实鼠标点击立刻就通了。
+以后验前端交互一律用真实点击，别用 `.click()`。

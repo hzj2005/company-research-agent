@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { Header, ResearchStatus, ResearchReport, ResearchForm, ReviewPanel } from "./components";
-import type { ResearchStatusType, ServerInfo, ReviewPayload } from "./types";
+import { Header, ResearchStatus, ResearchReport, ResearchForm, ReviewPanel, HistoryPanel } from "./components";
+import type { ResearchStatusType, ServerInfo, ReviewPayload, HistoryEntry } from "./types";
 import { glassStyle } from "./styles";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -38,6 +38,10 @@ function App() {
   const [reviewPayload, setReviewPayload] = useState<ReviewPayload | null>(null);
   const [reviewJobId, setReviewJobId] = useState<string | null>(null);
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [historyCompany, setHistoryCompany] = useState("");
+  const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [isRefreshingLive, setIsRefreshingLive] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
@@ -140,14 +144,55 @@ function App() {
     };
   };
 
+  /**
+   * 提交公司名后的第一步：**先查历史**，不要直接开跑。
+   * 重复调研会白烧检索额度，而多数时候上次的结果已经够用。
+   * 只有用户在历史面板上点了「在线重新查询」，才真的发起一次新的调研。
+   */
   const handleSubmit = async (name: string) => {
     setError(null);
     setReport("");
     setIsComplete(false);
-    setIsResearching(true);
     setCompany(name);
     setReviewPayload(null);
     setReviewJobId(null);
+    setHistoryCompany(name);
+    setHistoryEntries([]);
+    setStatus({ step: "查找历史", message: `正在查找 ${name} 的历史调研结果…` });
+    setIsLoadingHistory(true);
+
+    try {
+      const response = await fetch(
+        `${API_URL}/research/history?company=${encodeURIComponent(name)}&limit=5`,
+      );
+      const data = response.ok ? await response.json() : { matches: [] };
+      const matches: HistoryEntry[] = data.matches ?? [];
+      setHistoryEntries(matches);
+
+      if (matches.length > 0) {
+        // 有历史：先把历史摆出来，让用户决定要不要重新查
+        setStatus({
+          step: "历史结果",
+          message: `找到 ${matches.length} 条 ${name} 的历史结果，可直接查看或选择在线重新查询`,
+        });
+      } else {
+        // 没有历史：直接开跑
+        setStatus(null);
+        await startLiveResearch(name);
+      }
+    } catch (err) {
+      // 查历史失败不该拦住调研，退回直接跑
+      setError(err instanceof Error ? err.message : "读取历史结果失败");
+      setStatus(null);
+      await startLiveResearch(name);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
+  /** 真正发起一次在线调研（会消耗检索额度） */
+  const startLiveResearch = async (name: string) => {
+    setIsResearching(true);
     setStatus({ step: "准备中", message: "正在创建调研任务…" });
 
     eventSourceRef.current?.close();
@@ -168,6 +213,18 @@ function App() {
       setError(err instanceof Error ? err.message : "无法发起调研");
       setStatus(null);
       setIsResearching(false);
+    }
+  };
+
+  /** 历史面板上的「在线重新查询」 */
+  const handleLiveRefresh = async () => {
+    if (!historyCompany || isRefreshingLive) return;
+    setIsRefreshingLive(true);
+    setHistoryEntries([]);
+    try {
+      await startLiveResearch(historyCompany);
+    } finally {
+      setIsRefreshingLive(false);
     }
   };
 
@@ -269,7 +326,21 @@ function App() {
           </div>
         )}
 
-        <ResearchForm onSubmit={handleSubmit} isResearching={isResearching} blocked={blocked} />
+        <ResearchForm
+          onSubmit={handleSubmit}
+          isResearching={isResearching || isLoadingHistory}
+          blocked={blocked}
+        />
+
+        {historyCompany && (isLoadingHistory || historyEntries.length > 0) && (
+          <HistoryPanel
+            company={historyCompany}
+            entries={historyEntries}
+            isLoading={isLoadingHistory}
+            onRefresh={handleLiveRefresh}
+            isRefreshing={isRefreshingLive || isResearching}
+          />
+        )}
 
         <ResearchStatus status={status} error={error} isComplete={isComplete} />
 
