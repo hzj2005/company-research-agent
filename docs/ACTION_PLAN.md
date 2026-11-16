@@ -2007,7 +2007,8 @@ Tavily key（必填！）、Company URL、HQ、Industry 四栏，以及一个模
   渲染审批面板；`streamResults` 记录 jobId 供审批提交复用。
 - 新增 `ui/src/components/ReviewPanel.tsx`：显示引用数、四栏可勾选拒答、备注框、两个动作
   「批准出稿 / 整体拒答」；勾选的栏目用「未找到公开依据」代替正文。
-- `handleReviewSubmit` → `POST /research/{id}/review` → 重开 SSE 等 complete。
+- `handleReviewSubmit` → `POST /research/{id}/review` → 拿到报告后直接渲染（详见 12.35.7：
+  最早是「重开 SSE 等 complete」，后来改成 review 接口直接返回报告正文，SSE 只作兜底）。
 - 类型：`types/index.ts` 增 `ReviewPayload` / `ReviewDecision`。
 - 新增 `evals/verify_ui_review.py`：CDP 驱动 headless Edge 跑完整交互流（输入 → 审批面板 →
   点批准 → 报告渲染），可复用的 UI 回归工具。
@@ -2023,3 +2024,34 @@ dev server，headless Edge 真点：审批面板出现（含引用数 8、四栏
   `waiting_review` 状态回显（现在是 SSE 一次性事件，刷新即丢）。要补的话是「前端刷新恢复」
   一个小功能，非阻断。
 - `job_status` / SSE 多 worker 限制依旧（见 12.35.3）。
+
+#### 12.35.7 复查补漏（2026-11-16 10:43，0 调用 / 0 credits）
+
+复查前端审批面板时发现 4 处问题，全部已修：
+
+- **栏目名与报告标题不一致**（真 bug）：`ReviewPanel` 的 `SECTION_LABELS` 写「公司概览 / 行业 /
+  财务」，而 `config/settings.yaml` 里是「公司概况 / 行业概况 / 财务概况」。勾选框写一套、
+  报告写另一套，用户会以为不是同一个栏目。已对齐成 settings.yaml 的实际名称。
+- **review 接口台账写失败会误报失败**（真 bug）：原来 `store_report` / `update_job` 裸调用，
+  Postgres 写失败就 500——但报告**已经成稿**（内存里有、SSE 也能拿到），前端会显示
+  「提交复核失败」，用户以为没成稿而重复提交（实际任务早已 completed，再提交只会 409）。
+  改成台账写失败只记日志，报告已成稿就照常返回成功。
+- **review 返回值补上报告正文**：前端原来要重开 SSE 才能拿到报告，而 SSE 只认进程内内存，
+  进程重启过就永远等不到 complete，界面卡在「生成中」。现在 review 接口直接返回 `report`，
+  前端直接渲染，SSE 重开只作兜底。
+- **并发重复提交无保护**（真漏洞）：同一任务连发两个 review 会续跑两遍。review 开始时先把
+  状态置 `reviewing`，第二个请求看到非 `waiting_review` 直接 409。`interrupt_stale` 同步把
+  `reviewing` 纳入收尾范围（续跑途中进程没了就是孤儿），但 `waiting_review` 仍不收
+  （它是有意停住等人决策）。
+
+真机验证：
+- headless Edge 两条分支都过：「批准出稿」→ 报告渲染；「勾选新闻动态」→ 报告里该栏目变成
+  「未找到公开依据」、其余栏目照常、审批面板消失。
+- 并发连发两个 review → 状态码 `[200, 409]`，报告只生成一次（772 字符）。
+- `npm run lint` 0 问题、`npm run build` 1710 modules；`pytest` 全量复跑。
+
+（顺带记一笔：这一轮排查还发现 `evals/verify_ui_review*.py` 里我自己写错了栏目名
+「公司概览」，导致脚本误报「报告未渲染」。功能本身一直是好的，是**测试脚本的判定词写错**——
+这类假失败如果不追到底，就会被当成真 bug 去改产品代码。）
+
+新增文件：`evals/verify_ui_review_reject.py`（勾选拒答分支的 CDP 回归脚本）。

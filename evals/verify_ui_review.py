@@ -136,7 +136,7 @@ async def main() -> int:
             report_seen = False
             for _ in range(60):
                 txt = await eval_js("document.body.innerText")
-                if txt and ("研究报告" in txt or "公司概览" in txt or "References" in txt):
+                if txt and ("研究报告" in txt or "公司概况" in txt or "References" in txt):
                     report_seen = True
                     break
                 await asyncio_sleep(0.5)
@@ -148,7 +148,7 @@ async def main() -> int:
 
             report_text = await eval_js("document.body.innerText")
             print("OK: 报告已渲染")
-            has_heading = any(k in report_text for k in ("研究报告", "公司概览", "行业", "财务", "新闻"))
+            has_heading = any(k in report_text for k in ("研究报告", "公司概况", "行业", "财务", "新闻"))
             print("  含栏目标题:", has_heading)
             # 截图留证
             shot = await send("Page.captureScreenshot", {"format": "png"})

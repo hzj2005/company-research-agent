@@ -167,9 +167,17 @@ function App() {
         const detail = await response.json().catch(() => null);
         throw new Error(detail?.detail || `提交复核失败（HTTP ${response.status}）`);
       }
-      // 后端续跑已把报告写回台账，但 SSE 那条流只认内存、且此刻已关闭；
-      // 这里直接重开一条流等 complete（或干脆轮询 GET），两条都行——重开 SSE 最省事。
+      const done = await response.json().catch(() => null);
       setReviewPayload(null);
+      // 后端续跑是同步的，返回时报告已成稿。直接用它渲染，不再依赖 SSE 重开：
+      // SSE 那条流只认进程内内存，进程重启过就等不到 complete，前端会卡在「生成中」。
+      if (done?.report) {
+        setReport(done.report);
+        setStatus({ step: "完成", message: "报告已生成" });
+        setIsComplete(true);
+        setIsResearching(false);
+        return;
+      }
       setIsResearching(true);
       setStatus({ step: "生成中", message: "复核通过，正在生成报告…" });
       streamResults(reviewJobId);

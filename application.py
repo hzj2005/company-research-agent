@@ -511,6 +511,16 @@ async def review_research(job_id: str, data: ReviewRequest):
     decision = data.model_dump()
     logger.info(f"Resuming {job_id} with review decision: approved={decision['approved']}")
 
+    # 先占位成 reviewing：同一任务的第二次复核请求必须被挡住。
+    # 续跑是同步的（可能好几秒），这期间状态不是 waiting_review，
+    # 并发进来的第二个请求会拿到 409，而不是重复续跑一遍。
+    job_status[job_id]["status"] = "reviewing"
+    if job_store is not None:
+        try:
+            await job_store.update_job(job_id, status="reviewing", current_step="human_review")
+        except Exception as exc:
+            logger.warning("复核中状态写台账失败（继续复核）：%s", exc)
+
     # 续跑结果写回台账，复用 process_research 里那套「先正文后状态」的落库逻辑
     async def _run_and_persist():
         settings = get_settings()
@@ -543,7 +553,10 @@ async def review_research(job_id: str, data: ReviewRequest):
         # 理论上恢复后必然成稿；留个兜底，别让「状态 completed 但查不到报告」出现
         err = "No report generated after review"
         if job_store is not None:
-            await job_store.update_job(job_id, status="failed", error=err)
+            try:
+                await job_store.update_job(job_id, status="failed", error=err)
+            except Exception:
+                logger.warning("复核失败状态写台账失败（job %s）", job_id)
         job_status[job_id].update({"status": "failed", "error": err})
         raise HTTPException(status_code=500, detail=err)
 
@@ -554,9 +567,15 @@ async def review_research(job_id: str, data: ReviewRequest):
         "last_update": datetime.now().isoformat(),
     })
     if job_store is not None:
-        await job_store.store_report(job_id, report_content)
-        await job_store.update_job(job_id, status="completed")
-    return {"status": "completed", "job_id": job_id}
+        # 台账写失败只记日志：报告**已经成稿**（内存里有、SSE 也能拿到），
+        # 让它变成 500 会让前端显示「提交复核失败」，用户以为没成稿而重复提交，
+        # 实际上任务早已 completed、再次提交只会拿到 409。
+        try:
+            await job_store.store_report(job_id, report_content)
+            await job_store.update_job(job_id, status="completed")
+        except Exception as exc:
+            logger.warning("复核结果写台账失败（报告已成稿，job %s）：%s", job_id, exc)
+    return {"status": "completed", "job_id": job_id, "report": report_content}
 
 
 

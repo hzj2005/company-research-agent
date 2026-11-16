@@ -198,18 +198,21 @@ class PostgresJobStore:
     async def interrupt_stale(
         self, reason: str, job_ids: list[str] | None = None
     ) -> int:
-        """把「进程早没了、状态还停在 pending/processing」的任务收尾。
+        """把「进程早没了、状态还停在 pending/processing/reviewing」的任务收尾。
 
         `job_status` 是进程内字典，所以只要进程重启过，库里所有非终态任务就已经没人
         推进了；不收尾的话历史列表里会永远挂着 pending（12.30 记录过两条这样的脏数据）。
         本方法只在**单 worker** 前提下成立：多 worker 时一个进程启动会误杀另一个进程
         正在跑的任务，这条限制写在 docs/POSTGRES.md §7。
 
+        `waiting_review` 不在收尾范围：它等人来提交决定，是**有意停住**的终态前状态，
+        收了等于把用户的复核请求作废。
+
         `job_ids` 只用于定向收尾（测试不想动别人的行）；启动时传 None = 全表。
         """
         sql = (
             "update jobs set status = 'failed', error = %s, updated_at = now()"
-            " where status in ('pending', 'processing')"
+            " where status in ('pending', 'processing', 'reviewing')"
         )
         params: list[Any] = [reason]
         if job_ids is not None:

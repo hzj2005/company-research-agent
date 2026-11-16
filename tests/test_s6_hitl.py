@@ -255,3 +255,11 @@ def test_api_review_rejects_on_bad_state(tmp_path: Path, monkeypatch) -> None:
         assert client.post(
             "/research/busy-job/review", json={"approved": True}
         ).status_code == 409
+
+        # 正在复核中（reviewing）→ 409，挡住并发重复提交
+        job_status["reviewing-job"] = {
+            "status": "reviewing", "company": "Notion", "thread_id": "tid",
+        }
+        assert client.post(
+            "/research/reviewing-job/review", json={"approved": True}
+        ).status_code == 409

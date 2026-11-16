@@ -9,10 +9,14 @@ interface ReviewPanelProps {
   onSubmit: (approved: boolean, rejectedSections: string[], note: string) => void;
 }
 
+/**
+ * 栏目 key → 中文标题。必须与 config/settings.yaml 里的栏目名一致，
+ * 否则勾选框里写「公司概览」、报告里写「公司概况」，用户会以为不是同一个栏目。
+ */
 const SECTION_LABELS: Record<string, string> = {
-  company: '公司概览',
-  industry: '行业',
-  financial: '财务',
+  company: '公司概况',
+  industry: '行业概况',
+  financial: '财务概况',
   news: '新闻动态',
 };
 

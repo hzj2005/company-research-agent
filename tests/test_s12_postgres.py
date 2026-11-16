@@ -444,7 +444,10 @@ def test_interrupt_stale_closes_orphans_but_never_rewrites_finished_rows() -> No
     from persistence.job_store import PostgresJobStore
 
     tag = uuid.uuid4().hex[:8]
-    ids = {name: f"{name}-{tag}" for name in ("pending", "processing", "done", "failed")}
+    ids = {
+        name: f"{name}-{tag}"
+        for name in ("pending", "processing", "reviewing", "waiting_review", "done", "failed")
+    }
 
     async def flow() -> None:
         store = await PostgresJobStore(DSN).open()
@@ -452,16 +455,22 @@ def test_interrupt_stale_closes_orphans_but_never_rewrites_finished_rows() -> No
             for name, jid in ids.items():
                 await store.create_job(jid, {"company": name})
             await store.update_job(ids["processing"], status="processing", current_step="briefing")
+            await store.update_job(ids["reviewing"], status="reviewing", current_step="human_review")
+            await store.update_job(ids["waiting_review"], status="waiting_review", current_step="human_review")
             await store.update_job(ids["done"], status="completed")
             await store.update_job(ids["failed"], status="failed", error="boom")
 
-            # 定向收尾：只碰这四条，不动库里别人的行
+            # 定向收尾：只碰这六条，不动库里别人的行
             cleaned = await store.interrupt_stale("进程重启，任务未完成（测试）", list(ids.values()))
-            assert cleaned == 2, f"应只收尾 pending + processing，实际 {cleaned}"
+            assert cleaned == 3, f"应收尾 pending + processing + reviewing，实际 {cleaned}"
 
             assert (await store.get_job(ids["pending"]))["status"] == "failed"
             assert (await store.get_job(ids["processing"]))["status"] == "failed"
             assert "进程重启" in (await store.get_job(ids["processing"]))["error"]
+            # reviewing 是「续跑途中」，进程没了就没人推进了 → 该收尾
+            assert (await store.get_job(ids["reviewing"]))["status"] == "failed"
+            # waiting_review 是有意停住等人决策，不是孤儿 → 不能收
+            assert (await store.get_job(ids["waiting_review"]))["status"] == "waiting_review"
             assert (await store.get_job(ids["done"]))["status"] == "completed"
             assert (await store.get_job(ids["failed"]))["error"] == "boom"
         finally:
