@@ -56,8 +56,8 @@ research 节点 = Orchestrator 子图（本次真正的编排层）
 
 | 阶段 | 内容 | 验证 |
 |---|---|---|
-| R0 | 建立新分支 `rebuild/orchestrator`，从存档点 `0c8d4a0` 拉出；保留旧版可随时对比 | 分支就位 |
-| R1 | **Orchestrator + 嵌套子图探针**：4 个最小 compiled 子图（空实现），orchestrator 节点 Send 派发、arbitrate 汇合 | 4 路真并行 + 状态汇总，独立性可查（`get_graph().nodes` 能看到子图） |
+| R0 ✅ | 建立新分支 `rebuild/orchestrator`，从存档点 `0c8d4a0` 拉出；保留旧版可随时对比 | 分支就位，已提交 |
+| R1 ✅ | **Orchestrator + 四独立子图**：4 个 compiled 子图（各带独立 state schema），orchestrator 真节点 Send 派发、arbitrate 汇合 | **6 个架构测试证明**：`Node.data` 是 `CompiledStateGraph`、四套 state 不同类、条件边派发、4 路不串；全量 571 passed |
 | R2 | **四套独立 state**：各子图自己的 schema + reducer，验证并行写回不覆盖 | 各 state 独立可内省 |
 | R3 | **key 映射 + LLM 抽取链**：`SYSTEM_ALIYUN_APIKEY` → `DASHSCOPE_API_KEY`，每栏目一条 `with_structured_output` 链；小规模实测（限次数） | 4 栏目真实抽取成功 |
 | R4 | 逐栏目差异化节点（company 消歧 / financial 时间线 / industry 竞品 / news 时效） | 每栏目独立用例 |
