@@ -41,14 +41,34 @@ research 节点 = Orchestrator 子图（本次真正的编排层）
                        ──Send(industry)───→ industry_subgraph  ├→ arbitrate → END
                        ──Send(financial)──→ financial_subgraph │
                        ──Send(news)───────→ news_subgraph      ┘
-四张 Agent 子图：每张 = 独立 State + 独立 graph + 独立节点 + 独立 LLM 抽取链
-  company_subgraph:    retrieve → extract(LLM) → entity_guard → emit
-  industry_subgraph:   retrieve → extract(LLM) → competitor_scan → matrix → emit
-  financial_subgraph:  retrieve → ticker_binding → extract(LLM) → number_guard → timeline → emit
-  news_subgraph:       retrieve → freshness → dedup → extract(LLM) → emit
+主图（R3 修订，用户 2026-11-17 决策）：5 节点 = grounding → research → briefing（+可选 human_review）
+  移除 curate / evidence_check —— 消歧与证据判定下沉进各子图
+  rewrite_query / degrade 的回退职责也进子图（子图内自闭环，Orchestrator 不协调回退）
+
+四张 Agent 子图：每张 = 独立 State + graph.py + nodes.py + prompts.py（四件套），自闭环：
+  retrieve → 消歧(guard) → extract(LLM) → evidence(判定) → [不够自返工 ≤2轮] → write_paragraph
+  write_paragraph 产出「栏目段落」= facts(claim+source_url) + 状态 + 冲突标注，**不带编号**
+  company:     + entity_guard + conflict 标注
+  financial:   + ticker_binding + number_guard + timeline（同轮才判冲突）
+  industry:    + number_guard + classify_slots + competitor_scan + positioning
+  news:        + freshness_filter + dedup_events
+
+报告层 briefing = 纯拼装工：
+  收四段 → assemble.py 统一编号 + References → Markdown
+  不再自己调 LLM 抽取（避免同一文档抽两次）
 ```
 
-**与上一版的本质区别**：`agent_*` 从"research 子图里的普通节点"变成"独立编译的子图"；派发从条件边挪进真正的 `orchestrator` 节点。
+**与上一版的本质区别**：`agent_*` 从"普通节点"变成"独立编译子图 + 自闭环任务流"；报告层从"抽+写"退化成"只拼装"；主图从 7 节点精简为 5 节点。
+
+**R3 关键决策链（用户逐条确认）**：
+1. 子图写段落、报告层只拼装；
+2. 编号由拼装工统一做（子图不碰编号，避免多栏目 [1] 撞号）；
+3. 消歧搬进子图（搜错人的资料在子图内就扔掉）；
+4. 主图移除 curate / evidence_check；
+5. 回退重检子图内自闭环（每个子图自己返工 ≤2 轮，Orchestrator 不协调）；
+6. 四栏目 extract 先用通用 `SectionBrief` 抽 Fact，专用契约留 R4 规则派生；
+7. 严格四件套、extract 每栏目各自实现；
+8. 三级降级：LLM → 本地小模型(预留) → 规则。
 
 ---
 
@@ -58,17 +78,17 @@ research 节点 = Orchestrator 子图（本次真正的编排层）
 |---|---|---|
 | R0 ✅ | 建立新分支 `rebuild/orchestrator`，从存档点 `0c8d4a0` 拉出；保留旧版可随时对比 | 分支就位，已提交 |
 | R1 ✅ | **Orchestrator + 四独立子图**：4 个 compiled 子图（各带独立 state schema），orchestrator 真节点 Send 派发、arbitrate 汇合 | **6 个架构测试证明**：`Node.data` 是 `CompiledStateGraph`、四套 state 不同类、条件边派发、4 路不串；全量 571 passed |
-| R2 | **四套独立 state**：各子图自己的 schema + reducer，验证并行写回不覆盖 | 各 state 独立可内省 |
-| R3 | **key 映射 + LLM 抽取链**：`SYSTEM_ALIYUN_APIKEY` → `DASHSCOPE_API_KEY`，每栏目一条 `with_structured_output` 链；小规模实测（限次数） | 4 栏目真实抽取成功 |
-| R4 | 逐栏目差异化节点（company 消歧 / financial 时间线 / industry 竞品 / news 时效） | 每栏目独立用例 |
-| R5 | 报告层适配 + 评测回归：报告文本契约、gate、A/B | 全绿，指标无回退 |
+| R2 ✅ | **四套独立 state**：各子图自己的 schema + reducer，验证并行写回不覆盖 | 4 测试证明隔离；全量 575 passed |
+| R3（进行中） | **数据流重构**：key 映射（✅ 已做）+ 四子图自闭环（检索→消歧→LLM抽取→判定→写段落）+ 主图移除 curate/evidence_check 变 5 节点 + 报告层改拼装器。三级降级；最小实跑 4 次 | 拼装器单测✅；待：子图自闭环端到端 + 主图 5 节点 + 真实 LLM 4 次 |
+| R4 | 逐栏目差异化节点（company conflict / financial 时间线 / industry 竞品矩阵 / news 时效去重） | 每栏目独立用例 |
+| R5 | 评测回归：报告文本契约、gate、A/B | 全绿，指标无回退 |
 | R6 | 文档：本规划标记完成、架构图更新；**不动简历** | 文档与代码一致 |
 
 ---
 
 ## 5. 红线（继承上一版血的教训）
 
-1. 主图 7 节点、对外 State 字段不变；
+1. **主图由用户决策改为 5 节点**（R3 移除 curate/evidence_check，消歧与判定下沉子图）——这是对旧红线"7 节点不变"的**显式变更**，已获用户确认；对外 State 字段尽量保持兼容；
 2. 每条结论带 source_url，查不到就拒答；
 3. 不生成推断性结论（重要性/情感/定位点评）；
 4. 不写未测指标进简历（本版不碰简历，但代码/文档同样遵守）；

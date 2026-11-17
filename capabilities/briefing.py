@@ -143,8 +143,11 @@ def _mock_completion(request: httpx.Request, seen: list[str]) -> httpx.Response:
     )
 
 
-def make_briefing_backend(settings: Settings) -> BriefingBackend:
-    """按 app.mode 构造简报抽取后端。fixture 完全离网，live 需模型 key。"""
+def make_briefing_backend(settings: Settings, *, system_prompt: str | None = None) -> BriefingBackend:
+    """按 app.mode 构造简报抽取后端。fixture 完全离网，live 需模型 key。
+
+    `system_prompt` 透传给抽取链，供各栏目使用自己的说明书；不传用通用规则。
+    """
     if settings.app.mode == "fixture":
         seen: list[str] = []
         client = httpx.AsyncClient(
@@ -159,7 +162,7 @@ def make_briefing_backend(settings: Settings) -> BriefingBackend:
             settings, "briefing", credentials=creds, http_async_client=client
         )
         return BriefingBackend(
-            chain=make_extraction_chain(model),
+            chain=make_extraction_chain(model, system_prompt=system_prompt),
             mode="fixture",
             seen=seen,
             client=client,
@@ -168,7 +171,7 @@ def make_briefing_backend(settings: Settings) -> BriefingBackend:
 
     model = make_chat_model(settings, "briefing")
     logger.warning("live 简报后端已构造；是否发起真实模型调用取决于后续节点执行")
-    return BriefingBackend(chain=make_extraction_chain(model), mode="live")
+    return BriefingBackend(chain=make_extraction_chain(model, system_prompt=system_prompt), mode="live")
 
 
 @asynccontextmanager

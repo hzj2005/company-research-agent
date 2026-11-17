@@ -167,11 +167,13 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 # 不引入额外 SDK。可用 LLM_BASE_URL 覆盖（例如代理或其他兼容服务）。
 DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
-_LLM_PROVIDERS: tuple[tuple[str, str, str | None], ...] = (
-    ("openrouter", "OPENROUTER_API_KEY", OPENROUTER_BASE_URL),
-    ("dashscope", "DASHSCOPE_API_KEY", DASHSCOPE_BASE_URL),
-    ("openai", "OPENAI_API_KEY", None),
-    ("gemini", "GEMINI_API_KEY", None),
+# provider -> (环境变量候选名, base_url)。候选按顺序取第一个有值的：
+# 标准名优先，SYSTEM_ALIYUN_APIKEY 是用户系统里实际注入的阿里云 key 名。
+_LLM_PROVIDERS: tuple[tuple[str, tuple[str, ...], str | None], ...] = (
+    ("openrouter", ("OPENROUTER_API_KEY",), OPENROUTER_BASE_URL),
+    ("dashscope", ("DASHSCOPE_API_KEY", "SYSTEM_ALIYUN_APIKEY"), DASHSCOPE_BASE_URL),
+    ("openai", ("OPENAI_API_KEY",), None),
+    ("gemini", ("GEMINI_API_KEY",), None),
 )
 
 
@@ -196,14 +198,18 @@ def resolve_llm_credentials(
             f"未知 LLM_PROVIDER={explicit!r}；可选：{known}"
         )
     override_base = (env.get("LLM_BASE_URL") or "").strip()
-    for provider, var, default_base in _LLM_PROVIDERS:
+    for provider, var_candidates, default_base in _LLM_PROVIDERS:
         if explicit and provider != explicit:
             continue
-        raw = (env.get(var) or "").strip()
+        raw = ""
+        for var in var_candidates:
+            raw = (env.get(var) or "").strip()
+            if raw:
+                break
         if not raw:
             if explicit:
                 raise MissingLLMCredentials(
-                    f"LLM_PROVIDER={provider}，但缺少 {var}；拒绝回退到其他 provider"
+                    f"LLM_PROVIDER={provider}，但缺少 {var_candidates}；拒绝回退到其他 provider"
                 )
             continue
         return LLMCredentials(

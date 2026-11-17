@@ -57,10 +57,19 @@ class ExtractionResult:
     notes: list[dict[str, Any]] = field(default_factory=list)
 
 
-def make_extraction_chain(model: BaseChatModel) -> Runnable:
-    """LCEL：prompt | with_structured_output(SectionBrief)。"""
+# 公开别名：各栏目 prompt 在通用规则上追加自己的专属要求时用
+BASE_SYSTEM_PROMPT = _SYSTEM_PROMPT
+
+
+def make_extraction_chain(model: BaseChatModel, *, system_prompt: str | None = None) -> Runnable:
+    """LCEL：prompt | with_structured_output(SectionBrief)。
+
+    `system_prompt` 可选：不传用通用规则（向后兼容）；传入则整段替换。
+    各栏目把自己的说明书拼成「通用规则 + 栏目补充」后传入。
+    fixture stub 只解析 human 消息里的 <documents>，与 system prompt 无关。
+    """
     prompt = ChatPromptTemplate.from_messages(
-        [("system", _SYSTEM_PROMPT), ("human", "{payload}")]
+        [("system", system_prompt or _SYSTEM_PROMPT), ("human", "{payload}")]
     )
     return prompt | model.with_structured_output(SectionBrief, method="function_calling")
 
