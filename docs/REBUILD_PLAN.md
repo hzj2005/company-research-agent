@@ -79,7 +79,7 @@ research 节点 = Orchestrator 子图（本次真正的编排层）
 | R0 ✅ | 建立新分支 `rebuild/orchestrator`，从存档点 `0c8d4a0` 拉出；保留旧版可随时对比 | 分支就位，已提交 |
 | R1 ✅ | **Orchestrator + 四独立子图**：4 个 compiled 子图（各带独立 state schema），orchestrator 真节点 Send 派发、arbitrate 汇合 | **6 个架构测试证明**：`Node.data` 是 `CompiledStateGraph`、四套 state 不同类、条件边派发、4 路不串；全量 571 passed |
 | R2 ✅ | **四套独立 state**：各子图自己的 schema + reducer，验证并行写回不覆盖 | 4 测试证明隔离；全量 575 passed |
-| R3 ✅ 主体完成 | **数据流重构**：key 映射 + 四子图自闭环（检索→消歧→抽取→判定→返工→写段落）+ 主图移除 curate/evidence_check 变 5 节点 + 报告层改拼装器。三级降级链（LLM→本地小模型预留空位→规则）由共享 `extract.py` 执行，四栏目接入。 | **561 passed 全绿**；评测 gate PASS 全指标 1.0；48 个旧测试全部迁移；3 个降级链测试。**查漏补漏（2026-11-18）：修复降级链死代码（原四栏目各写两级，现接共享三级）。待：真实 LLM 4 次实跑（R3-live）** |
+| R3 ✅ 完成（含实跑，如实标注） | **数据流重构**：key 映射 + 四子图自闭环（检索→消歧→抽取→判定→返工→写段落）+ 主图移除 curate/evidence_check 变 5 节点 + 报告层改拼装器。三级降级链（LLM→本地小模型预留空位→规则）由共享 `extract.py` 执行，四栏目接入。 | **561 passed 全绿**；评测 gate PASS 全指标 1.0；48 个旧测试迁移；3 个降级链测试。查漏补漏：修复降级链死代码（原四栏目各写两级，现接共享三级）。**R3-live 实跑（4 次）：company/financial 真实 LLM 成功（证明链路+prompt+URL守卫），industry/news 云端 Connection error 降级到规则（证明降级链真实故障下生效）。用户确认不补跑；4 栏目真实 LLM 全成功未达成，如实标注。** |
 | R4 | 逐栏目差异化节点（company conflict / financial 时间线 / industry 竞品矩阵 / news 时效去重） | 每栏目独立用例 |
 | R5 | 评测回归：报告文本契约、gate、A/B | 全绿，指标无回退 |
 | R6 | 文档：本规划标记完成、架构图更新；**不动简历** | 文档与代码一致 |

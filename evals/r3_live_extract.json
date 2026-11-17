@@ -1,0 +1,106 @@
+{
+  "purpose": "R3-live：新架构 extract_with_fallback 四栏目真实 LLM 抽取（各 1 次）",
+  "status": "partial_or_failed",
+  "config": {
+    "app_mode": "live",
+    "provider": "dashscope",
+    "model": "qwen-plus",
+    "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "max_retries": 0
+  },
+  "guard": {
+    "llm_requests_total": 2,
+    "expected_llm_requests": 4,
+    "tavily_calls": 0
+  },
+  "results": {
+    "company": {
+      "status": "ok",
+      "extract_status": "ok",
+      "facts_count": 3,
+      "fact_fields": [
+        "claim",
+        "confidence",
+        "source_url"
+      ],
+      "all_urls_in_allowed_set": true,
+      "notes": [
+        {
+          "status": "llm",
+          "prompt": "company"
+        }
+      ],
+      "sample_claim": "Notion 提供笔记与协作工作区",
+      "requests": 1,
+      "total_tokens": 960,
+      "elapsed_ms": 14698.5
+    },
+    "industry": {
+      "status": "ok",
+      "extract_status": "no_retry",
+      "facts_count": 1,
+      "fact_fields": [
+        "claim",
+        "confidence",
+        "source_url"
+      ],
+      "all_urls_in_allowed_set": true,
+      "notes": [
+        {
+          "status": "rule_fallback",
+          "prompt": null
+        }
+      ],
+      "sample_claim": "Gartner 口径下协作文档市场规模 50 亿美元，同比增长 20%。",
+      "requests": 0,
+      "total_tokens": 0,
+      "elapsed_ms": 32.0
+    },
+    "financial": {
+      "status": "ok",
+      "extract_status": "ok",
+      "facts_count": 1,
+      "fact_fields": [
+        "claim",
+        "confidence",
+        "source_url"
+      ],
+      "all_urls_in_allowed_set": true,
+      "notes": [
+        {
+          "status": "llm",
+          "prompt": "financial"
+        }
+      ],
+      "sample_claim": "Notion 于 2021 年完成 A 轮融资，金额为 500 万美元，投资方为 Sequoia。",
+      "requests": 1,
+      "total_tokens": 916,
+      "elapsed_ms": 2181.4
+    },
+    "news": {
+      "status": "ok",
+      "extract_status": "no_retry",
+      "facts_count": 1,
+      "fact_fields": [
+        "claim",
+        "confidence",
+        "source_url"
+      ],
+      "all_urls_in_allowed_set": true,
+      "notes": [
+        {
+          "status": "rule_fallback",
+          "prompt": null
+        }
+      ],
+      "sample_claim": "2024 年 5 月 Notion 推出 AI 写作功能。",
+      "requests": 0,
+      "total_tokens": 0,
+      "elapsed_ms": 33.4
+    }
+  },
+  "elapsed_ms_total": 16997.9,
+  "note": "qwen-plus 单价不在 get_openai_callback 价目表，不套用/不编造成本数字",
+  "user_decision": "2026-11-18 用户确认：不补跑。本地小模型为空位属预期；云端连接失败时降级到规则链按设计工作，如实记录。",
+  "honest_summary": "4 次请求中 2 次真实 LLM 成功(company/financial, 证明抽取链路+栏目prompt+URL守卫可用)；2 次因云端 Connection error 降级到规则(industry/news, 证明降级链在真实故障下生效)。4 栏目真实 LLM 全部成功未达成，如实标注。"
+}
