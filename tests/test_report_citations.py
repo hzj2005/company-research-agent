@@ -1,8 +1,11 @@
-"""补账回归：正文结论与 References 必须一一对应，不允许孤儿事实。
+"""补账回归（R3 迁移版）：正文结论与 References 一一对应，无孤儿编号。
 
-起因：旧实现按 max_references 截断引用表、正文却遍历全部文档，
-实测 12 篇合格文档时会出现 2 条「有结论、没有 [n]」的事实。
-fixture 只有 8~9 篇所以一直没暴露，接真实检索必现。
+R3：max_references 截断下沉到子图 pipeline，briefing 拼装器统一编号。
+验证：
+- 超过上限时每栏只保留 max_references 条，且都带 [n]；
+- References 编号连续、正文编号都能解析；
+- 截断数留痕（truncated_per_section）；
+- 降级栏目不产生孤儿引用；引用开关关闭仍渲染。
 """
 
 from __future__ import annotations
@@ -11,62 +14,74 @@ import asyncio
 import re
 from typing import Any
 
-from config.loader import Settings, get_settings
-from graph.nodes.report import make_briefing_node
+from langchain_core.tools import tool
+
+from config.loader import get_settings
+from graph.agents.company.nodes import make_company_pipeline_node
+from graph.nodes.assemble import assemble_report
 
 
-def _state(n_docs: int, *, degraded: list[str] | None = None) -> dict[str, Any]:
-    urls = [f"https://example.org/{i}" for i in range(n_docs)]
+def _many_docs(n: int) -> dict[str, list[dict[str, Any]]]:
     return {
-        "company": "X",
-        "curated_data": {
-            u: {"url": u, "content": f"事实 {i}", "score": 0.9, "section": "company"}
-            for i, u in enumerate(urls)
-        },
-        "references": {
-            u: {"title": f"来源 {i}", "score": 0.9, "used_by": ["company"]}
-            for i, u in enumerate(urls)
-        },
-        "degraded_sections": degraded or [],
+        "company": [
+            {"url": f"https://example.org/{i}", "title": f"来源 {i}",
+             "content": f"事实 {i}", "score": 0.9, "section": "company"}
+            for i in range(n)
+        ]
     }
 
 
-def _render(state: dict[str, Any], settings: Settings | None = None) -> dict[str, Any]:
-    return asyncio.run(make_briefing_node(settings or get_settings())(state))
+def _pipeline_output(n: int) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    s = get_settings()
+
+    @tool
+    async def fetch(company: str, sections: list[str], round_no: int) -> dict[str, list[dict[str, Any]]]:
+        """返回构造的多篇文档。"""
+        return _many_docs(n)
+
+    out = asyncio.run(
+        make_company_pipeline_node(s, fetch)({"company": "X", "round_no": 0})
+    )
+    return out["company_paragraph"], out["review_notes"]
 
 
 def test_every_factual_bullet_has_inline_citation() -> None:
-    """故意超过 max_references：不能有不带 [n] 的事实性结论。"""
-    out = _render(_state(12))
-    facts = [ln for ln in out["report"].splitlines() if ln.startswith("- 事实")]
-    assert len(facts) == get_settings().report.max_references, "每栏目结论数应受配置约束"
-    assert all(re.search(r"\[\d+\]$", ln) for ln in facts), "每条事实性结论必须带 [n]"
+    s = get_settings()
+    para, _ = _pipeline_output(12)
+    assert len(para["facts"]) == s.report.max_references, "每栏结论数应受上限约束"
+    report, _ = assemble_report("X", [{**para, "key": "company"}], s)
+    facts = [ln for ln in report.splitlines() if ln.startswith("- 事实")]
+    assert all(re.search(r"\[\d+\]$", ln) for ln in facts), "每条事实必须带 [n]"
 
 
 def test_reference_numbers_are_dense_and_resolvable() -> None:
-    report = _render(_state(12))["report"]
+    s = get_settings()
+    para, _ = _pipeline_output(12)
+    report, _ = assemble_report("X", [{**para, "key": "company"}], s)
     used = [int(n) for n in re.findall(r"- 事实 \d+ \[(\d+)\]", report)]
     refs = [int(n) for n in re.findall(r"^\[(\d+)\] ", report, flags=re.M)]
-    assert used and set(used) <= set(refs), "正文编号必须能在末尾 References 找到"
-    assert refs == list(range(1, len(refs) + 1)), "References 编号必须连续无空洞"
+    assert used and set(used) <= set(refs), "正文编号必须能在 References 找到"
+    assert refs == list(range(1, len(refs) + 1)), "编号必须连续无空洞"
 
 
-def test_truncated_documents_are_recorded_not_silently_dropped() -> None:
-    out = _render(_state(12))
-    note = next(n for n in out["review_notes"] if n["node"] == "briefing")
-    assert note["truncated_per_section"]["company"] == 2
-    assert note["referenced"] == get_settings().report.max_references
+def test_truncated_documents_are_recorded() -> None:
+    para, notes = _pipeline_output(12)
+    assert para["truncated"] == 2, "超出的 2 条应记进截断数"
+    assert any(n.get("node") == "truncate" and n["dropped"] == 2 for n in notes)
 
 
 def test_degraded_section_emits_no_orphan_reference() -> None:
-    out = _render(_state(3, degraded=["company"]))
-    assert "该类信息未找到公开依据" in out["report"]
-    assert "事实" not in out["report"]
-    assert "[1]" not in out["report"], "降级栏目不得在 References 里留下无正文的条目"
+    s = get_settings()
+    para = {"key": "company", "status": "degraded", "facts": [],
+            "references": {}, "conflicts": [], "truncated": 0}
+    report, _ = assemble_report("X", [para], s)
+    assert "该类信息未找到公开依据" in report
+    assert "[1]" not in report, "降级栏目不得留孤儿引用"
 
 
 def test_inline_citations_switch_off_still_renders() -> None:
     s = get_settings().model_copy(deep=True)
     s.features.inline_citations = False
-    report = _render(_state(12), s)["report"]
+    para, _ = _pipeline_output(3)
+    report, _ = assemble_report("X", [{**para, "key": "company"}], s)
     assert "事实 0" in report and "## References" in report

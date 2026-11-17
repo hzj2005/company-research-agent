@@ -44,6 +44,8 @@ def make_pipeline_node(
     # 漏搬这块会让 empty case 的低分文档（score 0.12）被抽成 fact → 误报有证据。
     min_score = settings.graph.evidence.min_relevance_score
     require_url = settings.graph.evidence.require_source_url
+    # 每栏目事实数上限（旧 briefing 的 max_references 截断下沉子图）
+    max_facts = settings.report.max_references
 
     async def pipeline(state: dict[str, Any]) -> dict[str, Any]:
         company = state["company"]
@@ -125,6 +127,15 @@ def make_pipeline_node(
         else:
             status = "degraded"
 
+        # ④b 每栏结论数截断（防正文事实多于 References 造成孤儿编号）
+        truncated = max(0, len(facts) - max_facts)
+        if truncated:
+            all_notes.append(
+                {"node": "truncate", "section": section,
+                 "kept": max_facts, "dropped": truncated}
+            )
+            facts = facts[:max_facts]
+
         # ⑤ 写段落（facts 带 source_url，不带编号）
         paragraph = make_paragraph(
             section, section, _to_facts(facts),
@@ -139,6 +150,7 @@ def make_pipeline_node(
         # 供评测按旧契约读子图内返工轮次
         # 返工轮次 = 实际多跑的轮数（与有没有 facts 无关；empty case 也记满）
         used_round = max(attempt - round_no, 0)
+        paragraph["truncated"] = truncated
         return {
             f"{section}_paragraph": paragraph,
             "degraded_sections": degraded_marker,

@@ -218,10 +218,15 @@ def make_briefing_node(
             for f in sec.get("facts", [])
             if f.get("source_url")
         }
+        truncated_per_section = {
+            sec["key"]: sec["truncated"]
+            for sec in sections
+            if sec.get("truncated")
+        }
         base_note = {
             "node": "briefing",
             "referenced": len(all_urls),
-            "truncated_per_section": {},
+            "truncated_per_section": truncated_per_section,
         }
         result: dict[str, Any] = {
             "report": report,
