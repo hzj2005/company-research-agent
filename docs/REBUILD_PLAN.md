@@ -1,6 +1,6 @@
 # 重建规划书：Orchestrator 管理的四独立 Agent 子图
 
-> 状态：**规划中，未开始实施**。上一版 V2 已存档于 GitHub commit `0c8d4a0`（`archive:` 提交），随时可回退。
+> 状态：**R0–R3 主体完成，R4–R6 待做**。上一版 V2 已存档于 GitHub tag `v2-archive-before-rebuild`（commit `0c8d4a0`），随时可回退。
 > 本版与上一版的核心区别：**架构真实优先 + 栏目内真实 LLM 抽取**。
 > 规划过程中用户已就 5 个关键决策表态，见 §1。
 
