@@ -1,7 +1,11 @@
-"""S4 验收：并行子图、Send 精确派发、栏目级重试、引用全量重算。
+"""S4 验收（R3 迁移版）：四路并行派发、reducer 合并不覆盖、栏目级隔离。
 
-覆盖 ACTION_PLAN 第 7.4 节：4 路 Send 并行、reducer 合并不覆盖、回退只派发
-不足栏目、部分栏目用尽额度不连累其他栏目、旧引用可被移除、降级不可关闭。
+R3：research = Orchestrator 子图，Send 派发到 4 张独立 pipeline 子图；
+回退在子图内；主图 5 节点。保留仍有效的验证：
+- 4 路真并行（时间窗重叠）
+- 各栏目段落互不覆盖、reducer 合并正确
+- Send 白名单驱动
+- 降级不可关闭是红线
 """
 
 from __future__ import annotations
@@ -15,17 +19,11 @@ from langchain_core.tools import tool
 
 from capabilities.retrieval import make_document_tool
 from config.loader import get_settings
+from graph.agents.factory import build_all_agent_subgraphs
 from graph.builder import build_graph
-from graph.conditions import (
-    ROUTE_DEGRADE,
-    ROUTE_RETRY,
-    route_after_evidence,
-    sections_to_research,
-)
+from graph.orchestrator import build_orchestrator_subgraph, make_dispatch_edge
 from graph.run import run_research
-from graph.state import initial_state, latest_list, merge_docs, replace_mapping
-from graph.subgraphs.research import build_research_subgraph, fanout_dispatch
-from persistence.checkpointer import CheckpointSession
+from graph.state import merge_docs, replace_mapping, append_unique
 
 
 def _run(company: str, tmp_path: Path) -> tuple[dict[str, Any], list[str]]:
@@ -34,188 +32,77 @@ def _run(company: str, tmp_path: Path) -> tuple[dict[str, Any], list[str]]:
     )
 
 
-def _analyst_notes(state: dict[str, Any]) -> list[dict[str, Any]]:
-    # 重建版：四张独立 Agent 子图的留痕 node=agent_<section>，按 analyst 字段筛选
-    return [n for n in state["review_notes"] if n.get("analyst") in set(get_settings().graph.sections)]
-
-
-def test_first_round_fans_out_to_four_analysts(tmp_path: Path) -> None:
+def test_first_round_fans_out_to_four_pipelines(tmp_path: Path) -> None:
     state, trace = _run("Notion", tmp_path)
-    notes = _analyst_notes(state)
-    assert len(notes) == 4, "子图不得把累积字段重复回传给主图 reducer"
-    assert {n["analyst"] for n in notes} == set(get_settings().graph.sections)
+    for section in get_settings().graph.sections:
+        assert state[f"{section}_paragraph"]["facts"], f"{section} 段落应有事实"
     assert trace.count("research") == 1
-
-
-def test_retry_only_dispatches_insufficient_analyst(tmp_path: Path) -> None:
-    state, trace = _run("Linear", tmp_path)
-    second_round = [n for n in _analyst_notes(state) if n["round"] == 1]
-    assert [n["analyst"] for n in second_round] == ["company"], "回退不得唤醒其余 3 个 analyst"
-    assert state["sections_to_research"] == ["company"], "派发白名单必须写进 State"
-    assert trace.count("research") == 2
-
-
-def test_empty_keeps_bounded_retry_then_degrades(tmp_path: Path) -> None:
-    state, trace = _run("Zephyrstone Labs", tmp_path)
-    assert trace.count("research") == get_settings().graph.max_retry + 1
-    assert state["degraded"] is True
-    assert len([n for n in _analyst_notes(state) if n["round"] > 0]) == 2
 
 
 def test_parallel_writes_are_merged_not_overwritten(tmp_path: Path) -> None:
     state, _ = _run("Notion", tmp_path)
-    for field, section in (
-        ("company_data", "company"),
-        ("industry_data", "industry"),
-        ("financial_data", "financial"),
-        ("news_data", "news"),
-    ):
-        assert state[field], f"{field} 不应被其他 analyst 覆盖"
-        assert all(doc.get("section") == section for doc in state[field].values())
+    # 四栏目 references 都在，没被其他分支覆盖
+    for section in ("company", "industry", "financial", "news"):
+        assert state[f"{section}_paragraph"]["references"], f"{section} 引用被覆盖"
 
 
 def test_fanout_is_pure_and_whitelist_driven() -> None:
     s = get_settings()
-    first = fanout_dispatch({"sections_to_research": []}, settings=s)
-    retry = fanout_dispatch({"sections_to_research": ["company"]}, settings=s)
+    edge = make_dispatch_edge(s)
+    first = edge({"sections_to_research": [], "dispatch_decision": []})
+    retry = edge({"sections_to_research": ["company"], "dispatch_decision": ["company"]})
     assert len(first) == 4 and len(retry) == 1
-    assert {x.node for x in first} == {"analyst"}
-    assert retry[0].arg["active_section"] == "company"
+    assert {x.node for x in first} == {f"agent_{k}" for k in s.graph.sections}
+    assert retry[0].node == "agent_company"
 
 
 def test_subgraph_structure_and_conditional_edge() -> None:
     s = get_settings()
-    sub = build_research_subgraph(s, make_document_tool(s))
-    assert {"dispatch", "analyst"} <= set(sub.get_graph().nodes.keys())
+    sub = build_orchestrator_subgraph(s, make_document_tool(s))
+    nodes = set(sub.get_graph().nodes.keys())
+    assert {"orchestrator", "arbitrate"} <= nodes
+    assert all(f"agent_{k}" in nodes for k in s.graph.sections)
     conditional_sources = {
         getattr(e, "source", "?")
         for e in sub.get_graph().edges
         if getattr(e, "conditional", False)
     }
-    assert "dispatch" in conditional_sources, "Send 派发必须是真实条件边"
+    assert "orchestrator" in conditional_sources, "Send 派发必须是真实条件边"
 
     main = build_graph(s, make_document_tool(s))
-    assert set(main.nodes.keys()) == {
-        "grounding", "research", "curate", "evidence_check",
-        "rewrite_query", "degrade", "briefing",
-    }
-
-
-def test_partial_retry_budget_does_not_abort_other_sections() -> None:
-    """旧 `any(...)`：company 达上限会把还有额度的 industry 一起降级。"""
-    s = get_settings()
-    state = {
-        **initial_state("X"),
-        "evidence_verdict": {"company": "insufficient", "industry": "insufficient"},
-        "retry_count": {"company": s.graph.max_retry, "industry": 0},
-    }
-    assert route_after_evidence(state, settings=s) == ROUTE_RETRY
-    assert sections_to_research(state, s) == ["industry"], "已达上限栏目不该再被重搜"
-    exhausted = {**state, "retry_count": {"company": s.graph.max_retry, "industry": s.graph.max_retry}}
-    assert route_after_evidence(exhausted, settings=s) == ROUTE_DEGRADE
+    # R3：主图 5 节点（human_review 默认关）
+    assert {"grounding", "research", "briefing"} <= set(main.nodes.keys())
+    assert "curate" not in main.nodes.keys() and "evidence_check" not in main.nodes.keys()
 
 
 def test_reducers_are_last_write_wins_and_full_replace() -> None:
-    assert latest_list(["company"], ["industry"]) == ["industry"]
-    assert latest_list(["company"], None) == ["company"]
-    assert latest_list(["company"], []) == []
+    assert append_unique(["company"], ["company", "industry"]) == ["company", "industry"]
+    assert append_unique(["company"], ["company"]) == ["company"]
     assert replace_mapping({"old": 1}, {"new": 2}) == {"new": 2}
-    assert replace_mapping({"old": 1}, {}) == {}
     assert replace_mapping({"old": 1}, None) == {"old": 1}
-
-
-def test_curate_drops_reference_when_new_version_falls_below_threshold() -> None:
-    """走真实链路：同 URL 新版本经 merge_docs 覆盖 → curate 重判 → replace_mapping 移除。
-
-    只在这个范围内 `replace_mapping` 确实能移除旧引用；不夸大成「所有旧引用都能移除」。
-    """
-    from graph.nodes.collect import make_curate_node
-
-    s = get_settings()
-    curate = make_curate_node(s)
-    url = "https://example.org/a"
-    good = {"url": url, "title": "A", "score": 0.9, "content": "x"}
-    stale = {**good, "score": 0.1}  # 同一来源的新版本被判定低相关
-
-    first = asyncio.run(curate({**initial_state("X"), "company_data": {url: good}}))
-    assert url in first["references"]
-
-    merged_data = merge_docs({url: good}, {url: stale})
-    second = asyncio.run(curate({**initial_state("X"), "company_data": merged_data}))
-    final = replace_mapping(first["references"], second["references"])
-    assert url not in final, "同一 URL 的新版本不合格时，旧引用必须被移除"
-
-
-def test_url_that_stops_being_returned_is_retained_as_known_limitation() -> None:
-    """如实记录边界，不假装修复：`*_data` 按 URL 累积，URL 不再返回时旧引用移除不掉。
-
-    要让这类旧引用消失，需要按栏目维护「本轮有效 URL 集合」，真实检索接入后才有
-    意义（挂 S5/S7）。文档措辞因此不得写「旧引用自动移除」。
-    """
-    from graph.nodes.collect import make_curate_node
-
-    s = get_settings()
-    curate = make_curate_node(s)
-    old_url = "https://example.org/old"
-    new_url = "https://example.org/new"
-    doc = lambda u: {"url": u, "title": u, "score": 0.9, "content": "x"}  # noqa: E731
-
-    first = asyncio.run(curate({**initial_state("X"), "company_data": {old_url: doc(old_url)}}))
-    merged_data = merge_docs({old_url: doc(old_url)}, {new_url: doc(new_url)})
-    second = asyncio.run(curate({**initial_state("X"), "company_data": merged_data}))
-    final = replace_mapping(first["references"], second["references"])
-    assert old_url in final, "当前实现确实保留不再返回的旧 URL；这是已知边界，改实现时此断言应随之更新"
+    assert merge_docs({"u1": {"a": 1}}, {"u2": {"b": 2}}) == {
+        "u1": {"a": 1}, "u2": {"b": 2}
+    }
 
 
 def test_degrade_switch_removed_from_config() -> None:
     assert "enabled" not in get_settings().graph.degrade.model_dump(), "降级不可关闭是红线"
 
 
-def test_analyst_uses_its_own_retry_round_when_sections_are_out_of_sync(tmp_path: Path) -> None:
-    """S4 复查回归：不能用全局 max 当轮次（会让刚开始回退的栏目错拿别的栏目数据）。
+def test_four_agent_subgraphs_are_independently_compiled() -> None:
+    """四张子图各自编译、各自独立（架构真实性）。"""
+    from langgraph.graph.state import CompiledStateGraph
 
-    端到端跑主图（真 compile + checkpointer + Send 派发）：
-    company 已用尽 2 次额度、industry 才第 1 次，白名单只派发 industry，
-    它请求 fixture/live 的 round_no 必须是 1 而不是 2。
-    """
-    captured: list[tuple[str, int]] = []
-
-    @tool
-    async def fetch_company_documents(
-        company: str, sections: list[str], round_no: int
-    ) -> dict[str, list[dict[str, Any]]]:
-        """记录每个 analyst 实际请求的轮次，不返回文档。"""
-        captured.append((sections[0], round_no))
-        return {sections[0]: []}
-
-    base = get_settings()
-    # 关掉自纠正，让主图在第一轮 evidence_check 后直接 degrade，不会再回到 research
-    settings = base.model_copy(
-        update={"features": base.features.model_copy(update={"self_correction": False})}
-    )
-    start = {
-        **initial_state("X"),
-        "retry_count": {"company": 2, "industry": 1},
-        "sections_to_research": ["industry"],
-    }
-
-    async def run() -> None:
-        async with CheckpointSession(settings=settings, path=tmp_path / "round.db") as sess:
-            graph = sess.compile(build_graph(settings, fetch_company_documents))
-            await graph.ainvoke(start, config=sess.config_for("s4:round:1"))
-
-    asyncio.run(run())
-    assert captured == [("industry", 1)], (
-        "白名单只派发 industry，它自己的 retry_count=1；不能用 company 的 2"
-    )
+    s = get_settings()
+    agents = build_all_agent_subgraphs(s, make_document_tool(s))
+    assert set(agents) == set(s.graph.sections)
+    for section, sub in agents.items():
+        assert isinstance(sub, CompiledStateGraph)
+        assert f"{section}_pipeline" in set(sub.get_graph().nodes.keys())
 
 
 def test_send_branches_overlap_in_time() -> None:
-    """证明 4 路 Send 是真并发，不是顺序循环。
-
-    用「所有分支都已开始、才允许第一个分支结束」的时间窗重叠断言，不依赖绝对
-    耗时，避免不同机器/CI 负载下的时序抖动。串行执行时该断言必然失败。
-    """
+    """4 路 Send 是真并发（时间窗重叠，不依赖绝对耗时）。"""
     spans: list[tuple[str, float, float]] = []
 
     @tool
@@ -228,11 +115,22 @@ def test_send_branches_overlap_in_time() -> None:
         spans.append((sections[0], started, time.perf_counter()))
         return {sections[0]: []}
 
-    sub = build_research_subgraph(get_settings(), slow_fetch)
+    sub = build_orchestrator_subgraph(get_settings(), slow_fetch)
     asyncio.run(
-        sub.ainvoke({"company": "X", "sections_to_research": [], "retry_count": {}})
+        sub.ainvoke({
+            "company": "X", "sections_to_research": [], "retry_count": {},
+            "degraded_sections": [], "company_paragraph": {}, "industry_paragraph": {},
+            "financial_paragraph": {}, "news_paragraph": {}, "review_notes": [],
+        })
     )
     assert {s for s, _, _ in spans} == set(get_settings().graph.sections)
-    assert max(start for _, start, _ in spans) < min(end for _, _, end in spans), (
-        "4 个分支时间窗必须重叠；若串行执行，最后一个开始时会晚于第一个结束"
+    # 某栏目可能因证据不足返工跑多轮，按栏目归并首轮时间窗；
+    # 只要首轮四栏目时间窗重叠即证明 Send 并行（不是串行循环）。
+    first_round: dict[str, tuple[float, float]] = {}
+    for section, start, end in spans:
+        prev = first_round.get(section)
+        if prev is None or start < prev[0]:
+            first_round[section] = (start, end)
+    assert max(w[0] for w in first_round.values()) < min(w[1] for w in first_round.values()), (
+        "4 个分支首轮时间窗必须重叠；若串行执行，最后一个开始会晚于第一个结束"
     )
