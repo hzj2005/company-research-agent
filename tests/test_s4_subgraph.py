@@ -35,7 +35,8 @@ def _run(company: str, tmp_path: Path) -> tuple[dict[str, Any], list[str]]:
 
 
 def _analyst_notes(state: dict[str, Any]) -> list[dict[str, Any]]:
-    return [n for n in state["review_notes"] if n["node"] == "research"]
+    # 重建版：四张独立 Agent 子图的留痕 node=agent_<section>，按 analyst 字段筛选
+    return [n for n in state["review_notes"] if n.get("analyst") in set(get_settings().graph.sections)]
 
 
 def test_first_round_fans_out_to_four_analysts(tmp_path: Path) -> None:

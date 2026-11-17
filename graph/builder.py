@@ -26,7 +26,7 @@ from graph.nodes.decide import (
 from graph.nodes.human_review import make_human_review_node
 from graph.nodes.report import make_briefing_node
 from graph.state import ResearchState
-from graph.subgraphs.research import build_research_subgraph
+from graph.orchestrator import build_orchestrator_subgraph
 
 
 def build_graph(
@@ -44,7 +44,8 @@ def build_graph(
 
     builder.add_node("grounding", make_grounding_node(settings))
     # 编译后的子图直接当节点：主图 astream 里仍叫 research（前置探针实测）
-    builder.add_node("research", build_research_subgraph(settings, document_tool))
+    # 重建版：research 节点 = Orchestrator 子图（管理四张独立 Agent 子图）
+    builder.add_node("research", build_orchestrator_subgraph(settings, document_tool))
     builder.add_node("curate", make_curate_node(settings))
     builder.add_node("evidence_check", make_evidence_check_node(settings))
     builder.add_node("rewrite_query", make_rewrite_query_node(settings))

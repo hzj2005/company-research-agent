@@ -52,8 +52,9 @@ def test_sparse_retries_once_then_converges(tmp_path: Path) -> None:
     assert trace.count("research") == 2, "首轮 + 一次回退"
     assert "https://example.org/linear/about" in state["report"], "回退补回的文档应进报告"
     # 回退只重搜不足栏目，其余栏目状态不能被覆盖
-    notes = [n for n in state["review_notes"] if n["node"] == "research"]
-    assert any(n["sections"] == ["company"] for n in notes), "回退应精确指向不足栏目"
+    # 重建版：orchestrator 节点写派发决策，字段 dispatch_to
+    notes = [n for n in state["review_notes"] if n["node"] == "orchestrator"]
+    assert any(n["dispatch_to"] == ["company"] for n in notes), "回退应精确指向不足栏目"
 
 
 def test_empty_degrades_after_max_retry_without_fabrication(tmp_path: Path) -> None:
