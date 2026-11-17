@@ -209,6 +209,16 @@ def make_briefing_node(
                      "facts": [], "conflicts": [], "references": {}}
                 )
 
+        # 人工复核/子图判定降级的栏目 → 强制该段走拒答话术
+        # （复核 reject 写 degraded_sections 后，报告必须真的不输出该栏目）
+        degraded = set(state.get("degraded_sections") or [])
+        for sec in sections:
+            if sec.get("key") in degraded:
+                sec["status"] = "degraded"
+                sec["facts"] = []
+                sec["conflicts"] = []
+                sec["references"] = {}  # 全拒答时不得留孤儿引用
+
         report, briefings = assemble_report(state["company"], sections, settings)
 
         # 兼容旧断言：briefing note 最后一条，带 referenced 计数

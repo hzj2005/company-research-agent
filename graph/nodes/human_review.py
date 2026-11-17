@@ -62,26 +62,22 @@ def _build_evidence_preview(
     报告的那些（与 report 节点的筛选口径一致：`in references` 才算数）。排序也按
     分数从高到低，保证人看到的是最可能进正文的那几条。
     """
-    curated = state.get("curated_data", {}) or {}
-    references = state.get("references", {}) or {}
     preview: dict[str, list[dict[str, Any]]] = {}
 
     for section in sections:
-        docs = sorted(
-            (
-                d
-                for d in curated.values()
-                if d.get("section") == section and d.get("url") in references
-            ),
-            key=lambda d: (-float(d.get("score", 0) or 0.0), str(d.get("url", ""))),
-        )
+        # R3：证据来自该子图写好的段落 facts（不再是主图 curated_data）
+        paragraph = state.get(f"{section}_paragraph") or {}
+        facts = list(paragraph.get("facts", []))
+        refs = paragraph.get("references", {}) or {}
         items: list[dict[str, Any]] = []
-        for doc in docs[:EVIDENCE_PREVIEW_PER_SECTION]:
-            content = str(doc.get("content") or "").strip()
+        for fact in facts[:EVIDENCE_PREVIEW_PER_SECTION]:
+            url = str(fact.get("source_url") or "")
+            content = str(fact.get("claim") or "").strip()
+            meta = refs.get(url, {})
             items.append({
-                "title": str(doc.get("title") or "")[:200],
-                "url": str(doc.get("url") or ""),
-                "score": round(float(doc.get("score", 0) or 0.0), 4),
+                "title": str(meta.get("title") or "")[:200],
+                "url": url,
+                "score": round(float(fact.get("confidence", 0) or 0.0), 4),
                 "snippet": content[:SNIPPET_CHARS] + ("…" if len(content) > SNIPPET_CHARS else ""),
             })
         preview[section] = items
@@ -106,7 +102,10 @@ def make_human_review_node(settings: Settings) -> Node:
             "prompt": "复核成稿：批准出稿，或指定要拒答的栏目",
             "company": state["company"],
             "sections": sections,
-            "reference_count": len(state.get("references", {})),
+            "reference_count": sum(
+                len((state.get(f"{s}_paragraph") or {}).get("references", {}))
+                for s in sections
+            ),
             "degraded_sections": list(state.get("degraded_sections", [])),
             # 给人看的证据摘要：没有它，复核人只能看到一个引用总数，
             # 既判断不了证据够不够，也定不了该拒答哪一栏 —— 那就只是盲批。

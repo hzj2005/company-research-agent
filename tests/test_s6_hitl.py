@@ -16,10 +16,8 @@ from config.loader import apply_overrides, get_settings
 from graph.builder import build_graph
 from graph.run import run_research
 
-BASE_NODES = {
-    "grounding", "research", "curate", "evidence_check",
-    "rewrite_query", "degrade", "briefing",
-}
+# R3：主图 5 节点（消歧/判定/回退下沉子图）
+BASE_NODES = {"grounding", "research", "briefing"}
 ABSTAIN = "该类信息未找到公开依据"
 
 
