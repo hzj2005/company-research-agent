@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 from config.loader import ROOT
-from evals.build_golden_live import DRAFT, FILLED, OUTPUT, REVIEW, main
+from evals.build_golden_live import DRAFT, FILLED, REVIEW, main
 from evals.config import dataset_path, load_eval_config
 from evals.metrics import load_golden
 
@@ -28,14 +28,26 @@ def _rows(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
+@pytest.fixture(scope="module")
+def golden_output(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """生成物写到临时目录，绝不碰生产文件 golden_live.jsonl。
+
+    原实现 autouse 调 main() 写死 OUTPUT（生产路径），且 date.today() 会覆盖
+    人工核验文件的 generated_at——每次 pytest 都污染生产数据（S8 复查抓到）。
+    """
+    tmp = tmp_path_factory.mktemp("golden_live")
+    return main(tmp / "golden_live.jsonl")
+
+
 @pytest.fixture(scope="module", autouse=True)
-def _generated() -> None:
-    main()
+def _generated(golden_output: Path) -> None:
+    # 触发生成即可；产物路径由 golden_output fixture 提供
+    assert golden_output.exists()
 
 
 @pytest.fixture(scope="module")
-def rows() -> list[dict]:
-    return _rows(OUTPUT)
+def rows(golden_output: Path) -> list[dict]:
+    return _rows(golden_output)
 
 
 @pytest.fixture(scope="module")
@@ -140,9 +152,11 @@ def test_only_notion_has_a_real_report(claims: dict[str, dict], meta: dict) -> N
     assert all(r["report_section"] for r in claims.values())
 
 
-def test_s7_pipeline_cannot_be_reused_by_swapping_dataset_path(rows: list[dict]) -> None:
+def test_s7_pipeline_cannot_be_reused_by_swapping_dataset_path(
+    rows: list[dict], golden_output: Path
+) -> None:
     """实测三处不兼容：无 abstain、provenance 写死、fixture case 名对不上。"""
-    golden = load_golden(OUTPUT)
+    golden = load_golden(golden_output)
     assert len(golden.abstains) == 0
     cfg = load_eval_config()
     assert cfg.dataset.provenance == "synthetic-fixture-derived"
@@ -150,9 +164,10 @@ def test_s7_pipeline_cannot_be_reused_by_swapping_dataset_path(rows: list[dict])
     assert dataset_path(cfg).name == "golden.jsonl", "S7 仍必须只跑 fixture golden"
 
 
-def test_generation_does_not_mutate_any_input() -> None:
+def test_generation_does_not_mutate_any_input(golden_output: Path) -> None:
     before = {p: hashlib.sha256(p.read_bytes()).hexdigest() for p in (FILLED, REVIEW, DRAFT)}
-    main()
+    # 再生成一次到临时路径，确认输入文件（复核稿）不被改动
+    main(golden_output.parent / "again.jsonl")
     after = {p: hashlib.sha256(p.read_bytes()).hexdigest() for p in (FILLED, REVIEW, DRAFT)}
     assert before == after
 

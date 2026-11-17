@@ -116,6 +116,8 @@ class ResearchState(InputState):
     review_notes: Annotated[list[dict[str, Any]], append_notes]
     # S6 HITL：人工复核的原始决策（受控 dict），供审计与 resume 后追溯
     review_decision: Annotated[dict[str, Any], replace_mapping]
+    # V2 后处理产物（行业竞品/对比矩阵、新闻时效/事件去重）；默认空，不影响报告
+    postprocess: Annotated[dict[str, Any], replace_mapping]
     report: str
 
 
@@ -139,6 +141,7 @@ def initial_state(company: str, **kwargs: Any) -> dict[str, Any]:
         "degraded_sections": [],
         "review_notes": [],
         "review_decision": {},
+        "postprocess": {},
         "report": "",
         **kwargs,
     }

@@ -78,6 +78,10 @@ features:
   auto_approve_review: ${AUTO_APPROVE_REVIEW:-true}        # 开了 human_review 仍需显式关这里才会 interrupt
   entity_guard: ${FEATURES_ENTITY_GUARD:-true}             # S10 同名实体消歧：拒绝「另一个同名实体」的文档
   conflict_annotation: ${FEATURES_CONFLICT_ANNOTATION:-true}  # S10 同栏目事实冲突标注（只在结构化路径生效）
+  # V2 多 Agent 改造开关：false = 旧的单一 analyst 节点（回滚路径）；true = 4 个专职栏目节点
+  multi_agent: ${FEATURES_MULTI_AGENT:-false}
+  # V2 后处理开关：行业竞品识别/对比矩阵、新闻时效标注/事件去重。默认关，不影响报告文本与评测基线
+  postprocess: ${FEATURES_POSTPROCESS:-false}
 
 report:
   # 报告结构保持与原版一致，便于做前后对比

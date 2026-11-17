@@ -206,13 +206,21 @@ def build() -> list[dict]:
     return out
 
 
-def main() -> Path:
+def main(output: Path | None = None) -> Path:
+    """生成 golden_live 并写入 `output`。
+
+    默认写生产路径 OUTPUT（CLI / 人工发布用）；传入路径时写到该处。
+    测试必须传临时路径——否则每次 pytest 都会用 date.today() 覆盖人工核验
+    文件的 generated_at（S8 复查发现的测试污染）。
+    """
     rows = build()
-    OUTPUT.write_text(
+    target = output or OUTPUT
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(
         "\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n",
         encoding="utf-8",
     )
-    return OUTPUT
+    return target
 
 
 if __name__ == "__main__":

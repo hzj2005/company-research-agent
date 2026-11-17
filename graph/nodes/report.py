@@ -217,10 +217,24 @@ def make_briefing_node(
             "referenced": len(ordered_urls),
             "truncated_per_section": truncated,
         }
-        return {
+        result: dict[str, Any] = {
             "report": report,
             "briefings": briefings,
             "review_notes": [*notes, base_note],
         }
+        # V2 后处理：默认关闭。开启时对已抽取 facts 做行业/新闻专项加工，
+        # 写入独立字段，不改 report 文本、不改 briefings 结构 → 评测基线不受影响。
+        if settings.features.postprocess:
+            from datetime import date
+
+            from capabilities.postprocess import postprocess_from_briefing
+
+            result["postprocess"] = postprocess_from_briefing(
+                briefings,
+                company=state["company"],
+                reference_year=date.today().year,
+                source_docs=selected,  # 财务数字保真需要原文 content
+            )
+        return result
 
     return briefing

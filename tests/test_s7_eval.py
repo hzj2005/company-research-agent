@@ -86,7 +86,8 @@ def test_golden_provenance_counts_and_honest_note(golden) -> None:
     assert golden.meta["schema_version"] == 1
     assert "不是真实世界事实" in golden.meta["note"]
     assert len(golden.cases) == 3
-    assert len(golden.claims) == 23
+    # claim 数由 fixture 文档数派生，不写死：扩数据后应随之增长
+    assert len(golden.claims) >= 3
     assert len(golden.abstains) == 1
     assert all(i["expected_text"] == i["source_content"] for i in golden.claims)
 
@@ -195,8 +196,11 @@ def test_baseline_gate_and_zero_external_calls(full_card, cfg) -> None:
     assert base["metrics"]["abstain_rate"] == 1.0
     assert base["metrics"]["hallucination_rate"] == 0.0
     assert base["metrics"]["self_correction_success"] == 1.0
-    assert base["counts"]["expected_claims"] == 23
-    assert base["counts"]["report_claims"] == 23
+    # 两个计数必须与 dataset 派生出的 claim 数自洽，不写死具体数值
+    n_claims = card["dataset"]["claim_items"]
+    assert n_claims >= 3
+    assert base["counts"]["expected_claims"] == n_claims
+    assert base["counts"]["report_claims"] == n_claims
     assert card["external_calls"] == {"tavily": 0, "llm": 0, "blocked_connection_attempts": 0}
     assert attempts == []
     assert "generated_at" not in card and "timestamp" not in card

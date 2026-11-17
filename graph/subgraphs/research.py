@@ -51,14 +51,36 @@ def fanout_dispatch(state: ResearchSubgraphState, *, settings: Settings) -> list
         "retry_count": dict(state.get("retry_count", {})),
     }
     sections = pending_sections(state, settings)
-    logger.info("research 子图派发 %d 个 analyst: %s", len(sections), sections)
-    return [Send("analyst", {**base, "active_section": section}) for section in sections]
+    # V2：多 Agent 模式派发到 4 个具名栏目节点；关闭时走旧的单 analyst（回滚路径）
+    target = (lambda s: f"agent_{s}") if settings.features.multi_agent else (lambda s: "analyst")
+    logger.info(
+        "research 子图派发 %d 个 analyst (multi_agent=%s): %s",
+        len(sections), settings.features.multi_agent, sections,
+    )
+    return [Send(target(s), {**base, "active_section": s}) for s in sections]
 
 
-def make_dispatch_node() -> Any:
+def make_dispatch_node(settings: Settings) -> Any:
+    """Orchestrator 的决策节点：读白名单、决定派发范围，并写决策留痕。
+
+    派发动作本身仍在条件边 fanout_dispatch 里（Send 只能在条件边发），
+    但"本轮派谁、为什么"由这个节点显式记下来，让编排决策可追溯。
+    """
+
     async def dispatch(state: ResearchSubgraphState) -> dict[str, Any]:
-        # 纯占位：派发逻辑在条件边里，节点本身不写状态
-        return {}
+        sections = pending_sections(state, settings)
+        is_retry = bool(state.get("sections_to_research"))
+        return {
+            "review_notes": [
+                {
+                    "node": "dispatch",
+                    "sections": sections,
+                    "is_retry": is_retry,
+                    "retry_count": dict(state.get("retry_count", {})),
+                    "multi_agent": settings.features.multi_agent,
+                }
+            ]
+        }
 
     return dispatch
 
@@ -104,13 +126,43 @@ def build_research_subgraph(settings: Settings, document_tool: StructuredTool) -
         input_schema=ResearchSubgraphInput,
         output_schema=ResearchSubgraphOutput,
     )
-    builder.add_node("dispatch", make_dispatch_node())
-    builder.add_node("analyst", make_analyst_node(settings, document_tool))
+    builder.add_node("dispatch", make_dispatch_node(settings))
+
+    if settings.features.multi_agent:
+        # V2：4 个专职栏目节点，派发目标由 fanout_dispatch 按 active_section 决定
+        from graph.agents.arbitrate import make_arbitrate_node
+        from graph.agents.base import make_base_node
+        from graph.agents.company.nodes import make_company_node
+        from graph.agents.financial.nodes import make_financial_node
+
+        targets = {
+            "company": make_company_node(settings, document_tool),
+            "financial": make_financial_node(settings, document_tool),
+            "industry": make_base_node(settings, document_tool, "industry"),
+            "news": make_base_node(settings, document_tool, "news"),
+        }
+        for section, node in targets.items():
+            builder.add_node(f"agent_{section}", node)
+        node_names = [f"agent_{s}" for s in targets]
+        # 仲裁节点：4 路汇合后做跨栏一致性标注（只标不改）
+        builder.add_node("arbitrate", make_arbitrate_node(settings))
+    else:
+        # 回滚路径：V1 单一 analyst
+        builder.add_node("analyst", make_analyst_node(settings, document_tool))
+        node_names = ["analyst"]
+
     builder.add_edge(START, "dispatch")
     builder.add_conditional_edges(
         "dispatch",
         lambda state: fanout_dispatch(state, settings=settings),
-        ["analyst"],
+        node_names,
     )
-    builder.add_edge("analyst", END)
+    if settings.features.multi_agent:
+        # 4 路都汇入 arbitrate，它等全部完成后执行一次（真汇合，不是各走各的）
+        for name in node_names:
+            builder.add_edge(name, "arbitrate")
+        builder.add_edge("arbitrate", END)
+    else:
+        for name in node_names:
+            builder.add_edge(name, END)
     return builder.compile()

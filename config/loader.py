@@ -127,6 +127,10 @@ class FeaturesConfig(_Strict):
     # S10：默认开启，可关掉做 A/B（关掉即回到「不消歧 / 不标冲突」的 S9 行为）
     entity_guard: bool = True
     conflict_annotation: bool = True
+    # V2：多 Agent 子图开关，默认 false 保持 V1 行为；S4 起可开
+    multi_agent: bool = False
+    # V2：行业/新闻后处理，默认 false，不影响报告文本与评测基线
+    postprocess: bool = False
 
 
 class ReportConfig(_Strict):

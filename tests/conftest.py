@@ -27,3 +27,17 @@ os.environ.setdefault("CHECKPOINTER", "sqlite")
 os.environ.setdefault("APP_MODE", "fixture")
 os.environ.setdefault("TAVILY_LIVE_ENABLED", "false")
 os.environ.setdefault("TAVILY_MAX_CALLS", "0")
+
+
+def assert_report_shape(report: str) -> None:
+    """断言 fixture 报告结构完整，不依赖具体长度或事实条数。
+
+    历史上多个测试写死 `len(report) == 772`：一旦往 fixture 加合成文档，
+    报告自然会变长，断言就红了，但其实报告完全正常。结构断言保留"报告
+    真的生成了、四栏目齐全、引用可用"的验证意图，又不与数据量耦合。
+    """
+    assert "# " in report, "缺报告主标题"
+    for heading in ("公司概况", "行业概况", "财务概况", "新闻动态"):
+        assert f"## {heading}" in report, f"缺栏目：{heading}"
+    assert "## References" in report, "缺引用列表"
+    assert "[1]" in report, "缺行内引用标记"

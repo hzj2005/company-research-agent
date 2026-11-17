@@ -9,6 +9,8 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
+from conftest import assert_report_shape
+
 from capabilities.retrieval import make_document_tool
 from config.loader import apply_overrides, get_settings
 from graph.builder import build_graph
@@ -47,7 +49,7 @@ def test_default_graph_has_no_review_node_and_report_is_unchanged(tmp_path: Path
     assert set(build_graph(s, make_document_tool(s)).nodes.keys()) == BASE_NODES
 
     state, _ = asyncio.run(run_research("Notion", s, tmp_path / "default.db"))
-    assert len(state["report"]) == 772
+    assert_report_shape(state["report"])
     assert "_interrupt" not in state
     assert state["review_decision"] == {}
 
@@ -64,7 +66,7 @@ def test_switch_on_adds_node_but_auto_approve_never_interrupts(tmp_path: Path) -
     assert "_interrupt" not in state
     assert state["review_decision"]["note"] == "auto_approved"
     assert "human_review" in trace
-    assert len(state["report"]) == 772
+    assert_report_shape(state["report"])
 
 
 def test_real_interrupt_pauses_before_briefing(tmp_path: Path) -> None:
@@ -133,7 +135,7 @@ def test_resume_in_a_new_session_completes_the_report(tmp_path: Path) -> None:
     state, trace = _resume("Linear", db, {"approved": True, "note": "looks good"})
 
     assert "_interrupt" not in state
-    assert len(state["report"]) == 779
+    assert_report_shape(state["report"])
     assert state["review_decision"]["approved"] is True
     assert state["review_decision"]["note"] == "looks good"
     assert "human_review" in trace and "briefing" in trace
@@ -155,7 +157,11 @@ def test_reject_sections_changes_only_that_section(tmp_path: Path) -> None:
     assert ABSTAIN in report
     assert "Notion 产品概览" in report, "未拒答栏目必须照常出稿"
     assert "## 新闻动态\n\n- " + ABSTAIN in report
-    assert len(report) != 772, "人工决定必须真能改变报告，而不是只留条日志"
+    assert_report_shape(report)
+    news_body = report.split("## 新闻动态", 1)[-1].split("## References", 1)[0]
+    assert not [ln for ln in news_body.splitlines() if ln.startswith("- ") and ABSTAIN not in ln], (
+        "被拒栏目只剩拒答行，不能残留任何原始事实行"
+    )
     assert any(n["node"] == "human_review" and n["status"] == "rejected"
                for n in state["review_notes"])
 
@@ -210,7 +216,7 @@ def test_review_mode_still_makes_zero_external_calls(tmp_path: Path) -> None:
     with patch.object(socket.socket, "connect", guarded):
         _start("Notion", db)
         state, _ = _resume("Notion", db, {"approved": True})
-    assert len(state["report"]) == 772
+    assert_report_shape(state["report"])
     assert attempts == []
     assert socket.socket.connect is original
 
@@ -268,7 +274,7 @@ def test_api_review_end_to_end(tmp_path: Path, monkeypatch) -> None:
 
         final = dict(job_status.get(jid, {}))
         assert final["status"] == "completed"
-        assert len(final["report"]) == 772, "批准后报告应与默认一致"
+        assert_report_shape(final["report"])
 
 
 def test_api_review_rejects_on_bad_state(tmp_path: Path, monkeypatch) -> None:

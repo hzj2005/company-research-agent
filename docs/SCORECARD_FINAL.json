@@ -1,0 +1,2410 @@
+{
+  "ab_effects": {
+    "fewer_results": {
+      "delta_vs_baseline": {
+        "abstain_rate": 0.0,
+        "avg_retry_rounds": 0.0,
+        "citation_traceability": 0.0,
+        "cost_per_report": 0.0,
+        "fact_accuracy": 0.0,
+        "hallucination_rate": 0.0,
+        "self_correction_success": 0.0
+      },
+      "note": "确定性指标向量与 baseline 一致；该 override 在当前 fixture 配置下未改变任何可观测行为（详见 docs/ACTION_PLAN.md 第 11 节）",
+      "status": "no_effect"
+    },
+    "free_text_output": {
+      "delta_vs_baseline": {
+        "abstain_rate": 0.0,
+        "avg_retry_rounds": 0.0,
+        "citation_traceability": 0.0,
+        "cost_per_report": 0.0,
+        "fact_accuracy": 0.0,
+        "hallucination_rate": 0.0,
+        "self_correction_success": 0.0
+      },
+      "note": "确定性指标向量与 baseline 一致；该 override 在当前 fixture 配置下未改变任何可观测行为（详见 docs/ACTION_PLAN.md 第 11 节）",
+      "status": "no_effect"
+    },
+    "no_human_review": {
+      "delta_vs_baseline": {
+        "abstain_rate": 0.0,
+        "avg_retry_rounds": 0.0,
+        "citation_traceability": 0.0,
+        "cost_per_report": 0.0,
+        "fact_accuracy": 0.0,
+        "hallucination_rate": 0.0,
+        "self_correction_success": 0.0
+      },
+      "note": "确定性指标向量与 baseline 一致；该 override 在当前 fixture 配置下未改变任何可观测行为（详见 docs/ACTION_PLAN.md 第 11 节）",
+      "status": "no_effect"
+    },
+    "no_inline_citations": {
+      "delta_vs_baseline": {
+        "abstain_rate": 0.0,
+        "avg_retry_rounds": 0.0,
+        "citation_traceability": -1.0,
+        "cost_per_report": 0.0,
+        "fact_accuracy": 0.0,
+        "hallucination_rate": 1.0,
+        "self_correction_success": 0.0
+      },
+      "note": "确定性指标与 baseline 存在差异，差异项见 delta_vs_baseline",
+      "status": "changed"
+    },
+    "self_correction_off": {
+      "delta_vs_baseline": {
+        "abstain_rate": 0.0,
+        "avg_retry_rounds": -1.0,
+        "citation_traceability": 0.0,
+        "cost_per_report": 0.0,
+        "fact_accuracy": -0.096774,
+        "hallucination_rate": 0.0,
+        "self_correction_success": -1.0
+      },
+      "note": "确定性指标与 baseline 存在差异，差异项见 delta_vs_baseline",
+      "status": "changed"
+    }
+  },
+  "code_sha256": "3e76034836909941",
+  "config": {
+    "metric_direction": {
+      "abstain_rate": "higher",
+      "avg_retry_rounds": "lower",
+      "citation_traceability": "higher",
+      "cost_per_report": "lower",
+      "fact_accuracy": "higher",
+      "hallucination_rate": "lower",
+      "self_correction_success": "higher"
+    },
+    "non_deterministic_metrics": [
+      "p95_latency_ms"
+    ],
+    "protected_metrics": [
+      "fact_accuracy",
+      "citation_traceability",
+      "abstain_rate",
+      "hallucination_rate"
+    ],
+    "regression_tolerance": 0.02,
+    "thresholds": {
+      "abstain_rate_min": 0.9,
+      "citation_traceability_min": 0.9,
+      "fact_accuracy_min": 0.9,
+      "hallucination_rate_max": 0.1,
+      "max_avg_retry_rounds": 2.0
+    }
+  },
+  "dataset": {
+    "abstain_items": 1,
+    "cases": 3,
+    "claim_items": 31,
+    "meta": {
+      "generated_by": "evals/build_golden.py",
+      "provenance": "synthetic-fixture-derived",
+      "settings_fingerprint": "7e91fabca32308e3"
+    },
+    "path": "evals/golden.jsonl"
+  },
+  "disclaimer": "fixture 合成语料上的可机器核验契约指标，不是真实世界准确率/成本。citation_traceability 为词法包含代理判定，不等价语义蕴含；真实指标需 APP_MODE=live + 人工核验 golden（S8）。",
+  "external_calls": {
+    "blocked_connection_attempts": 0,
+    "llm": 0,
+    "tavily": 0
+  },
+  "inputs_sha256": "896c9824242e9bdc",
+  "mode": "fixture",
+  "provenance": "synthetic-fixture-derived",
+  "runs": {
+    "baseline": {
+      "cases": [
+        {
+          "case": "sufficient",
+          "claim_records": [
+            {
+              "marker": 1,
+              "reason": "ok",
+              "section": "company",
+              "supported": true,
+              "text": "Notion 提供笔记、文档与协作工作区；目标客户为团队与个人知识工作者。",
+              "url": "https://example.org/notion/overview",
+              "url_inferred": false
+            },
+            {
+              "marker": 3,
+              "reason": "ok",
+              "section": "company",
+              "supported": true,
+              "text": "团队位于 San Francisco，商业模式为订阅制，含免费版与付费版。",
+              "url": "https://example.org/notion/about",
+              "url_inferred": false
+            },
+            {
+              "marker": 9,
+              "reason": "ok",
+              "section": "company",
+              "supported": true,
+              "text": "Notion 成立于 2014 年，是一家协作软件公司。",
+              "url": "https://example.org/notion/founded-2014",
+              "url_inferred": false
+            },
+            {
+              "marker": 14,
+              "reason": "ok",
+              "section": "company",
+              "supported": true,
+              "text": "Notion 成立于 2013 年，总部位于 San Francisco。",
+              "url": "https://example.org/notion/founded-2013",
+              "url_inferred": false
+            },
+            {
+              "marker": 7,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "协同文档与知识管理市场持续增长，主要需求来自远程协作。",
+              "url": "https://example.org/market/productivity",
+              "url_inferred": false
+            },
+            {
+              "marker": 10,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "直接竞品包括 Obsidian 与 Coda，差异化集中在模块化与模板生态。",
+              "url": "https://example.org/market/competitors",
+              "url_inferred": false
+            },
+            {
+              "marker": 11,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "2025 年协同文档市场规模约 50 亿美元（Gartner 口径）。",
+              "url": "https://example.org/market/size-gartner",
+              "url_inferred": false
+            },
+            {
+              "marker": 12,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "2025 年生产力软件市场规模约 200 亿美元（IDC 口径，范围更广）。",
+              "url": "https://example.org/market/size-idc",
+              "url_inferred": false
+            },
+            {
+              "marker": 2,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "已披露多轮融资，投资方包含多家风投机构。",
+              "url": "https://example.org/notion/funding",
+              "url_inferred": false
+            },
+            {
+              "marker": 4,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "2023 年完成 B 轮融资 2 亿美元，估值达到 100 亿美元。",
+              "url": "https://example.org/notion/series-b",
+              "url_inferred": false
+            },
+            {
+              "marker": 5,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "收入以按席位订阅为主，另提供团队版与企业版。",
+              "url": "https://example.org/notion/pricing",
+              "url_inferred": false
+            },
+            {
+              "marker": 6,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "2021 年完成 A 轮融资 5000 万美元，由红杉领投。",
+              "url": "https://example.org/notion/series-a",
+              "url_inferred": false
+            },
+            {
+              "marker": 8,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "2026 年 3 月发布新版本，强化了协作与自动化能力。",
+              "url": "https://example.org/news/notion-2026",
+              "url_inferred": false
+            },
+            {
+              "marker": 13,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "2026 年 1 月宣布与企业软件厂商达成集成合作。",
+              "url": "https://example.org/news/notion-partnership",
+              "url_inferred": false
+            },
+            {
+              "marker": 15,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "2025 年 11 月获得年度生产力工具奖项。",
+              "url": "https://example.org/news/notion-award",
+              "url_inferred": false
+            },
+            {
+              "marker": 16,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "2020 年 5 月发布早期版本，供时效过滤节点识别并剔除。",
+              "url": "https://example.org/news/notion-2020",
+              "url_inferred": false
+            }
+          ],
+          "company": "Notion",
+          "degraded_sections": [],
+          "elapsed_ms": 7026.858,
+          "expected_abstains": 0,
+          "expected_claims": 16,
+          "expected_research_runs": 1,
+          "failures": [],
+          "matched_claims": 16,
+          "passed": true,
+          "passed_abstains": 0,
+          "reference_count": 16,
+          "report_chars": 1559,
+          "research_runs": 1,
+          "retry_rounds": 0,
+          "self_correction_denominator": 0,
+          "self_correction_success": 0
+        },
+        {
+          "case": "sparse",
+          "claim_records": [
+            {
+              "marker": 2,
+              "reason": "ok",
+              "section": "company",
+              "supported": true,
+              "text": "团队分布在美国与欧洲，主打高速、简洁的issue 追踪体验。",
+              "url": "https://example.org/linear/about",
+              "url_inferred": false
+            },
+            {
+              "marker": 3,
+              "reason": "ok",
+              "section": "company",
+              "supported": true,
+              "text": "Linear 是面向软件团队的项目管理工具。",
+              "url": "https://example.org/linear/overview",
+              "url_inferred": false
+            },
+            {
+              "marker": 6,
+              "reason": "ok",
+              "section": "company",
+              "supported": true,
+              "text": "客户以软件与互联网公司研发团队为主。",
+              "url": "https://example.org/linear/customers",
+              "url_inferred": false
+            },
+            {
+              "marker": 5,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "研发协作工具市场规模稳定增长。",
+              "url": "https://example.org/market/devtools",
+              "url_inferred": false
+            },
+            {
+              "marker": 8,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "竞品集中在 issue tracking 与敏捷管理赛道。",
+              "url": "https://example.org/market/devtools-competition",
+              "url_inferred": false
+            },
+            {
+              "marker": 1,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "公开报道显示完成过多轮融资。",
+              "url": "https://example.org/linear/funding",
+              "url_inferred": false
+            },
+            {
+              "marker": 4,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "按用户数订阅，提供免费档位。",
+              "url": "https://example.org/linear/pricing",
+              "url_inferred": false
+            },
+            {
+              "marker": 7,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "推出新的周期规划功能。",
+              "url": "https://example.org/news/linear-2026",
+              "url_inferred": false
+            },
+            {
+              "marker": 9,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "入选开发者工具年度榜单。",
+              "url": "https://example.org/news/linear-award",
+              "url_inferred": false
+            }
+          ],
+          "company": "Linear",
+          "degraded_sections": [],
+          "elapsed_ms": 294.271,
+          "expected_abstains": 0,
+          "expected_claims": 9,
+          "expected_research_runs": 2,
+          "failures": [],
+          "matched_claims": 9,
+          "passed": true,
+          "passed_abstains": 0,
+          "reference_count": 9,
+          "report_chars": 779,
+          "research_runs": 2,
+          "retry_rounds": 1,
+          "self_correction_denominator": 1,
+          "self_correction_success": 1
+        },
+        {
+          "case": "empty",
+          "claim_records": [
+            {
+              "marker": 1,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "该领域缺少公开规模数据。",
+              "url": "https://example.org/market/generic-1",
+              "url_inferred": false
+            },
+            {
+              "marker": 4,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "公开资料有限是主要挑战。",
+              "url": "https://example.org/market/generic-2",
+              "url_inferred": false
+            },
+            {
+              "marker": 2,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "未查到可核验的融资披露。",
+              "url": "https://example.org/finance/generic-1",
+              "url_inferred": false
+            },
+            {
+              "marker": 5,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "未查到可核验的收入模式说明。",
+              "url": "https://example.org/finance/generic-2",
+              "url_inferred": false
+            },
+            {
+              "marker": 3,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "近期无重大公开公告。",
+              "url": "https://example.org/news/generic-1",
+              "url_inferred": false
+            },
+            {
+              "marker": 6,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "媒体覆盖非常有限。",
+              "url": "https://example.org/news/generic-2",
+              "url_inferred": false
+            }
+          ],
+          "company": "Zephyrstone Labs",
+          "degraded_sections": [
+            "company"
+          ],
+          "elapsed_ms": 328.088,
+          "expected_abstains": 1,
+          "expected_claims": 6,
+          "expected_research_runs": 3,
+          "failures": [],
+          "matched_claims": 6,
+          "passed": true,
+          "passed_abstains": 1,
+          "reference_count": 6,
+          "report_chars": 511,
+          "research_runs": 3,
+          "retry_rounds": 2,
+          "self_correction_denominator": 0,
+          "self_correction_success": 0
+        }
+      ],
+      "counts": {
+        "abstain_items": 1,
+        "abstain_passed": 1,
+        "cases": 3,
+        "claims_without_explicit_citation": 0,
+        "empty_traceability_denominator": false,
+        "expected_claims": 31,
+        "matched_claims": 31,
+        "report_claims": 31,
+        "self_correction_denominator": 1,
+        "supported_claims": 31,
+        "unsupported_reasons": {
+          "content_mismatch": 0,
+          "no_explicit_citation": 0,
+          "no_marker_or_url": 0,
+          "url_not_in_golden_corpus": 0
+        }
+      },
+      "gate": {
+        "checks": {
+          "abstain_rate_min": true,
+          "citation_traceability_min": true,
+          "fact_accuracy_min": true,
+          "hallucination_rate_max": true,
+          "max_avg_retry_rounds": true
+        },
+        "passed": true,
+        "violations": []
+      },
+      "metrics": {
+        "abstain_rate": 1.0,
+        "avg_retry_rounds": 1.0,
+        "citation_traceability": 1.0,
+        "cost_per_report": 0.0,
+        "fact_accuracy": 1.0,
+        "hallucination_rate": 0.0,
+        "p95_latency_ms": 7026.858,
+        "self_correction_success": 1.0
+      },
+      "overrides": {},
+      "status": "baseline"
+    },
+    "fewer_results": {
+      "cases": [
+        {
+          "case": "sufficient",
+          "claim_records": [
+            {
+              "marker": 1,
+              "reason": "ok",
+              "section": "company",
+              "supported": true,
+              "text": "Notion 提供笔记、文档与协作工作区；目标客户为团队与个人知识工作者。",
+              "url": "https://example.org/notion/overview",
+              "url_inferred": false
+            },
+            {
+              "marker": 3,
+              "reason": "ok",
+              "section": "company",
+              "supported": true,
+              "text": "团队位于 San Francisco，商业模式为订阅制，含免费版与付费版。",
+              "url": "https://example.org/notion/about",
+              "url_inferred": false
+            },
+            {
+              "marker": 9,
+              "reason": "ok",
+              "section": "company",
+              "supported": true,
+              "text": "Notion 成立于 2014 年，是一家协作软件公司。",
+              "url": "https://example.org/notion/founded-2014",
+              "url_inferred": false
+            },
+            {
+              "marker": 14,
+              "reason": "ok",
+              "section": "company",
+              "supported": true,
+              "text": "Notion 成立于 2013 年，总部位于 San Francisco。",
+              "url": "https://example.org/notion/founded-2013",
+              "url_inferred": false
+            },
+            {
+              "marker": 7,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "协同文档与知识管理市场持续增长，主要需求来自远程协作。",
+              "url": "https://example.org/market/productivity",
+              "url_inferred": false
+            },
+            {
+              "marker": 10,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "直接竞品包括 Obsidian 与 Coda，差异化集中在模块化与模板生态。",
+              "url": "https://example.org/market/competitors",
+              "url_inferred": false
+            },
+            {
+              "marker": 11,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "2025 年协同文档市场规模约 50 亿美元（Gartner 口径）。",
+              "url": "https://example.org/market/size-gartner",
+              "url_inferred": false
+            },
+            {
+              "marker": 12,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "2025 年生产力软件市场规模约 200 亿美元（IDC 口径，范围更广）。",
+              "url": "https://example.org/market/size-idc",
+              "url_inferred": false
+            },
+            {
+              "marker": 2,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "已披露多轮融资，投资方包含多家风投机构。",
+              "url": "https://example.org/notion/funding",
+              "url_inferred": false
+            },
+            {
+              "marker": 4,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "2023 年完成 B 轮融资 2 亿美元，估值达到 100 亿美元。",
+              "url": "https://example.org/notion/series-b",
+              "url_inferred": false
+            },
+            {
+              "marker": 5,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "收入以按席位订阅为主，另提供团队版与企业版。",
+              "url": "https://example.org/notion/pricing",
+              "url_inferred": false
+            },
+            {
+              "marker": 6,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "2021 年完成 A 轮融资 5000 万美元，由红杉领投。",
+              "url": "https://example.org/notion/series-a",
+              "url_inferred": false
+            },
+            {
+              "marker": 8,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "2026 年 3 月发布新版本，强化了协作与自动化能力。",
+              "url": "https://example.org/news/notion-2026",
+              "url_inferred": false
+            },
+            {
+              "marker": 13,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "2026 年 1 月宣布与企业软件厂商达成集成合作。",
+              "url": "https://example.org/news/notion-partnership",
+              "url_inferred": false
+            },
+            {
+              "marker": 15,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "2025 年 11 月获得年度生产力工具奖项。",
+              "url": "https://example.org/news/notion-award",
+              "url_inferred": false
+            },
+            {
+              "marker": 16,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "2020 年 5 月发布早期版本，供时效过滤节点识别并剔除。",
+              "url": "https://example.org/news/notion-2020",
+              "url_inferred": false
+            }
+          ],
+          "company": "Notion",
+          "degraded_sections": [],
+          "elapsed_ms": 190.081,
+          "expected_abstains": 0,
+          "expected_claims": 16,
+          "expected_research_runs": 1,
+          "failures": [],
+          "matched_claims": 16,
+          "passed": true,
+          "passed_abstains": 0,
+          "reference_count": 16,
+          "report_chars": 1559,
+          "research_runs": 1,
+          "retry_rounds": 0,
+          "self_correction_denominator": 0,
+          "self_correction_success": 0
+        },
+        {
+          "case": "sparse",
+          "claim_records": [
+            {
+              "marker": 2,
+              "reason": "ok",
+              "section": "company",
+              "supported": true,
+              "text": "团队分布在美国与欧洲，主打高速、简洁的issue 追踪体验。",
+              "url": "https://example.org/linear/about",
+              "url_inferred": false
+            },
+            {
+              "marker": 3,
+              "reason": "ok",
+              "section": "company",
+              "supported": true,
+              "text": "Linear 是面向软件团队的项目管理工具。",
+              "url": "https://example.org/linear/overview",
+              "url_inferred": false
+            },
+            {
+              "marker": 6,
+              "reason": "ok",
+              "section": "company",
+              "supported": true,
+              "text": "客户以软件与互联网公司研发团队为主。",
+              "url": "https://example.org/linear/customers",
+              "url_inferred": false
+            },
+            {
+              "marker": 5,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "研发协作工具市场规模稳定增长。",
+              "url": "https://example.org/market/devtools",
+              "url_inferred": false
+            },
+            {
+              "marker": 8,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "竞品集中在 issue tracking 与敏捷管理赛道。",
+              "url": "https://example.org/market/devtools-competition",
+              "url_inferred": false
+            },
+            {
+              "marker": 1,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "公开报道显示完成过多轮融资。",
+              "url": "https://example.org/linear/funding",
+              "url_inferred": false
+            },
+            {
+              "marker": 4,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "按用户数订阅，提供免费档位。",
+              "url": "https://example.org/linear/pricing",
+              "url_inferred": false
+            },
+            {
+              "marker": 7,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "推出新的周期规划功能。",
+              "url": "https://example.org/news/linear-2026",
+              "url_inferred": false
+            },
+            {
+              "marker": 9,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "入选开发者工具年度榜单。",
+              "url": "https://example.org/news/linear-award",
+              "url_inferred": false
+            }
+          ],
+          "company": "Linear",
+          "degraded_sections": [],
+          "elapsed_ms": 272.867,
+          "expected_abstains": 0,
+          "expected_claims": 9,
+          "expected_research_runs": 2,
+          "failures": [],
+          "matched_claims": 9,
+          "passed": true,
+          "passed_abstains": 0,
+          "reference_count": 9,
+          "report_chars": 779,
+          "research_runs": 2,
+          "retry_rounds": 1,
+          "self_correction_denominator": 1,
+          "self_correction_success": 1
+        },
+        {
+          "case": "empty",
+          "claim_records": [
+            {
+              "marker": 1,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "该领域缺少公开规模数据。",
+              "url": "https://example.org/market/generic-1",
+              "url_inferred": false
+            },
+            {
+              "marker": 4,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "公开资料有限是主要挑战。",
+              "url": "https://example.org/market/generic-2",
+              "url_inferred": false
+            },
+            {
+              "marker": 2,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "未查到可核验的融资披露。",
+              "url": "https://example.org/finance/generic-1",
+              "url_inferred": false
+            },
+            {
+              "marker": 5,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "未查到可核验的收入模式说明。",
+              "url": "https://example.org/finance/generic-2",
+              "url_inferred": false
+            },
+            {
+              "marker": 3,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "近期无重大公开公告。",
+              "url": "https://example.org/news/generic-1",
+              "url_inferred": false
+            },
+            {
+              "marker": 6,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "媒体覆盖非常有限。",
+              "url": "https://example.org/news/generic-2",
+              "url_inferred": false
+            }
+          ],
+          "company": "Zephyrstone Labs",
+          "degraded_sections": [
+            "company"
+          ],
+          "elapsed_ms": 331.074,
+          "expected_abstains": 1,
+          "expected_claims": 6,
+          "expected_research_runs": 3,
+          "failures": [],
+          "matched_claims": 6,
+          "passed": true,
+          "passed_abstains": 1,
+          "reference_count": 6,
+          "report_chars": 511,
+          "research_runs": 3,
+          "retry_rounds": 2,
+          "self_correction_denominator": 0,
+          "self_correction_success": 0
+        }
+      ],
+      "counts": {
+        "abstain_items": 1,
+        "abstain_passed": 1,
+        "cases": 3,
+        "claims_without_explicit_citation": 0,
+        "empty_traceability_denominator": false,
+        "expected_claims": 31,
+        "matched_claims": 31,
+        "report_claims": 31,
+        "self_correction_denominator": 1,
+        "supported_claims": 31,
+        "unsupported_reasons": {
+          "content_mismatch": 0,
+          "no_explicit_citation": 0,
+          "no_marker_or_url": 0,
+          "url_not_in_golden_corpus": 0
+        }
+      },
+      "gate": null,
+      "metrics": {
+        "abstain_rate": 1.0,
+        "avg_retry_rounds": 1.0,
+        "citation_traceability": 1.0,
+        "cost_per_report": 0.0,
+        "fact_accuracy": 1.0,
+        "hallucination_rate": 0.0,
+        "p95_latency_ms": 331.074,
+        "self_correction_success": 1.0
+      },
+      "overrides": {
+        "retrieval.max_results_per_query": 1
+      },
+      "status": "ab"
+    },
+    "free_text_output": {
+      "cases": [
+        {
+          "case": "sufficient",
+          "claim_records": [
+            {
+              "marker": 1,
+              "reason": "ok",
+              "section": "company",
+              "supported": true,
+              "text": "Notion 提供笔记、文档与协作工作区；目标客户为团队与个人知识工作者。",
+              "url": "https://example.org/notion/overview",
+              "url_inferred": false
+            },
+            {
+              "marker": 3,
+              "reason": "ok",
+              "section": "company",
+              "supported": true,
+              "text": "团队位于 San Francisco，商业模式为订阅制，含免费版与付费版。",
+              "url": "https://example.org/notion/about",
+              "url_inferred": false
+            },
+            {
+              "marker": 9,
+              "reason": "ok",
+              "section": "company",
+              "supported": true,
+              "text": "Notion 成立于 2014 年，是一家协作软件公司。",
+              "url": "https://example.org/notion/founded-2014",
+              "url_inferred": false
+            },
+            {
+              "marker": 14,
+              "reason": "ok",
+              "section": "company",
+              "supported": true,
+              "text": "Notion 成立于 2013 年，总部位于 San Francisco。",
+              "url": "https://example.org/notion/founded-2013",
+              "url_inferred": false
+            },
+            {
+              "marker": 7,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "协同文档与知识管理市场持续增长，主要需求来自远程协作。",
+              "url": "https://example.org/market/productivity",
+              "url_inferred": false
+            },
+            {
+              "marker": 10,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "直接竞品包括 Obsidian 与 Coda，差异化集中在模块化与模板生态。",
+              "url": "https://example.org/market/competitors",
+              "url_inferred": false
+            },
+            {
+              "marker": 11,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "2025 年协同文档市场规模约 50 亿美元（Gartner 口径）。",
+              "url": "https://example.org/market/size-gartner",
+              "url_inferred": false
+            },
+            {
+              "marker": 12,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "2025 年生产力软件市场规模约 200 亿美元（IDC 口径，范围更广）。",
+              "url": "https://example.org/market/size-idc",
+              "url_inferred": false
+            },
+            {
+              "marker": 2,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "已披露多轮融资，投资方包含多家风投机构。",
+              "url": "https://example.org/notion/funding",
+              "url_inferred": false
+            },
+            {
+              "marker": 4,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "2023 年完成 B 轮融资 2 亿美元，估值达到 100 亿美元。",
+              "url": "https://example.org/notion/series-b",
+              "url_inferred": false
+            },
+            {
+              "marker": 5,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "收入以按席位订阅为主，另提供团队版与企业版。",
+              "url": "https://example.org/notion/pricing",
+              "url_inferred": false
+            },
+            {
+              "marker": 6,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "2021 年完成 A 轮融资 5000 万美元，由红杉领投。",
+              "url": "https://example.org/notion/series-a",
+              "url_inferred": false
+            },
+            {
+              "marker": 8,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "2026 年 3 月发布新版本，强化了协作与自动化能力。",
+              "url": "https://example.org/news/notion-2026",
+              "url_inferred": false
+            },
+            {
+              "marker": 13,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "2026 年 1 月宣布与企业软件厂商达成集成合作。",
+              "url": "https://example.org/news/notion-partnership",
+              "url_inferred": false
+            },
+            {
+              "marker": 15,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "2025 年 11 月获得年度生产力工具奖项。",
+              "url": "https://example.org/news/notion-award",
+              "url_inferred": false
+            },
+            {
+              "marker": 16,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "2020 年 5 月发布早期版本，供时效过滤节点识别并剔除。",
+              "url": "https://example.org/news/notion-2020",
+              "url_inferred": false
+            }
+          ],
+          "company": "Notion",
+          "degraded_sections": [],
+          "elapsed_ms": 189.868,
+          "expected_abstains": 0,
+          "expected_claims": 16,
+          "expected_research_runs": 1,
+          "failures": [],
+          "matched_claims": 16,
+          "passed": true,
+          "passed_abstains": 0,
+          "reference_count": 16,
+          "report_chars": 1559,
+          "research_runs": 1,
+          "retry_rounds": 0,
+          "self_correction_denominator": 0,
+          "self_correction_success": 0
+        },
+        {
+          "case": "sparse",
+          "claim_records": [
+            {
+              "marker": 2,
+              "reason": "ok",
+              "section": "company",
+              "supported": true,
+              "text": "团队分布在美国与欧洲，主打高速、简洁的issue 追踪体验。",
+              "url": "https://example.org/linear/about",
+              "url_inferred": false
+            },
+            {
+              "marker": 3,
+              "reason": "ok",
+              "section": "company",
+              "supported": true,
+              "text": "Linear 是面向软件团队的项目管理工具。",
+              "url": "https://example.org/linear/overview",
+              "url_inferred": false
+            },
+            {
+              "marker": 6,
+              "reason": "ok",
+              "section": "company",
+              "supported": true,
+              "text": "客户以软件与互联网公司研发团队为主。",
+              "url": "https://example.org/linear/customers",
+              "url_inferred": false
+            },
+            {
+              "marker": 5,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "研发协作工具市场规模稳定增长。",
+              "url": "https://example.org/market/devtools",
+              "url_inferred": false
+            },
+            {
+              "marker": 8,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "竞品集中在 issue tracking 与敏捷管理赛道。",
+              "url": "https://example.org/market/devtools-competition",
+              "url_inferred": false
+            },
+            {
+              "marker": 1,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "公开报道显示完成过多轮融资。",
+              "url": "https://example.org/linear/funding",
+              "url_inferred": false
+            },
+            {
+              "marker": 4,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "按用户数订阅，提供免费档位。",
+              "url": "https://example.org/linear/pricing",
+              "url_inferred": false
+            },
+            {
+              "marker": 7,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "推出新的周期规划功能。",
+              "url": "https://example.org/news/linear-2026",
+              "url_inferred": false
+            },
+            {
+              "marker": 9,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "入选开发者工具年度榜单。",
+              "url": "https://example.org/news/linear-award",
+              "url_inferred": false
+            }
+          ],
+          "company": "Linear",
+          "degraded_sections": [],
+          "elapsed_ms": 238.101,
+          "expected_abstains": 0,
+          "expected_claims": 9,
+          "expected_research_runs": 2,
+          "failures": [],
+          "matched_claims": 9,
+          "passed": true,
+          "passed_abstains": 0,
+          "reference_count": 9,
+          "report_chars": 779,
+          "research_runs": 2,
+          "retry_rounds": 1,
+          "self_correction_denominator": 1,
+          "self_correction_success": 1
+        },
+        {
+          "case": "empty",
+          "claim_records": [
+            {
+              "marker": 1,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "该领域缺少公开规模数据。",
+              "url": "https://example.org/market/generic-1",
+              "url_inferred": false
+            },
+            {
+              "marker": 4,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "公开资料有限是主要挑战。",
+              "url": "https://example.org/market/generic-2",
+              "url_inferred": false
+            },
+            {
+              "marker": 2,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "未查到可核验的融资披露。",
+              "url": "https://example.org/finance/generic-1",
+              "url_inferred": false
+            },
+            {
+              "marker": 5,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "未查到可核验的收入模式说明。",
+              "url": "https://example.org/finance/generic-2",
+              "url_inferred": false
+            },
+            {
+              "marker": 3,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "近期无重大公开公告。",
+              "url": "https://example.org/news/generic-1",
+              "url_inferred": false
+            },
+            {
+              "marker": 6,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "媒体覆盖非常有限。",
+              "url": "https://example.org/news/generic-2",
+              "url_inferred": false
+            }
+          ],
+          "company": "Zephyrstone Labs",
+          "degraded_sections": [
+            "company"
+          ],
+          "elapsed_ms": 308.923,
+          "expected_abstains": 1,
+          "expected_claims": 6,
+          "expected_research_runs": 3,
+          "failures": [],
+          "matched_claims": 6,
+          "passed": true,
+          "passed_abstains": 1,
+          "reference_count": 6,
+          "report_chars": 511,
+          "research_runs": 3,
+          "retry_rounds": 2,
+          "self_correction_denominator": 0,
+          "self_correction_success": 0
+        }
+      ],
+      "counts": {
+        "abstain_items": 1,
+        "abstain_passed": 1,
+        "cases": 3,
+        "claims_without_explicit_citation": 0,
+        "empty_traceability_denominator": false,
+        "expected_claims": 31,
+        "matched_claims": 31,
+        "report_claims": 31,
+        "self_correction_denominator": 1,
+        "supported_claims": 31,
+        "unsupported_reasons": {
+          "content_mismatch": 0,
+          "no_explicit_citation": 0,
+          "no_marker_or_url": 0,
+          "url_not_in_golden_corpus": 0
+        }
+      },
+      "gate": null,
+      "metrics": {
+        "abstain_rate": 1.0,
+        "avg_retry_rounds": 1.0,
+        "citation_traceability": 1.0,
+        "cost_per_report": 0.0,
+        "fact_accuracy": 1.0,
+        "hallucination_rate": 0.0,
+        "p95_latency_ms": 308.923,
+        "self_correction_success": 1.0
+      },
+      "overrides": {
+        "features.structured_output": false
+      },
+      "status": "ab"
+    },
+    "no_human_review": {
+      "cases": [
+        {
+          "case": "sufficient",
+          "claim_records": [
+            {
+              "marker": 1,
+              "reason": "ok",
+              "section": "company",
+              "supported": true,
+              "text": "Notion 提供笔记、文档与协作工作区；目标客户为团队与个人知识工作者。",
+              "url": "https://example.org/notion/overview",
+              "url_inferred": false
+            },
+            {
+              "marker": 3,
+              "reason": "ok",
+              "section": "company",
+              "supported": true,
+              "text": "团队位于 San Francisco，商业模式为订阅制，含免费版与付费版。",
+              "url": "https://example.org/notion/about",
+              "url_inferred": false
+            },
+            {
+              "marker": 9,
+              "reason": "ok",
+              "section": "company",
+              "supported": true,
+              "text": "Notion 成立于 2014 年，是一家协作软件公司。",
+              "url": "https://example.org/notion/founded-2014",
+              "url_inferred": false
+            },
+            {
+              "marker": 14,
+              "reason": "ok",
+              "section": "company",
+              "supported": true,
+              "text": "Notion 成立于 2013 年，总部位于 San Francisco。",
+              "url": "https://example.org/notion/founded-2013",
+              "url_inferred": false
+            },
+            {
+              "marker": 7,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "协同文档与知识管理市场持续增长，主要需求来自远程协作。",
+              "url": "https://example.org/market/productivity",
+              "url_inferred": false
+            },
+            {
+              "marker": 10,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "直接竞品包括 Obsidian 与 Coda，差异化集中在模块化与模板生态。",
+              "url": "https://example.org/market/competitors",
+              "url_inferred": false
+            },
+            {
+              "marker": 11,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "2025 年协同文档市场规模约 50 亿美元（Gartner 口径）。",
+              "url": "https://example.org/market/size-gartner",
+              "url_inferred": false
+            },
+            {
+              "marker": 12,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "2025 年生产力软件市场规模约 200 亿美元（IDC 口径，范围更广）。",
+              "url": "https://example.org/market/size-idc",
+              "url_inferred": false
+            },
+            {
+              "marker": 2,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "已披露多轮融资，投资方包含多家风投机构。",
+              "url": "https://example.org/notion/funding",
+              "url_inferred": false
+            },
+            {
+              "marker": 4,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "2023 年完成 B 轮融资 2 亿美元，估值达到 100 亿美元。",
+              "url": "https://example.org/notion/series-b",
+              "url_inferred": false
+            },
+            {
+              "marker": 5,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "收入以按席位订阅为主，另提供团队版与企业版。",
+              "url": "https://example.org/notion/pricing",
+              "url_inferred": false
+            },
+            {
+              "marker": 6,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "2021 年完成 A 轮融资 5000 万美元，由红杉领投。",
+              "url": "https://example.org/notion/series-a",
+              "url_inferred": false
+            },
+            {
+              "marker": 8,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "2026 年 3 月发布新版本，强化了协作与自动化能力。",
+              "url": "https://example.org/news/notion-2026",
+              "url_inferred": false
+            },
+            {
+              "marker": 13,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "2026 年 1 月宣布与企业软件厂商达成集成合作。",
+              "url": "https://example.org/news/notion-partnership",
+              "url_inferred": false
+            },
+            {
+              "marker": 15,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "2025 年 11 月获得年度生产力工具奖项。",
+              "url": "https://example.org/news/notion-award",
+              "url_inferred": false
+            },
+            {
+              "marker": 16,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "2020 年 5 月发布早期版本，供时效过滤节点识别并剔除。",
+              "url": "https://example.org/news/notion-2020",
+              "url_inferred": false
+            }
+          ],
+          "company": "Notion",
+          "degraded_sections": [],
+          "elapsed_ms": 240.509,
+          "expected_abstains": 0,
+          "expected_claims": 16,
+          "expected_research_runs": 1,
+          "failures": [],
+          "matched_claims": 16,
+          "passed": true,
+          "passed_abstains": 0,
+          "reference_count": 16,
+          "report_chars": 1559,
+          "research_runs": 1,
+          "retry_rounds": 0,
+          "self_correction_denominator": 0,
+          "self_correction_success": 0
+        },
+        {
+          "case": "sparse",
+          "claim_records": [
+            {
+              "marker": 2,
+              "reason": "ok",
+              "section": "company",
+              "supported": true,
+              "text": "团队分布在美国与欧洲，主打高速、简洁的issue 追踪体验。",
+              "url": "https://example.org/linear/about",
+              "url_inferred": false
+            },
+            {
+              "marker": 3,
+              "reason": "ok",
+              "section": "company",
+              "supported": true,
+              "text": "Linear 是面向软件团队的项目管理工具。",
+              "url": "https://example.org/linear/overview",
+              "url_inferred": false
+            },
+            {
+              "marker": 6,
+              "reason": "ok",
+              "section": "company",
+              "supported": true,
+              "text": "客户以软件与互联网公司研发团队为主。",
+              "url": "https://example.org/linear/customers",
+              "url_inferred": false
+            },
+            {
+              "marker": 5,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "研发协作工具市场规模稳定增长。",
+              "url": "https://example.org/market/devtools",
+              "url_inferred": false
+            },
+            {
+              "marker": 8,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "竞品集中在 issue tracking 与敏捷管理赛道。",
+              "url": "https://example.org/market/devtools-competition",
+              "url_inferred": false
+            },
+            {
+              "marker": 1,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "公开报道显示完成过多轮融资。",
+              "url": "https://example.org/linear/funding",
+              "url_inferred": false
+            },
+            {
+              "marker": 4,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "按用户数订阅，提供免费档位。",
+              "url": "https://example.org/linear/pricing",
+              "url_inferred": false
+            },
+            {
+              "marker": 7,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "推出新的周期规划功能。",
+              "url": "https://example.org/news/linear-2026",
+              "url_inferred": false
+            },
+            {
+              "marker": 9,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "入选开发者工具年度榜单。",
+              "url": "https://example.org/news/linear-award",
+              "url_inferred": false
+            }
+          ],
+          "company": "Linear",
+          "degraded_sections": [],
+          "elapsed_ms": 291.162,
+          "expected_abstains": 0,
+          "expected_claims": 9,
+          "expected_research_runs": 2,
+          "failures": [],
+          "matched_claims": 9,
+          "passed": true,
+          "passed_abstains": 0,
+          "reference_count": 9,
+          "report_chars": 779,
+          "research_runs": 2,
+          "retry_rounds": 1,
+          "self_correction_denominator": 1,
+          "self_correction_success": 1
+        },
+        {
+          "case": "empty",
+          "claim_records": [
+            {
+              "marker": 1,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "该领域缺少公开规模数据。",
+              "url": "https://example.org/market/generic-1",
+              "url_inferred": false
+            },
+            {
+              "marker": 4,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "公开资料有限是主要挑战。",
+              "url": "https://example.org/market/generic-2",
+              "url_inferred": false
+            },
+            {
+              "marker": 2,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "未查到可核验的融资披露。",
+              "url": "https://example.org/finance/generic-1",
+              "url_inferred": false
+            },
+            {
+              "marker": 5,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "未查到可核验的收入模式说明。",
+              "url": "https://example.org/finance/generic-2",
+              "url_inferred": false
+            },
+            {
+              "marker": 3,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "近期无重大公开公告。",
+              "url": "https://example.org/news/generic-1",
+              "url_inferred": false
+            },
+            {
+              "marker": 6,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "媒体覆盖非常有限。",
+              "url": "https://example.org/news/generic-2",
+              "url_inferred": false
+            }
+          ],
+          "company": "Zephyrstone Labs",
+          "degraded_sections": [
+            "company"
+          ],
+          "elapsed_ms": 225.09,
+          "expected_abstains": 1,
+          "expected_claims": 6,
+          "expected_research_runs": 3,
+          "failures": [],
+          "matched_claims": 6,
+          "passed": true,
+          "passed_abstains": 1,
+          "reference_count": 6,
+          "report_chars": 511,
+          "research_runs": 3,
+          "retry_rounds": 2,
+          "self_correction_denominator": 0,
+          "self_correction_success": 0
+        }
+      ],
+      "counts": {
+        "abstain_items": 1,
+        "abstain_passed": 1,
+        "cases": 3,
+        "claims_without_explicit_citation": 0,
+        "empty_traceability_denominator": false,
+        "expected_claims": 31,
+        "matched_claims": 31,
+        "report_claims": 31,
+        "self_correction_denominator": 1,
+        "supported_claims": 31,
+        "unsupported_reasons": {
+          "content_mismatch": 0,
+          "no_explicit_citation": 0,
+          "no_marker_or_url": 0,
+          "url_not_in_golden_corpus": 0
+        }
+      },
+      "gate": null,
+      "metrics": {
+        "abstain_rate": 1.0,
+        "avg_retry_rounds": 1.0,
+        "citation_traceability": 1.0,
+        "cost_per_report": 0.0,
+        "fact_accuracy": 1.0,
+        "hallucination_rate": 0.0,
+        "p95_latency_ms": 291.162,
+        "self_correction_success": 1.0
+      },
+      "overrides": {
+        "features.human_review": false
+      },
+      "status": "ab"
+    },
+    "no_inline_citations": {
+      "cases": [
+        {
+          "case": "sufficient",
+          "claim_records": [
+            {
+              "marker": null,
+              "reason": "no_explicit_citation",
+              "section": "company",
+              "supported": false,
+              "text": "Notion 提供笔记、文档与协作工作区；目标客户为团队与个人知识工作者。",
+              "url": "https://example.org/notion/overview",
+              "url_inferred": true
+            },
+            {
+              "marker": null,
+              "reason": "no_explicit_citation",
+              "section": "company",
+              "supported": false,
+              "text": "团队位于 San Francisco，商业模式为订阅制，含免费版与付费版。",
+              "url": "https://example.org/notion/about",
+              "url_inferred": true
+            },
+            {
+              "marker": null,
+              "reason": "no_explicit_citation",
+              "section": "company",
+              "supported": false,
+              "text": "Notion 成立于 2014 年，是一家协作软件公司。",
+              "url": "https://example.org/notion/founded-2014",
+              "url_inferred": true
+            },
+            {
+              "marker": null,
+              "reason": "no_explicit_citation",
+              "section": "company",
+              "supported": false,
+              "text": "Notion 成立于 2013 年，总部位于 San Francisco。",
+              "url": "https://example.org/notion/founded-2013",
+              "url_inferred": true
+            },
+            {
+              "marker": null,
+              "reason": "no_explicit_citation",
+              "section": "industry",
+              "supported": false,
+              "text": "协同文档与知识管理市场持续增长，主要需求来自远程协作。",
+              "url": "https://example.org/market/productivity",
+              "url_inferred": true
+            },
+            {
+              "marker": null,
+              "reason": "no_explicit_citation",
+              "section": "industry",
+              "supported": false,
+              "text": "直接竞品包括 Obsidian 与 Coda，差异化集中在模块化与模板生态。",
+              "url": "https://example.org/market/competitors",
+              "url_inferred": true
+            },
+            {
+              "marker": null,
+              "reason": "no_explicit_citation",
+              "section": "industry",
+              "supported": false,
+              "text": "2025 年协同文档市场规模约 50 亿美元（Gartner 口径）。",
+              "url": "https://example.org/market/size-gartner",
+              "url_inferred": true
+            },
+            {
+              "marker": null,
+              "reason": "no_explicit_citation",
+              "section": "industry",
+              "supported": false,
+              "text": "2025 年生产力软件市场规模约 200 亿美元（IDC 口径，范围更广）。",
+              "url": "https://example.org/market/size-idc",
+              "url_inferred": true
+            },
+            {
+              "marker": null,
+              "reason": "no_explicit_citation",
+              "section": "financial",
+              "supported": false,
+              "text": "已披露多轮融资，投资方包含多家风投机构。",
+              "url": "https://example.org/notion/funding",
+              "url_inferred": true
+            },
+            {
+              "marker": null,
+              "reason": "no_explicit_citation",
+              "section": "financial",
+              "supported": false,
+              "text": "2023 年完成 B 轮融资 2 亿美元，估值达到 100 亿美元。",
+              "url": "https://example.org/notion/series-b",
+              "url_inferred": true
+            },
+            {
+              "marker": null,
+              "reason": "no_explicit_citation",
+              "section": "financial",
+              "supported": false,
+              "text": "收入以按席位订阅为主，另提供团队版与企业版。",
+              "url": "https://example.org/notion/pricing",
+              "url_inferred": true
+            },
+            {
+              "marker": null,
+              "reason": "no_explicit_citation",
+              "section": "financial",
+              "supported": false,
+              "text": "2021 年完成 A 轮融资 5000 万美元，由红杉领投。",
+              "url": "https://example.org/notion/series-a",
+              "url_inferred": true
+            },
+            {
+              "marker": null,
+              "reason": "no_explicit_citation",
+              "section": "news",
+              "supported": false,
+              "text": "2026 年 3 月发布新版本，强化了协作与自动化能力。",
+              "url": "https://example.org/news/notion-2026",
+              "url_inferred": true
+            },
+            {
+              "marker": null,
+              "reason": "no_explicit_citation",
+              "section": "news",
+              "supported": false,
+              "text": "2026 年 1 月宣布与企业软件厂商达成集成合作。",
+              "url": "https://example.org/news/notion-partnership",
+              "url_inferred": true
+            },
+            {
+              "marker": null,
+              "reason": "no_explicit_citation",
+              "section": "news",
+              "supported": false,
+              "text": "2025 年 11 月获得年度生产力工具奖项。",
+              "url": "https://example.org/news/notion-award",
+              "url_inferred": true
+            },
+            {
+              "marker": null,
+              "reason": "no_explicit_citation",
+              "section": "news",
+              "supported": false,
+              "text": "2020 年 5 月发布早期版本，供时效过滤节点识别并剔除。",
+              "url": "https://example.org/news/notion-2020",
+              "url_inferred": true
+            }
+          ],
+          "company": "Notion",
+          "degraded_sections": [],
+          "elapsed_ms": 256.082,
+          "expected_abstains": 0,
+          "expected_claims": 16,
+          "expected_research_runs": 1,
+          "failures": [],
+          "matched_claims": 16,
+          "passed": true,
+          "passed_abstains": 0,
+          "reference_count": 16,
+          "report_chars": 1488,
+          "research_runs": 1,
+          "retry_rounds": 0,
+          "self_correction_denominator": 0,
+          "self_correction_success": 0
+        },
+        {
+          "case": "sparse",
+          "claim_records": [
+            {
+              "marker": null,
+              "reason": "no_explicit_citation",
+              "section": "company",
+              "supported": false,
+              "text": "团队分布在美国与欧洲，主打高速、简洁的issue 追踪体验。",
+              "url": "https://example.org/linear/about",
+              "url_inferred": true
+            },
+            {
+              "marker": null,
+              "reason": "no_explicit_citation",
+              "section": "company",
+              "supported": false,
+              "text": "Linear 是面向软件团队的项目管理工具。",
+              "url": "https://example.org/linear/overview",
+              "url_inferred": true
+            },
+            {
+              "marker": null,
+              "reason": "no_explicit_citation",
+              "section": "company",
+              "supported": false,
+              "text": "客户以软件与互联网公司研发团队为主。",
+              "url": "https://example.org/linear/customers",
+              "url_inferred": true
+            },
+            {
+              "marker": null,
+              "reason": "no_explicit_citation",
+              "section": "industry",
+              "supported": false,
+              "text": "研发协作工具市场规模稳定增长。",
+              "url": "https://example.org/market/devtools",
+              "url_inferred": true
+            },
+            {
+              "marker": null,
+              "reason": "no_explicit_citation",
+              "section": "industry",
+              "supported": false,
+              "text": "竞品集中在 issue tracking 与敏捷管理赛道。",
+              "url": "https://example.org/market/devtools-competition",
+              "url_inferred": true
+            },
+            {
+              "marker": null,
+              "reason": "no_explicit_citation",
+              "section": "financial",
+              "supported": false,
+              "text": "公开报道显示完成过多轮融资。",
+              "url": "https://example.org/linear/funding",
+              "url_inferred": true
+            },
+            {
+              "marker": null,
+              "reason": "no_explicit_citation",
+              "section": "financial",
+              "supported": false,
+              "text": "按用户数订阅，提供免费档位。",
+              "url": "https://example.org/linear/pricing",
+              "url_inferred": true
+            },
+            {
+              "marker": null,
+              "reason": "no_explicit_citation",
+              "section": "news",
+              "supported": false,
+              "text": "推出新的周期规划功能。",
+              "url": "https://example.org/news/linear-2026",
+              "url_inferred": true
+            },
+            {
+              "marker": null,
+              "reason": "no_explicit_citation",
+              "section": "news",
+              "supported": false,
+              "text": "入选开发者工具年度榜单。",
+              "url": "https://example.org/news/linear-award",
+              "url_inferred": true
+            }
+          ],
+          "company": "Linear",
+          "degraded_sections": [],
+          "elapsed_ms": 299.693,
+          "expected_abstains": 0,
+          "expected_claims": 9,
+          "expected_research_runs": 2,
+          "failures": [],
+          "matched_claims": 9,
+          "passed": true,
+          "passed_abstains": 0,
+          "reference_count": 9,
+          "report_chars": 743,
+          "research_runs": 2,
+          "retry_rounds": 1,
+          "self_correction_denominator": 1,
+          "self_correction_success": 1
+        },
+        {
+          "case": "empty",
+          "claim_records": [
+            {
+              "marker": null,
+              "reason": "no_explicit_citation",
+              "section": "industry",
+              "supported": false,
+              "text": "该领域缺少公开规模数据。",
+              "url": "https://example.org/market/generic-1",
+              "url_inferred": true
+            },
+            {
+              "marker": null,
+              "reason": "no_explicit_citation",
+              "section": "industry",
+              "supported": false,
+              "text": "公开资料有限是主要挑战。",
+              "url": "https://example.org/market/generic-2",
+              "url_inferred": true
+            },
+            {
+              "marker": null,
+              "reason": "no_explicit_citation",
+              "section": "financial",
+              "supported": false,
+              "text": "未查到可核验的融资披露。",
+              "url": "https://example.org/finance/generic-1",
+              "url_inferred": true
+            },
+            {
+              "marker": null,
+              "reason": "no_explicit_citation",
+              "section": "financial",
+              "supported": false,
+              "text": "未查到可核验的收入模式说明。",
+              "url": "https://example.org/finance/generic-2",
+              "url_inferred": true
+            },
+            {
+              "marker": null,
+              "reason": "no_explicit_citation",
+              "section": "news",
+              "supported": false,
+              "text": "近期无重大公开公告。",
+              "url": "https://example.org/news/generic-1",
+              "url_inferred": true
+            },
+            {
+              "marker": null,
+              "reason": "no_explicit_citation",
+              "section": "news",
+              "supported": false,
+              "text": "媒体覆盖非常有限。",
+              "url": "https://example.org/news/generic-2",
+              "url_inferred": true
+            }
+          ],
+          "company": "Zephyrstone Labs",
+          "degraded_sections": [
+            "company"
+          ],
+          "elapsed_ms": 379.448,
+          "expected_abstains": 1,
+          "expected_claims": 6,
+          "expected_research_runs": 3,
+          "failures": [],
+          "matched_claims": 6,
+          "passed": true,
+          "passed_abstains": 1,
+          "reference_count": 6,
+          "report_chars": 487,
+          "research_runs": 3,
+          "retry_rounds": 2,
+          "self_correction_denominator": 0,
+          "self_correction_success": 0
+        }
+      ],
+      "counts": {
+        "abstain_items": 1,
+        "abstain_passed": 1,
+        "cases": 3,
+        "claims_without_explicit_citation": 31,
+        "empty_traceability_denominator": false,
+        "expected_claims": 31,
+        "matched_claims": 31,
+        "report_claims": 31,
+        "self_correction_denominator": 1,
+        "supported_claims": 0,
+        "unsupported_reasons": {
+          "content_mismatch": 0,
+          "no_explicit_citation": 31,
+          "no_marker_or_url": 0,
+          "url_not_in_golden_corpus": 0
+        }
+      },
+      "gate": null,
+      "metrics": {
+        "abstain_rate": 1.0,
+        "avg_retry_rounds": 1.0,
+        "citation_traceability": 0.0,
+        "cost_per_report": 0.0,
+        "fact_accuracy": 1.0,
+        "hallucination_rate": 1.0,
+        "p95_latency_ms": 379.448,
+        "self_correction_success": 1.0
+      },
+      "overrides": {
+        "features.inline_citations": false
+      },
+      "status": "ab"
+    },
+    "self_correction_off": {
+      "cases": [
+        {
+          "case": "sufficient",
+          "claim_records": [
+            {
+              "marker": 1,
+              "reason": "ok",
+              "section": "company",
+              "supported": true,
+              "text": "Notion 提供笔记、文档与协作工作区；目标客户为团队与个人知识工作者。",
+              "url": "https://example.org/notion/overview",
+              "url_inferred": false
+            },
+            {
+              "marker": 3,
+              "reason": "ok",
+              "section": "company",
+              "supported": true,
+              "text": "团队位于 San Francisco，商业模式为订阅制，含免费版与付费版。",
+              "url": "https://example.org/notion/about",
+              "url_inferred": false
+            },
+            {
+              "marker": 9,
+              "reason": "ok",
+              "section": "company",
+              "supported": true,
+              "text": "Notion 成立于 2014 年，是一家协作软件公司。",
+              "url": "https://example.org/notion/founded-2014",
+              "url_inferred": false
+            },
+            {
+              "marker": 14,
+              "reason": "ok",
+              "section": "company",
+              "supported": true,
+              "text": "Notion 成立于 2013 年，总部位于 San Francisco。",
+              "url": "https://example.org/notion/founded-2013",
+              "url_inferred": false
+            },
+            {
+              "marker": 7,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "协同文档与知识管理市场持续增长，主要需求来自远程协作。",
+              "url": "https://example.org/market/productivity",
+              "url_inferred": false
+            },
+            {
+              "marker": 10,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "直接竞品包括 Obsidian 与 Coda，差异化集中在模块化与模板生态。",
+              "url": "https://example.org/market/competitors",
+              "url_inferred": false
+            },
+            {
+              "marker": 11,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "2025 年协同文档市场规模约 50 亿美元（Gartner 口径）。",
+              "url": "https://example.org/market/size-gartner",
+              "url_inferred": false
+            },
+            {
+              "marker": 12,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "2025 年生产力软件市场规模约 200 亿美元（IDC 口径，范围更广）。",
+              "url": "https://example.org/market/size-idc",
+              "url_inferred": false
+            },
+            {
+              "marker": 2,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "已披露多轮融资，投资方包含多家风投机构。",
+              "url": "https://example.org/notion/funding",
+              "url_inferred": false
+            },
+            {
+              "marker": 4,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "2023 年完成 B 轮融资 2 亿美元，估值达到 100 亿美元。",
+              "url": "https://example.org/notion/series-b",
+              "url_inferred": false
+            },
+            {
+              "marker": 5,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "收入以按席位订阅为主，另提供团队版与企业版。",
+              "url": "https://example.org/notion/pricing",
+              "url_inferred": false
+            },
+            {
+              "marker": 6,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "2021 年完成 A 轮融资 5000 万美元，由红杉领投。",
+              "url": "https://example.org/notion/series-a",
+              "url_inferred": false
+            },
+            {
+              "marker": 8,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "2026 年 3 月发布新版本，强化了协作与自动化能力。",
+              "url": "https://example.org/news/notion-2026",
+              "url_inferred": false
+            },
+            {
+              "marker": 13,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "2026 年 1 月宣布与企业软件厂商达成集成合作。",
+              "url": "https://example.org/news/notion-partnership",
+              "url_inferred": false
+            },
+            {
+              "marker": 15,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "2025 年 11 月获得年度生产力工具奖项。",
+              "url": "https://example.org/news/notion-award",
+              "url_inferred": false
+            },
+            {
+              "marker": 16,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "2020 年 5 月发布早期版本，供时效过滤节点识别并剔除。",
+              "url": "https://example.org/news/notion-2020",
+              "url_inferred": false
+            }
+          ],
+          "company": "Notion",
+          "degraded_sections": [],
+          "elapsed_ms": 174.211,
+          "expected_abstains": 0,
+          "expected_claims": 16,
+          "expected_research_runs": 1,
+          "failures": [],
+          "matched_claims": 16,
+          "passed": true,
+          "passed_abstains": 0,
+          "reference_count": 16,
+          "report_chars": 1559,
+          "research_runs": 1,
+          "retry_rounds": 0,
+          "self_correction_denominator": 0,
+          "self_correction_success": 0
+        },
+        {
+          "case": "sparse",
+          "claim_records": [
+            {
+              "marker": 3,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "研发协作工具市场规模稳定增长。",
+              "url": "https://example.org/market/devtools",
+              "url_inferred": false
+            },
+            {
+              "marker": 5,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "竞品集中在 issue tracking 与敏捷管理赛道。",
+              "url": "https://example.org/market/devtools-competition",
+              "url_inferred": false
+            },
+            {
+              "marker": 1,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "公开报道显示完成过多轮融资。",
+              "url": "https://example.org/linear/funding",
+              "url_inferred": false
+            },
+            {
+              "marker": 2,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "按用户数订阅，提供免费档位。",
+              "url": "https://example.org/linear/pricing",
+              "url_inferred": false
+            },
+            {
+              "marker": 4,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "推出新的周期规划功能。",
+              "url": "https://example.org/news/linear-2026",
+              "url_inferred": false
+            },
+            {
+              "marker": 6,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "入选开发者工具年度榜单。",
+              "url": "https://example.org/news/linear-award",
+              "url_inferred": false
+            }
+          ],
+          "company": "Linear",
+          "degraded_sections": [
+            "company"
+          ],
+          "elapsed_ms": 207.312,
+          "expected_abstains": 0,
+          "expected_claims": 9,
+          "expected_research_runs": 2,
+          "failures": [
+            "sparse:company:0",
+            "sparse:company:1",
+            "sparse:company:2"
+          ],
+          "matched_claims": 6,
+          "passed": false,
+          "passed_abstains": 0,
+          "reference_count": 7,
+          "report_chars": 539,
+          "research_runs": 1,
+          "retry_rounds": 0,
+          "self_correction_denominator": 1,
+          "self_correction_success": 0
+        },
+        {
+          "case": "empty",
+          "claim_records": [
+            {
+              "marker": 1,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "该领域缺少公开规模数据。",
+              "url": "https://example.org/market/generic-1",
+              "url_inferred": false
+            },
+            {
+              "marker": 4,
+              "reason": "ok",
+              "section": "industry",
+              "supported": true,
+              "text": "公开资料有限是主要挑战。",
+              "url": "https://example.org/market/generic-2",
+              "url_inferred": false
+            },
+            {
+              "marker": 2,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "未查到可核验的融资披露。",
+              "url": "https://example.org/finance/generic-1",
+              "url_inferred": false
+            },
+            {
+              "marker": 5,
+              "reason": "ok",
+              "section": "financial",
+              "supported": true,
+              "text": "未查到可核验的收入模式说明。",
+              "url": "https://example.org/finance/generic-2",
+              "url_inferred": false
+            },
+            {
+              "marker": 3,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "近期无重大公开公告。",
+              "url": "https://example.org/news/generic-1",
+              "url_inferred": false
+            },
+            {
+              "marker": 6,
+              "reason": "ok",
+              "section": "news",
+              "supported": true,
+              "text": "媒体覆盖非常有限。",
+              "url": "https://example.org/news/generic-2",
+              "url_inferred": false
+            }
+          ],
+          "company": "Zephyrstone Labs",
+          "degraded_sections": [
+            "company"
+          ],
+          "elapsed_ms": 175.125,
+          "expected_abstains": 1,
+          "expected_claims": 6,
+          "expected_research_runs": 3,
+          "failures": [],
+          "matched_claims": 6,
+          "passed": true,
+          "passed_abstains": 1,
+          "reference_count": 6,
+          "report_chars": 511,
+          "research_runs": 1,
+          "retry_rounds": 0,
+          "self_correction_denominator": 0,
+          "self_correction_success": 0
+        }
+      ],
+      "counts": {
+        "abstain_items": 1,
+        "abstain_passed": 1,
+        "cases": 3,
+        "claims_without_explicit_citation": 0,
+        "empty_traceability_denominator": false,
+        "expected_claims": 31,
+        "matched_claims": 28,
+        "report_claims": 28,
+        "self_correction_denominator": 1,
+        "supported_claims": 28,
+        "unsupported_reasons": {
+          "content_mismatch": 0,
+          "no_explicit_citation": 0,
+          "no_marker_or_url": 0,
+          "url_not_in_golden_corpus": 0
+        }
+      },
+      "gate": null,
+      "metrics": {
+        "abstain_rate": 1.0,
+        "avg_retry_rounds": 0.0,
+        "citation_traceability": 1.0,
+        "cost_per_report": 0.0,
+        "fact_accuracy": 0.903226,
+        "hallucination_rate": 0.0,
+        "p95_latency_ms": 207.312,
+        "self_correction_success": 0.0
+      },
+      "overrides": {
+        "features.self_correction": false
+      },
+      "status": "ab"
+    }
+  },
+  "schema_version": 1,
+  "summary": {
+    "baseline_gate_passed": true,
+    "failed_case_ids": [
+      "self_correction_off:sparse:company:0",
+      "self_correction_off:sparse:company:1",
+      "self_correction_off:sparse:company:2"
+    ],
+    "groups_run": [
+      "baseline",
+      "self_correction_off",
+      "fewer_results",
+      "free_text_output",
+      "no_inline_citations",
+      "no_human_review"
+    ]
+  }
+}

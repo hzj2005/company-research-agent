@@ -11,19 +11,27 @@
         {
           "company": [
             {"url": "https://example.org/notion/overview", "title": "Notion 产品概览（合成）", "score": 0.93, "source": "company_website", "content": "Notion 提供笔记、文档与协作工作区；目标客户为团队与个人知识工作者。"},
-            {"url": "https://example.org/notion/about", "title": "Notion 关于我们（合成）", "score": 0.88, "source": "company_website", "content": "团队位于 San Francisco，商业模式为订阅制，含免费版与付费版。"}
+            {"url": "https://example.org/notion/about", "title": "Notion 关于我们（合成）", "score": 0.88, "source": "company_website", "content": "团队位于 San Francisco，商业模式为订阅制，含免费版与付费版。"},
+            {"url": "https://example.org/notion/founded-2013", "title": "公司档案 A（合成）", "score": 0.72, "source": "market_report", "content": "Notion 成立于 2013 年，总部位于 San Francisco。"},
+            {"url": "https://example.org/notion/founded-2014", "title": "公司档案 B（合成）", "score": 0.77, "source": "market_report", "content": "Notion 成立于 2014 年，是一家协作软件公司。"}
           ],
           "industry": [
             {"url": "https://example.org/market/productivity", "title": "协同办公市场（合成）", "score": 0.81, "source": "market_report", "content": "协同文档与知识管理市场持续增长，主要需求来自远程协作。"},
-            {"url": "https://example.org/market/competitors", "title": "竞品对比（合成）", "score": 0.76, "source": "market_report", "content": "直接竞品包括同类笔记与文档协作工具，差异化集中在模块化与模板生态。"}
+            {"url": "https://example.org/market/competitors", "title": "竞品对比（合成）", "score": 0.76, "source": "market_report", "content": "直接竞品包括 Obsidian 与 Coda，差异化集中在模块化与模板生态。"},
+            {"url": "https://example.org/market/size-gartner", "title": "市场规模 Gartner（合成）", "score": 0.74, "source": "market_report", "content": "2025 年协同文档市场规模约 50 亿美元（Gartner 口径）。"},
+            {"url": "https://example.org/market/size-idc", "title": "市场规模 IDC（合成）", "score": 0.73, "source": "market_report", "content": "2025 年生产力软件市场规模约 200 亿美元（IDC 口径，范围更广）。"}
           ],
           "financial": [
             {"url": "https://example.org/notion/funding", "title": "融资信息（合成）", "score": 0.91, "source": "news", "content": "已披露多轮融资，投资方包含多家风投机构。"},
-            {"url": "https://example.org/notion/pricing", "title": "定价页（合成）", "score": 0.85, "source": "company_website", "content": "收入以按席位订阅为主，另提供团队版与企业版。"}
+            {"url": "https://example.org/notion/pricing", "title": "定价页（合成）", "score": 0.85, "source": "company_website", "content": "收入以按席位订阅为主，另提供团队版与企业版。"},
+            {"url": "https://example.org/notion/series-a", "title": "A 轮融资（合成）", "score": 0.83, "source": "news", "content": "2021 年完成 A 轮融资 5000 万美元，由红杉领投。"},
+            {"url": "https://example.org/notion/series-b", "title": "B 轮融资（合成）", "score": 0.87, "source": "news", "content": "2023 年完成 B 轮融资 2 亿美元，估值达到 100 亿美元。"}
           ],
           "news": [
-            {"url": "https://example.org/news/notion-2026", "title": "近期发布（合成）", "score": 0.79, "source": "news", "content": "近期发布新版本，强化了协作与自动化能力。"},
-            {"url": "https://example.org/news/notion-partnership", "title": "合作公告（合成）", "score": 0.72, "source": "news", "content": "宣布与企业软件厂商达成集成合作。"}
+            {"url": "https://example.org/news/notion-2026", "title": "近期发布（合成）", "score": 0.79, "source": "news", "content": "2026 年 3 月发布新版本，强化了协作与自动化能力。"},
+            {"url": "https://example.org/news/notion-partnership", "title": "合作公告（合成）", "score": 0.72, "source": "news", "content": "2026 年 1 月宣布与企业软件厂商达成集成合作。"},
+            {"url": "https://example.org/news/notion-award", "title": "获奖报道（合成）", "score": 0.70, "source": "news", "content": "2025 年 11 月获得年度生产力工具奖项。"},
+            {"url": "https://example.org/news/notion-2020", "title": "旧闻（合成）", "score": 0.68, "source": "news", "content": "2020 年 5 月发布早期版本，供时效过滤节点识别并剔除。"}
           ]
         }
       ]

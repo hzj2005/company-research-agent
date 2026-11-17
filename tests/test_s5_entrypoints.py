@@ -13,6 +13,8 @@ from pathlib import Path
 
 import pytest
 
+from conftest import assert_report_shape
+
 from backend.classes.state import job_status
 
 EXPECTED_NODES = {
@@ -64,7 +66,7 @@ def test_process_research_runs_new_graph_and_reports_progress(tmp_path: Path) ->
 
     st = job_status[jid]
     assert st["status"] == "completed", st
-    assert len(st["report"]) == 772, "fixture sufficient 报告应与 CLI 完全一致"
+    assert_report_shape(st["report"])
     assert st["current_step"] in EXPECTED_NODES
     assert "SHOULD_NOT_BE_USED" not in str(st), "请求体里的 key 不能被消费或外泄"
 
@@ -93,7 +95,7 @@ def test_research_endpoint_end_to_end(tmp_path: Path, monkeypatch: pytest.Monkey
                 break
             time.sleep(0.1)
         assert state.get("status") == "completed", state
-        assert len(state["report"]) == 772
+        assert_report_shape(state["report"])
 
 
 def test_upstream_graph_not_used_by_entrypoints() -> None:

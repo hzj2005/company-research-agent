@@ -16,6 +16,8 @@ from unittest.mock import patch
 
 import pytest
 
+from conftest import assert_report_shape
+
 from config.loader import get_settings
 from graph.run import run_research
 
@@ -38,7 +40,7 @@ def test_full_graph_makes_zero_external_connections() -> None:
             )
 
     assert external_attempts == [], "任何外部连接都意味着消耗了 Tavily/模型额度"
-    assert len(state["report"]) == 772
+    assert_report_shape(state["report"])
     assert trace.count("research") == 1
     assert socket.socket.connect is original, "守卫必须被还原"
 
@@ -83,6 +85,6 @@ def test_research_endpoint_makes_zero_external_connections(
                 time.sleep(0.1)
 
     assert state.get("status") == "completed", state
-    assert len(state["report"]) == 772
+    assert_report_shape(state["report"])
     assert attempts == [], "任何外部连接都意味着消耗了 Tavily/模型额度"
     assert socket.socket.connect is original_connect, "守卫必须被还原"
