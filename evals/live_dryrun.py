@@ -199,13 +199,15 @@ def build_report() -> dict[str, Any]:
         "queries_sorted_by": ["query", "section", "cache_key"],
         "graph": {
             "company": state.get("company"),
-            "evidence_verdict": state.get("evidence_verdict"),
             "retry_count": state.get("retry_count"),
-            "degraded": state.get("degraded"),
             "degraded_sections": state.get("degraded_sections"),
             "report_chars": len(state.get("report", "")),
             "node_trace": trace,
-            "research_runs": trace.count("research") if trace else 0,
+            # R3：回退在子图内，主图 research 只跑 1 次；
+            # 报告"实际检索轮次"= 最大子图返工次数 + 1（对齐 golden 的 expected_research_runs）
+            "research_runs": (
+                max((state.get("retry_count") or {}).values(), default=0) + 1
+            ),
         },
         "guard": {
             "label": "S8 dry-run",

@@ -24,33 +24,15 @@
   },
   "graph": {
     "company": "Notion",
-    "degraded": true,
     "degraded_sections": [
       "company",
       "industry",
       "financial",
       "news"
     ],
-    "evidence_verdict": {
-      "company": "degraded",
-      "financial": "degraded",
-      "industry": "degraded",
-      "news": "degraded"
-    },
     "node_trace": [
       "grounding",
       "research",
-      "curate",
-      "evidence_check",
-      "rewrite_query",
-      "research",
-      "curate",
-      "evidence_check",
-      "rewrite_query",
-      "research",
-      "curate",
-      "evidence_check",
-      "degrade",
       "briefing"
     ],
     "report_chars": 125,

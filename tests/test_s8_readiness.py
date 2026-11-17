@@ -185,7 +185,8 @@ def test_live_dryrun_report_is_clean_and_reproducible() -> None:
     assert cred["llm_key_resolutions"] == 0
     assert cred["async_tavily_client_constructions"] == 0
     assert a["graph"]["research_runs"] == 3
-    assert "degrade" in a["graph"]["node_trace"]
+    # R3：主图 no degrade 节点；空样本在子图内判降级，写进 degraded_sections
+    assert "company" in a["graph"]["degraded_sections"]
     assert all(q["executed"] is False for q in a["queries"])
     assert a["queries"] == sorted(a["queries"], key=lambda q: (
         q["query"], q["section"], q["cache_key"]

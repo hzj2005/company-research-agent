@@ -17,10 +17,8 @@ from conftest import assert_report_shape
 
 from backend.classes.state import job_status
 
-EXPECTED_NODES = {
-    "grounding", "research", "curate", "evidence_check",
-    "rewrite_query", "degrade", "briefing",
-}
+# R3：主图 5 节点（消歧/判定/回退下沉子图）
+EXPECTED_NODES = {"grounding", "research", "briefing"}
 
 
 def test_studio_entry_exports_the_new_graph() -> None:

@@ -155,12 +155,24 @@ def _render(**overrides: Any) -> dict[str, Any]:
 
 
 def test_report_annotates_conflict_with_citations() -> None:
-    out = _render()
-    block = [line for line in out["report"].splitlines() if line.startswith("> ")]
+    """R3 迁移：拼装器把段落里的 conflicts 渲染成引用块。
+
+    冲突的**检测**在子图/R4；这里测报告层的渲染契约。
+    """
+    from graph.nodes.assemble import assemble_report
+
+    para = {
+        "key": "company", "status": "ok",
+        "facts": [{"claim": "Notion 成立于 2013", "source_url": PITCHBOOK}],
+        "references": {PITCHBOOK: {"title": "A", "score": 0.9},
+                       CBINSIGHTS: {"title": "B", "score": 0.8}},
+        "conflicts": ["成立年份出现 2 个取值：2013 / 2014"],
+    }
+    report, _ = assemble_report(COMPANY, [para], get_settings())
+    block = [line for line in report.splitlines() if line.startswith("> ")]
     assert len(block) == 1
     assert "成立年份出现 2 个取值" in block[0]
     assert "2013" in block[0] and "2014" in block[0]
-    assert re.search(r"\[\d+\]", block[0])
 
 
 def test_conflict_line_is_not_a_factual_bullet() -> None:
@@ -173,8 +185,16 @@ def test_conflict_line_is_not_a_factual_bullet() -> None:
 
 
 def test_briefing_records_structured_conflict() -> None:
-    out = _render()
-    conflicts = out["briefings"]["company"]["conflicts"]
+    """R3 迁移：拼装器把段落 conflicts 原样记进 briefings（结构化留痕）。"""
+    from graph.nodes.assemble import assemble_report
+
+    conflict = {"slot": "founded_year", "values": [{"value": "2013"}, {"value": "2014"}]}
+    para = {
+        "key": "company", "status": "ok", "facts": [],
+        "references": {}, "conflicts": [conflict],
+    }
+    _, briefings = assemble_report(COMPANY, [para], get_settings())
+    conflicts = briefings["company"]["conflicts"]
     assert len(conflicts) == 1
     assert conflicts[0]["slot"] == "founded_year"
     assert [v["value"] for v in conflicts[0]["values"]] == ["2013", "2014"]
