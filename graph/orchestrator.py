@@ -15,19 +15,47 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from typing import Annotated
+
 from langchain_core.tools import StructuredTool
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
+from typing_extensions import TypedDict
 
 from config.loader import Settings
 from graph.agents.factory import build_all_agent_subgraphs
+from graph.state import append_notes, append_unique, merge_mapping, replace_mapping
 from graph.subgraphs.state import (
     ResearchSubgraphInput,
-    ResearchSubgraphOutput,
     ResearchSubgraphState,
 )
 
 logger = logging.getLogger(__name__)
+
+
+class OrchestratorState(ResearchSubgraphState, total=False):
+    """编排子图 state：在基础字段上承载派发决策与四段落产物。"""
+
+    dispatch_decision: list[str]
+    degraded_sections: Annotated[list[str], append_unique]
+    retry_count: Annotated[dict[str, int], merge_mapping]
+    company_paragraph: Annotated[dict[str, Any], replace_mapping]
+    industry_paragraph: Annotated[dict[str, Any], replace_mapping]
+    financial_paragraph: Annotated[dict[str, Any], replace_mapping]
+    news_paragraph: Annotated[dict[str, Any], replace_mapping]
+
+
+class OrchestratorOutput(TypedDict, total=False):
+    """编排子图输出：只回传四段落与留痕（父图 State 子集）。"""
+
+    company_paragraph: Annotated[dict[str, Any], replace_mapping]
+    industry_paragraph: Annotated[dict[str, Any], replace_mapping]
+    financial_paragraph: Annotated[dict[str, Any], replace_mapping]
+    news_paragraph: Annotated[dict[str, Any], replace_mapping]
+    degraded_sections: Annotated[list[str], append_unique]
+    retry_count: Annotated[dict[str, int], merge_mapping]
+    review_notes: Annotated[list[dict[str, Any]], append_notes]
+
 
 
 def pending_sections(state: ResearchSubgraphState, settings: Settings) -> list[str]:
@@ -76,16 +104,28 @@ def make_dispatch_edge(settings: Settings) -> Any:
 
 
 def make_arbitrate_node(settings: Settings) -> Any:
-    """汇合节点：4 路子图结果汇总后的一致性检查（R1 留痕，R5 加实质逻辑）。"""
+    """汇合节点：读四段落状态，写 degraded_sections（供评测/报告判定拒答）。
+
+    R3 主图移除了 degrade 节点，但评测 metrics.py 用 degraded_sections 判定
+    abstain。子图段落 status=degraded/no_evidence 时，在这里统一补写该字段，
+    保持对外契约不变（报告文本早已由 assemble 写好拒答话术）。
+    """
 
     async def arbitrate(state: ResearchSubgraphState) -> dict[str, Any]:
+        degraded: list[str] = []
+        for section in settings.graph.sections:
+            paragraph = state.get(f"{section}_paragraph") or {}
+            if paragraph.get("status") in ("degraded", "no_evidence"):
+                degraded.append(section)
         return {
+            "degraded_sections": degraded,
             "review_notes": [
                 {
                     "node": "arbitrate",
                     "sections_checked": list(settings.graph.sections),
+                    "degraded": degraded,
                 }
-            ]
+            ],
         }
 
     return arbitrate
@@ -95,14 +135,10 @@ def build_orchestrator_subgraph(
     settings: Settings, document_tool: StructuredTool
 ) -> Any:
     """编译 Orchestrator 子图：orchestrator → 4 独立 Agent 子图 → arbitrate → END。"""
-    # 子图 state 需要承载派发决策字段
-    class OrchestratorState(ResearchSubgraphState, total=False):
-        dispatch_decision: list[str]
-
     builder = StateGraph(
         OrchestratorState,
         input_schema=ResearchSubgraphInput,
-        output_schema=ResearchSubgraphOutput,
+        output_schema=OrchestratorOutput,
     )
 
     agents = build_all_agent_subgraphs(settings, document_tool)

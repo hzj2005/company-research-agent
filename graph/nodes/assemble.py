@@ -75,7 +75,10 @@ def assemble_report(
 
         if status != "ok" or not facts:
             lines.append(f"- {degrade_msg}")
-            briefings[key] = {"status": status if status != "ok" else "no_evidence"}
+            briefings[key] = {
+                "status": status if status != "ok" else "no_evidence",
+                "conflicts": list(sec.get("conflicts", [])),
+            }
         else:
             for fact in facts:
                 claim = str(fact.get("claim", ""))

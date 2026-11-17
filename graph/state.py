@@ -98,6 +98,13 @@ class ResearchState(InputState):
     financial_data: Annotated[dict[str, dict[str, Any]], merge_docs]
     news_data: Annotated[dict[str, dict[str, Any]], merge_docs]
 
+    # R3：四张子图各自写好的栏目段落（facts + 状态 + 冲突，不带编号）。
+    # 用 replace_mapping：回退重搜后新段落整体替换旧段落。
+    company_paragraph: Annotated[dict[str, Any], replace_mapping]
+    industry_paragraph: Annotated[dict[str, Any], replace_mapping]
+    financial_paragraph: Annotated[dict[str, Any], replace_mapping]
+    news_paragraph: Annotated[dict[str, Any], replace_mapping]
+
     # curate 每轮全量重算，不用累积语义
     curated_data: Annotated[dict[str, dict[str, Any]], replace_mapping]
     evidence_verdict: Annotated[dict[str, Verdict], merge_mapping]
@@ -130,6 +137,10 @@ def initial_state(company: str, **kwargs: Any) -> dict[str, Any]:
         "industry_data": {},
         "financial_data": {},
         "news_data": {},
+        "company_paragraph": {},
+        "industry_paragraph": {},
+        "financial_paragraph": {},
+        "news_paragraph": {},
         "curated_data": {},
         "evidence_verdict": {},
         "retry_count": {},

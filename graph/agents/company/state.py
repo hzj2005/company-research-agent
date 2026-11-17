@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, TypedDict
 
-from graph.state import append_notes, merge_docs
+from graph.state import append_notes, append_unique, merge_docs, merge_mapping, replace_mapping
 
 
 class CompanyAgentInput(TypedDict, total=False):
@@ -20,12 +20,16 @@ class CompanyAgentState(TypedDict, total=False):
     company: str
     round_no: int
     active_section: str
-    company_data: Annotated[dict[str, dict[str, Any]], merge_docs]
+    company_paragraph: Annotated[dict[str, Any], replace_mapping]
+    degraded_sections: Annotated[list[str], append_unique]
+    retry_count: Annotated[dict[str, int], merge_mapping]
     review_notes: Annotated[list[dict[str, Any]], append_notes]
 
 
 class CompanyAgentOutput(TypedDict, total=False):
-    """只回传本栏目数据与留痕，不污染其它栏目。"""
+    """只回传本栏目段落与留痕，不污染其它栏目。"""
 
-    company_data: Annotated[dict[str, dict[str, Any]], merge_docs]
+    company_paragraph: Annotated[dict[str, Any], replace_mapping]
+    degraded_sections: Annotated[list[str], append_unique]
+    retry_count: Annotated[dict[str, int], merge_mapping]
     review_notes: Annotated[list[dict[str, Any]], append_notes]

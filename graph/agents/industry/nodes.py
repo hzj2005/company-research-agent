@@ -24,7 +24,7 @@ async def industry_extract(
     from graph.agents.prompts import build_section_prompt
 
     if not docs:
-        return [], "no_retry", [
+        return [], "ok", [
             {"node": "extract", "section": section, "status": "no_docs"}
         ]
 

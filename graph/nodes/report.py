@@ -186,44 +186,49 @@ async def _render_structured(
 def make_briefing_node(
     settings: Settings, *, backend: BriefingBackend | None = None
 ) -> Node:
-    active_backend = backend
-    if settings.features.structured_output and active_backend is None:
-        active_backend = make_briefing_backend(settings)
+    """R3 拼装工：读四张子图写好的栏目段落，统一编号 + References 拼成报告。
+
+    不再自己调 LLM 抽取（那会与子图内 extract 重复，抽两次）——
+    子图已端到端完成检索→消歧→抽取→判定→写段落，这里只做拼装。
+    `backend` 参数保留只为兼容旧调用签名，新路径不使用。
+    """
 
     async def briefing(state: ResearchState) -> dict[str, Any]:
-        selected, truncated, ordered_urls, references = _select_documents(state, settings)
-        degraded = set(state.get("degraded_sections", []))
-        index = {url: i + 1 for i, url in enumerate(ordered_urls)}
-        norm_index = {_norm(url): n for url, n in index.items()}
+        from graph.nodes.assemble import assemble_report
 
-        if settings.features.structured_output and active_backend is not None:
-            lines, briefings, notes = await _render_structured(
-                state, settings, selected, degraded, norm_index, active_backend
-            )
-        else:
-            lines, briefings, notes = _render_template(
-                state, settings, selected, degraded, index
-            )
+        # 收集四张子图的段落产物
+        sections: list[dict[str, Any]] = []
+        for key in settings.graph.sections:
+            paragraph = state.get(f"{key}_paragraph") or {}
+            if paragraph:
+                sections.append(paragraph)
+            else:
+                # 子图没产出段落（异常/未派发）→ 降级段，写拒答
+                sections.append(
+                    {"key": key, "section": key, "status": "degraded",
+                     "facts": [], "conflicts": [], "references": {}}
+                )
 
-        lines.extend(["## References", ""])
-        for url in ordered_urls:
-            meta = references[url]
-            lines.append(f"[{index[url]}] {meta.get('title', '')} — {url}")
+        report, briefings = assemble_report(state["company"], sections, settings)
 
-        report = "\n".join(lines).rstrip() + "\n"
-        # briefing note 必须是最后一条：tests/test_report_citations.py 依赖它取截断信息
+        # 兼容旧断言：briefing note 最后一条，带 referenced 计数
+        all_urls = {
+            str(f.get("source_url", ""))
+            for sec in sections
+            for f in sec.get("facts", [])
+            if f.get("source_url")
+        }
         base_note = {
             "node": "briefing",
-            "referenced": len(ordered_urls),
-            "truncated_per_section": truncated,
+            "referenced": len(all_urls),
+            "truncated_per_section": {},
         }
         result: dict[str, Any] = {
             "report": report,
             "briefings": briefings,
-            "review_notes": [*notes, base_note],
+            "review_notes": [base_note],
         }
-        # V2 后处理：默认关闭。开启时对已抽取 facts 做行业/新闻专项加工，
-        # 写入独立字段，不改 report 文本、不改 briefings 结构 → 评测基线不受影响。
+        # 后处理：默认关闭，读拼装用的 facts 做行业/新闻/财务专项加工
         if settings.features.postprocess:
             from datetime import date
 
@@ -233,7 +238,7 @@ def make_briefing_node(
                 briefings,
                 company=state["company"],
                 reference_year=date.today().year,
-                source_docs=selected,  # 财务数字保真需要原文 content
+                source_docs=None,  # R3 段落只带 url，无原文 content；财务数字保真留 R4
             )
         return result
 

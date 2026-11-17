@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, TypedDict
 
-from graph.state import append_notes, merge_docs
+from graph.state import append_notes, append_unique, merge_docs, merge_mapping, replace_mapping
 
 
 class NewsAgentInput(TypedDict, total=False):
@@ -16,10 +16,14 @@ class NewsAgentState(TypedDict, total=False):
     company: str
     round_no: int
     active_section: str
-    news_data: Annotated[dict[str, dict[str, Any]], merge_docs]
+    news_paragraph: Annotated[dict[str, Any], replace_mapping]
+    degraded_sections: Annotated[list[str], append_unique]
+    retry_count: Annotated[dict[str, int], merge_mapping]
     review_notes: Annotated[list[dict[str, Any]], append_notes]
 
 
 class NewsAgentOutput(TypedDict, total=False):
-    news_data: Annotated[dict[str, dict[str, Any]], merge_docs]
+    news_paragraph: Annotated[dict[str, Any], replace_mapping]
+    degraded_sections: Annotated[list[str], append_unique]
+    retry_count: Annotated[dict[str, int], merge_mapping]
     review_notes: Annotated[list[dict[str, Any]], append_notes]

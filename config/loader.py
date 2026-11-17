@@ -209,7 +209,7 @@ def resolve_llm_credentials(
         if not raw:
             if explicit:
                 raise MissingLLMCredentials(
-                    f"LLM_PROVIDER={provider}，但缺少 {var_candidates}；拒绝回退到其他 provider"
+                    f"LLM_PROVIDER={provider}，但缺少 {var_candidates[0]}；拒绝回退到其他 provider"
                 )
             continue
         return LLMCredentials(

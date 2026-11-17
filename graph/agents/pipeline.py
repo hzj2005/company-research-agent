@@ -38,7 +38,12 @@ def make_pipeline_node(
     `extract_fn` 是栏目自己的抽取实现（LLM + 降级）。
     """
     min_docs = settings.graph.evidence.min_docs_per_section
-    max_retry = settings.graph.max_retry
+    # 关闭自纠正时不允许返工（旧架构 rewrite_query 的开关语义下沉子图）
+    max_retry = settings.graph.max_retry if settings.features.self_correction else 0
+    # 旧 curate 的相关性阈值过滤也搬进子图：低分无关文档不进段落。
+    # 漏搬这块会让 empty case 的低分文档（score 0.12）被抽成 fact → 误报有证据。
+    min_score = settings.graph.evidence.min_relevance_score
+    require_url = settings.graph.evidence.require_source_url
 
     async def pipeline(state: dict[str, Any]) -> dict[str, Any]:
         company = state["company"]
@@ -70,19 +75,37 @@ def make_pipeline_node(
                         }
                     )
 
-            # ② references（消歧后的文档，供报告编号用）
-            references = {
-                str(d["url"]): {
-                    "title": d.get("title", ""),
-                    "score": float(d.get("score", 0) or 0),
-                }
-                for d in docs
-                if d.get("url")
-            }
+            # ①b 相关性阈值过滤（旧 curate 的职责，R3 下沉子图）
+            before = len(docs)
+            docs = [
+                d for d in docs
+                if float(d.get("score", 0) or 0) >= min_score
+                and (not require_url or d.get("url"))
+            ]
+            if before != len(docs):
+                all_notes.append(
+                    {"node": "relevance_filter", "section": section,
+                     "dropped": before - len(docs), "threshold": min_score}
+                )
+
+            # ② references（跨轮累积，按 URL 去重；回退重搜保留首轮证据）
+            for d in docs:
+                if d.get("url"):
+                    references[str(d["url"])] = {
+                        "title": d.get("title", ""),
+                        "score": float(d.get("score", 0) or 0),
+                    }
 
             # ③ extract（栏目自己的实现：LLM + 降级）
-            facts, extract_status, notes = await extract_fn(company, section, docs, settings)
+            round_facts, extract_status, notes = await extract_fn(company, section, docs, settings)
             all_notes.extend(notes)
+            # 跨轮累积 facts（按 source_url 去重）：首轮那 1 条也要留到最终段落，
+            # 否则 sparse case 回退后丢首轮证据（R3 实测 sparse:company:2 踩到）
+            seen_urls = {f.get("source_url") for f in facts}
+            for f in round_facts:
+                if f.get("source_url") not in seen_urls:
+                    facts.append(f)
+                    seen_urls.add(f.get("source_url"))
 
             # ④ 证据判定：够 → 写段落退出；不够 → 返工
             if len(facts) >= min_docs or extract_status == "no_retry":
@@ -104,12 +127,22 @@ def make_pipeline_node(
 
         # ⑤ 写段落（facts 带 source_url，不带编号）
         paragraph = make_paragraph(
-            section, section, _to_facts(facts), settings,
+            section, section, _to_facts(facts),
+            settings=settings,
             degraded=(status == "degraded"),
             references=references,
         )
+        # degraded 标记并行分支各自追加（append_unique reducer 合并），
+        # 不依赖 arbitrate 读汇合状态（Send 分支输出对汇合节点不可见）
+        degraded_marker = [section] if status in ("degraded", "no_evidence") else []
+        # retry_count 同样由并行分支各自写（merge_mapping reducer 合并），
+        # 供评测按旧契约读子图内返工轮次
+        # 返工轮次 = 实际多跑的轮数（与有没有 facts 无关；empty case 也记满）
+        used_round = max(attempt - round_no, 0)
         return {
             f"{section}_paragraph": paragraph,
+            "degraded_sections": degraded_marker,
+            "retry_count": {section: used_round} if used_round else {},
             "review_notes": [
                 *all_notes,
                 {

@@ -20,7 +20,7 @@ from langgraph.graph.state import CompiledStateGraph
 
 from capabilities.retrieval import make_document_tool
 from config.loader import get_settings
-from graph.agents.factory import build_agent_subgraph, build_all_agent_subgraphs
+from graph.agents.factory import build_all_agent_subgraphs
 from graph.orchestrator import build_orchestrator_subgraph
 from graph.run import run_research
 
@@ -34,11 +34,11 @@ def test_four_independent_state_schemas() -> None:
 
     states = [CompanyAgentState, IndustryAgentState, FinancialAgentState, NewsAgentState]
     assert len(set(states)) == 4, "四栏目必须各有独立 state schema"
-    # 各自的输出字段不同
-    assert "company_data" in CompanyAgentState.__annotations__
-    assert "financial_data" in FinancialAgentState.__annotations__
-    assert "industry_data" in IndustryAgentState.__annotations__
-    assert "news_data" in NewsAgentState.__annotations__
+    # 各自的段落输出字段不同（R3：*_data → *_paragraph）
+    assert "company_paragraph" in CompanyAgentState.__annotations__
+    assert "financial_paragraph" in FinancialAgentState.__annotations__
+    assert "industry_paragraph" in IndustryAgentState.__annotations__
+    assert "news_paragraph" in NewsAgentState.__annotations__
 
 
 def test_each_agent_subgraph_is_compiled() -> None:
@@ -49,7 +49,7 @@ def test_each_agent_subgraph_is_compiled() -> None:
     for section, subgraph in agents.items():
         assert isinstance(subgraph, CompiledStateGraph), f"{section} 必须是编译子图"
         nodes = set(subgraph.get_graph().nodes.keys())
-        assert f"{section}_agent" in nodes
+        assert f"{section}_pipeline" in nodes
 
 
 def test_orchestrator_is_a_real_node() -> None:
@@ -89,10 +89,12 @@ def test_end_to_end_four_sections_no_crosstalk() -> None:
     s = get_settings()
     with tempfile.TemporaryDirectory() as td:
         state, _ = asyncio.run(run_research("Notion", s, Path(td) / "p.db"))
-    for field in ("company_data", "industry_data", "financial_data", "news_data"):
-        assert state.get(field), f"{field} 不应为空"
-    # 各栏目文档 URL 应带各自特征，没串栏
-    assert all("notion" in u or "market" in u for u in state["company_data"])
+    for section in ("company", "industry", "financial", "news"):
+        para = state.get(f"{section}_paragraph") or {}
+        assert para.get("facts"), f"{section}_paragraph 不应为空"
+    # 各栏目段落的 references URL 应带各自特征，没串栏
+    comp_urls = state["company_paragraph"]["references"]
+    assert all("notion" in u for u in comp_urls)
     orch_notes = [n for n in state["review_notes"] if n.get("node") == "orchestrator"]
     assert orch_notes and set(orch_notes[0]["dispatch_to"]) == {
         "company", "industry", "financial", "news"
