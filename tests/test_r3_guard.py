@@ -12,7 +12,7 @@ from typing import Any
 from langchain_core.tools import tool
 
 from config.loader import get_settings
-from graph.agents.company.nodes import make_company_pipeline_node
+from graph.agents.company.graph import build_company_subgraph
 from graph.agents.financial.nodes import make_financial_pipeline_node
 
 
@@ -23,7 +23,10 @@ def _doc(url: str, title: str, content: str) -> dict[str, Any]:
 def _offline(docs: dict[str, list[dict[str, Any]]]) -> Any:
     @tool
     async def fetch_company_documents(
-        company: str, sections: list[str], round_no: int
+        company: str,
+        sections: list[str],
+        round_no: int,
+        queries: list[str] | None = None,
     ) -> dict[str, list[dict[str, Any]]]:
         """离线返回给定文档，不联网。"""
         return {s: docs.get(s, []) for s in sections}
@@ -40,8 +43,8 @@ def test_company_pipeline_rejects_same_name_foreign_entity() -> None:
                  "Notion VTec Berhad 是马来西亚上市公司。"),
         ]
     }
-    node = make_company_pipeline_node(s, _offline(docs))
-    out = asyncio.run(node({"company": "Notion", "round_no": 0}))
+    graph = build_company_subgraph(s, _offline(docs))
+    out = asyncio.run(graph.ainvoke({"company": "Notion", "round_no": 0}))
     para = out["company_paragraph"]
     assert "https://e.org/real" in para["references"]
     assert "https://e.org/fake" not in para["references"], "异实体应被挡掉"

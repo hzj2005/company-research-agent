@@ -49,7 +49,8 @@ def test_each_agent_subgraph_is_compiled() -> None:
     for section, subgraph in agents.items():
         assert isinstance(subgraph, CompiledStateGraph), f"{section} 必须是编译子图"
         nodes = set(subgraph.get_graph().nodes.keys())
-        assert f"{section}_pipeline" in nodes
+        # R7：各栏目自己编排，不再统一叫 `{section}_pipeline`；只要求有检索入口
+        assert "retrieve" in nodes or f"{section}_pipeline" in nodes, f"{section} 无检索入口"
 
 
 def test_orchestrator_is_a_real_node() -> None:

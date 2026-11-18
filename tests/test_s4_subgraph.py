@@ -90,7 +90,11 @@ def test_degrade_switch_removed_from_config() -> None:
 
 
 def test_four_agent_subgraphs_are_independently_compiled() -> None:
-    """四张子图各自编译、各自独立（架构真实性）。"""
+    """四张子图各自编译、各自独立（架构真实性）。
+
+    R7 起各栏目自己编排节点，所以断言的是「每张子图都有自己的检索入口」而不是
+    统一命名的单节点；company 已改成六节点带自环，额外断言它的拓扑。
+    """
     from langgraph.graph.state import CompiledStateGraph
 
     s = get_settings()
@@ -98,7 +102,17 @@ def test_four_agent_subgraphs_are_independently_compiled() -> None:
     assert set(agents) == set(s.graph.sections)
     for section, sub in agents.items():
         assert isinstance(sub, CompiledStateGraph)
-        assert f"{section}_pipeline" in set(sub.get_graph().nodes.keys())
+        names = set(sub.get_graph().nodes.keys())
+        assert "retrieve" in names or f"{section}_pipeline" in names, f"{section} 无检索入口"
+    assert len({id(sub) for sub in agents.values()}) == 4, "四张子图必须是不同实例"
+
+    company_nodes = set(agents["company"].get_graph().nodes.keys())
+    assert {"retrieve", "guard", "extract", "judge", "conflict", "write"} <= company_nodes
+    cycles = [
+        e for e in agents["company"].get_graph().edges
+        if getattr(e, "conditional", False)
+    ]
+    assert cycles, "company 子图必须保留「判定不足」的条件边"
 
 
 def test_send_branches_overlap_in_time() -> None:

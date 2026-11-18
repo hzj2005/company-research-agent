@@ -1,21 +1,16 @@
-"""Company Agent 的 nodes（四件套之一，R3）。
+"""Company Agent 的栏目专属实现。
 
-栏目任务流：pipeline(检索→消歧→extract→判定→返工→写段落)。
-Company 特有：实体消歧（do_guard=True）。
-extract 用本栏目 prompt + 共享三级降级链（graph/agents/extract.py）。
+R7 起节点编排写在 `graph.py`（每个栏目自己决定流程），本文件只保留
+Company 自己的抽取实现：本栏目 prompt + 共享三级降级链。
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from langchain_core.tools import StructuredTool
-
 from config.loader import Settings
-from graph.agents.company.analyzer import detect_same_round_conflicts
 from graph.agents.company.prompts import COMPANY_ADDENDUM
 from graph.agents.extract import extract_with_fallback
-from graph.agents.pipeline import make_pipeline_node
 
 
 async def company_extract(
@@ -24,11 +19,4 @@ async def company_extract(
     """Company extract：本栏目 prompt + 共享三级降级链。"""
     return await extract_with_fallback(
         company, section, docs, settings, addendum=COMPANY_ADDENDUM
-    )
-
-
-def make_company_pipeline_node(settings: Settings, document_tool: StructuredTool) -> Any:
-    return make_pipeline_node(
-        settings, "company", document_tool, company_extract,
-        do_guard=True, analyzer=detect_same_round_conflicts,
     )

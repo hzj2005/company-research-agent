@@ -17,7 +17,7 @@ from typing import Any
 from langchain_core.tools import tool
 
 from config.loader import get_settings
-from graph.agents.company.nodes import make_company_pipeline_node
+from graph.agents.company.graph import build_company_subgraph
 from graph.nodes.assemble import assemble_report
 
 
@@ -35,13 +35,17 @@ def _pipeline_output(n: int) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     s = get_settings()
 
     @tool
-    async def fetch(company: str, sections: list[str], round_no: int) -> dict[str, list[dict[str, Any]]]:
+    async def fetch(
+        company: str,
+        sections: list[str],
+        round_no: int,
+        queries: list[str] | None = None,
+    ) -> dict[str, list[dict[str, Any]]]:
         """返回构造的多篇文档。"""
         return _many_docs(n)
 
-    out = asyncio.run(
-        make_company_pipeline_node(s, fetch)({"company": "X", "round_no": 0})
-    )
+    graph = build_company_subgraph(s, fetch)
+    out = asyncio.run(graph.ainvoke({"company": "X", "round_no": 0}))
     return out["company_paragraph"], out["review_notes"]
 
 

@@ -1,6 +1,7 @@
-"""Company Agent 独立状态（重建版 R1/R2）。
+"""Company Agent 独立状态（重建版 R1/R2，R7 改为继承共用工作态）。
 
-每栏目一套独立 state schema（D4），不共用 ResearchSubgraphState。
+每栏目一套独立 state schema（D4）。`SectionWorkState` 只是**共用中间态字段**，
+不是共用流程——节点顺序仍由本栏目 graph.py 自己决定。
 输出字段必须是父图 State 的同名子集、带同名 reducer，编译时才能作为父图节点。
 """
 
@@ -8,7 +9,8 @@ from __future__ import annotations
 
 from typing import Annotated, Any, TypedDict
 
-from graph.state import append_notes, append_unique, merge_docs, merge_mapping, replace_mapping
+from graph.agents.work_state import SectionWorkState
+from graph.state import append_notes, append_unique, merge_mapping, replace_mapping
 
 
 class CompanyAgentInput(TypedDict, total=False):
@@ -16,10 +18,7 @@ class CompanyAgentInput(TypedDict, total=False):
     round_no: int
 
 
-class CompanyAgentState(TypedDict, total=False):
-    company: str
-    round_no: int
-    active_section: str
+class CompanyAgentState(SectionWorkState, total=False):
     company_paragraph: Annotated[dict[str, Any], replace_mapping]
     degraded_sections: Annotated[list[str], append_unique]
     retry_count: Annotated[dict[str, int], merge_mapping]
