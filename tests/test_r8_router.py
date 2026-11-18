@@ -173,6 +173,8 @@ def test_llm_missing_company_is_recovered_from_message() -> None:
 
 
 def test_llm_says_company_missing_but_message_has_one() -> None:
+    """模型误判「缺公司」，但公司名和范围都能从话里抽出来 → 不该再追问。"""
+
     async def fake(_message: str, _company: str, _settings: Any) -> RouteDecision:
         return RouteDecision(
             company=None, sections=[], need_clarify=True,
@@ -183,7 +185,8 @@ def test_llm_says_company_missing_but_message_has_one() -> None:
     out = _run(node, {"company": "", "user_message": "特斯拉最近有什么新闻"})
 
     assert out["company"] == "特斯拉"
-    assert out["clarify"]["kind"] == "scope", "能猜出公司就不该再问公司"
+    assert out["clarify"] == {}, "公司能抽出来、栏目也能判出来，就该直接跑"
+    assert out["requested_sections"] == ["news"]
 
 
 # ---------- 接线：图里真的跑了这个节点，且派发未被改动 ----------

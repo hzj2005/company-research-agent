@@ -1,0 +1,18 @@
+[
+  {"message": "Notion 的财务数据", "company_hint": "", "expect_company": "Notion", "expect_sections": ["financial"], "expect_clarify": null, "note": "单词+栏目"},
+  {"message": "帮我查查特斯拉最近的新闻和财报", "company_hint": "", "expect_company": "特斯拉", "expect_sections": ["financial", "news"], "expect_clarify": null, "note": "中文公司名+双栏目"},
+  {"message": "看看字节跳动的竞品", "company_hint": "", "expect_company": "字节跳动", "expect_sections": ["industry"], "expect_clarify": null, "note": "中文名+竞品"},
+  {"message": "OpenAI 是做什么的", "company_hint": "", "expect_company": "OpenAI", "expect_sections": ["company"], "expect_clarify": null, "note": "公司介绍"},
+  {"message": "全面调研 Stripe", "company_hint": "", "expect_company": "Stripe", "expect_sections": ["company", "industry", "financial", "news"], "expect_clarify": null, "note": "全都要"},
+  {"message": "Notion 的融资、竞品、新闻都要", "company_hint": "", "expect_company": "Notion", "expect_sections": ["industry", "financial", "news"], "expect_clarify": null, "note": "三栏目"},
+  {"message": "帮我查一下 Notion", "company_hint": "", "expect_company": "Notion", "expect_sections": [], "expect_clarify": "scope", "note": "只给公司→追问范围"},
+  {"message": "帮我查一下那家公司", "company_hint": "", "expect_company": null, "expect_sections": [], "expect_clarify": "company", "note": "指代→追问公司"},
+  {"message": "不要新闻，看看 Figma 的财务和行业", "company_hint": "", "expect_company": "Figma", "expect_sections": ["industry", "financial"], "expect_clarify": null, "note": "否定排除"},
+  {"message": "Figma 最近有什么动态", "company_hint": "", "expect_company": "Figma", "expect_sections": ["news"], "expect_clarify": null, "note": "新闻同义词"},
+  {"message": "英伟达的营收情况", "company_hint": "", "expect_company": "英伟达", "expect_sections": ["financial"], "expect_clarify": null, "note": "中文名+营收"},
+  {"message": "Slack 的竞品有哪些", "company_hint": "", "expect_company": "Slack", "expect_sections": ["industry"], "expect_clarify": null, "note": "竞品句式"},
+  {"message": "那新闻呢", "company_hint": "Notion", "expect_company": "Notion", "expect_sections": ["news"], "expect_clarify": null, "note": "多轮继承公司"},
+  {"message": "那财务呢", "company_hint": "Notion", "expect_company": "Notion", "expect_sections": ["financial"], "expect_clarify": null, "note": "多轮换范围"},
+  {"message": "全都要", "company_hint": "Figma", "expect_company": "Figma", "expect_sections": ["company", "industry", "financial", "news"], "expect_clarify": null, "note": "补全其余栏目"},
+  {"message": "我们最近要看什么", "company_hint": "", "expect_company": null, "expect_sections": [], "expect_clarify": "company", "note": "疑问词不是公司名"}
+]

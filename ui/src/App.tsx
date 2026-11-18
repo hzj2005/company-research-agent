@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Header, ResearchStatus, ResearchReport, ResearchForm, ReviewPanel, HistoryPanel } from "./components";
+import { Header, ResearchStatus, ResearchReport, ResearchForm, ReviewPanel, HistoryPanel, ChatPanel } from "./components";
 import type { ResearchStatusType, ServerInfo, ReviewPayload, HistoryEntry } from "./types";
 import { glassStyle } from "./styles";
 
@@ -26,6 +26,8 @@ const NODE_LABELS: Record<string, string> = {
 };
 
 function App() {
+  // R8：对话是默认入口；「完整报告」保留原来的表单 + 历史 + 人工复核流程
+  const [view, setView] = useState<"chat" | "form">("chat");
   const [company, setCompany] = useState("");
   const [isResearching, setIsResearching] = useState(false);
   const [status, setStatus] = useState<ResearchStatusType | null>(null);
@@ -326,41 +328,67 @@ function App() {
           </div>
         )}
 
-        <ResearchForm
-          onSubmit={handleSubmit}
-          isResearching={isResearching || isLoadingHistory}
-          blocked={blocked}
-        />
+        <div className="flex w-fit gap-1 rounded-full bg-white/60 p-1 ring-1 ring-slate-200/70">
+          {([
+            { key: "chat", label: "对话调研" },
+            { key: "form", label: "完整报告" },
+          ] as const).map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setView(tab.key)}
+              className={`rounded-full px-4 py-1.5 text-sm transition ${
+                view === tab.key
+                  ? "bg-[#2677FF] text-white"
+                  : "text-slate-600 hover:bg-white/70"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
 
-        {historyCompany && (isLoadingHistory || historyEntries.length > 0) && (
-          <HistoryPanel
-            company={historyCompany}
-            entries={historyEntries}
-            isLoading={isLoadingHistory}
-            onRefresh={handleLiveRefresh}
-            isRefreshing={isRefreshingLive || isResearching}
-          />
-        )}
+        {view === "chat" ? (
+          <ChatPanel blocked={blocked} />
+        ) : (
+          <>
+            <ResearchForm
+              onSubmit={handleSubmit}
+              isResearching={isResearching || isLoadingHistory}
+              blocked={blocked}
+            />
 
-        <ResearchStatus status={status} error={error} isComplete={isComplete} />
+            {historyCompany && (isLoadingHistory || historyEntries.length > 0) && (
+              <HistoryPanel
+                company={historyCompany}
+                entries={historyEntries}
+                isLoading={isLoadingHistory}
+                onRefresh={handleLiveRefresh}
+                isRefreshing={isRefreshingLive || isResearching}
+              />
+            )}
 
-        {reviewPayload && (
-          <ReviewPanel
-            payload={reviewPayload}
-            isSubmitting={isSubmittingReview}
-            onSubmit={handleReviewSubmit}
-          />
-        )}
+            <ResearchStatus status={status} error={error} isComplete={isComplete} />
 
-        {report && (
-          <ResearchReport
-            report={report}
-            companyName={company}
-            isGeneratingPdf={isGeneratingPdf}
-            isCopied={isCopied}
-            onCopyToClipboard={handleCopy}
-            onGeneratePdf={handleGeneratePdf}
-          />
+            {reviewPayload && (
+              <ReviewPanel
+                payload={reviewPayload}
+                isSubmitting={isSubmittingReview}
+                onSubmit={handleReviewSubmit}
+              />
+            )}
+
+            {report && (
+              <ResearchReport
+                report={report}
+                companyName={company}
+                isGeneratingPdf={isGeneratingPdf}
+                isCopied={isCopied}
+                onCopyToClipboard={handleCopy}
+                onGeneratePdf={handleGeneratePdf}
+              />
+            )}
+          </>
         )}
       </div>
     </div>

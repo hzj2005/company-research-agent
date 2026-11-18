@@ -1,0 +1,708 @@
+{
+  "rules": {
+    "mode": "rules",
+    "total": 16,
+    "passed": 16,
+    "accuracy": 1.0,
+    "failed_messages": [],
+    "cases": [
+      {
+        "message": "Notion 的财务数据",
+        "note": "单词+栏目",
+        "passed": true,
+        "expected": {
+          "company": "Notion",
+          "sections": [
+            "financial"
+          ],
+          "clarify": null
+        },
+        "got": {
+          "company": "Notion",
+          "sections": [
+            "financial"
+          ],
+          "clarify": null,
+          "source": "rules"
+        },
+        "failures": []
+      },
+      {
+        "message": "帮我查查特斯拉最近的新闻和财报",
+        "note": "中文公司名+双栏目",
+        "passed": true,
+        "expected": {
+          "company": "特斯拉",
+          "sections": [
+            "financial",
+            "news"
+          ],
+          "clarify": null
+        },
+        "got": {
+          "company": "特斯拉",
+          "sections": [
+            "financial",
+            "news"
+          ],
+          "clarify": null,
+          "source": "rules"
+        },
+        "failures": []
+      },
+      {
+        "message": "看看字节跳动的竞品",
+        "note": "中文名+竞品",
+        "passed": true,
+        "expected": {
+          "company": "字节跳动",
+          "sections": [
+            "industry"
+          ],
+          "clarify": null
+        },
+        "got": {
+          "company": "字节跳动",
+          "sections": [
+            "industry"
+          ],
+          "clarify": null,
+          "source": "rules"
+        },
+        "failures": []
+      },
+      {
+        "message": "OpenAI 是做什么的",
+        "note": "公司介绍",
+        "passed": true,
+        "expected": {
+          "company": "OpenAI",
+          "sections": [
+            "company"
+          ],
+          "clarify": null
+        },
+        "got": {
+          "company": "OpenAI",
+          "sections": [
+            "company"
+          ],
+          "clarify": null,
+          "source": "rules"
+        },
+        "failures": []
+      },
+      {
+        "message": "全面调研 Stripe",
+        "note": "全都要",
+        "passed": true,
+        "expected": {
+          "company": "Stripe",
+          "sections": [
+            "company",
+            "industry",
+            "financial",
+            "news"
+          ],
+          "clarify": null
+        },
+        "got": {
+          "company": "Stripe",
+          "sections": [
+            "company",
+            "industry",
+            "financial",
+            "news"
+          ],
+          "clarify": null,
+          "source": "rules"
+        },
+        "failures": []
+      },
+      {
+        "message": "Notion 的融资、竞品、新闻都要",
+        "note": "三栏目",
+        "passed": true,
+        "expected": {
+          "company": "Notion",
+          "sections": [
+            "industry",
+            "financial",
+            "news"
+          ],
+          "clarify": null
+        },
+        "got": {
+          "company": "Notion",
+          "sections": [
+            "industry",
+            "financial",
+            "news"
+          ],
+          "clarify": null,
+          "source": "rules"
+        },
+        "failures": []
+      },
+      {
+        "message": "帮我查一下 Notion",
+        "note": "只给公司→追问范围",
+        "passed": true,
+        "expected": {
+          "company": "Notion",
+          "sections": [],
+          "clarify": "scope"
+        },
+        "got": {
+          "company": "Notion",
+          "sections": [],
+          "clarify": "scope",
+          "source": "rules"
+        },
+        "failures": []
+      },
+      {
+        "message": "帮我查一下那家公司",
+        "note": "指代→追问公司",
+        "passed": true,
+        "expected": {
+          "company": null,
+          "sections": [],
+          "clarify": "company"
+        },
+        "got": {
+          "company": "",
+          "sections": [],
+          "clarify": "company",
+          "source": "rules"
+        },
+        "failures": []
+      },
+      {
+        "message": "不要新闻，看看 Figma 的财务和行业",
+        "note": "否定排除",
+        "passed": true,
+        "expected": {
+          "company": "Figma",
+          "sections": [
+            "industry",
+            "financial"
+          ],
+          "clarify": null
+        },
+        "got": {
+          "company": "Figma",
+          "sections": [
+            "industry",
+            "financial"
+          ],
+          "clarify": null,
+          "source": "rules"
+        },
+        "failures": []
+      },
+      {
+        "message": "Figma 最近有什么动态",
+        "note": "新闻同义词",
+        "passed": true,
+        "expected": {
+          "company": "Figma",
+          "sections": [
+            "news"
+          ],
+          "clarify": null
+        },
+        "got": {
+          "company": "Figma",
+          "sections": [
+            "news"
+          ],
+          "clarify": null,
+          "source": "rules"
+        },
+        "failures": []
+      },
+      {
+        "message": "英伟达的营收情况",
+        "note": "中文名+营收",
+        "passed": true,
+        "expected": {
+          "company": "英伟达",
+          "sections": [
+            "financial"
+          ],
+          "clarify": null
+        },
+        "got": {
+          "company": "英伟达",
+          "sections": [
+            "financial"
+          ],
+          "clarify": null,
+          "source": "rules"
+        },
+        "failures": []
+      },
+      {
+        "message": "Slack 的竞品有哪些",
+        "note": "竞品句式",
+        "passed": true,
+        "expected": {
+          "company": "Slack",
+          "sections": [
+            "industry"
+          ],
+          "clarify": null
+        },
+        "got": {
+          "company": "Slack",
+          "sections": [
+            "industry"
+          ],
+          "clarify": null,
+          "source": "rules"
+        },
+        "failures": []
+      },
+      {
+        "message": "那新闻呢",
+        "note": "多轮继承公司",
+        "passed": true,
+        "expected": {
+          "company": "Notion",
+          "sections": [
+            "news"
+          ],
+          "clarify": null
+        },
+        "got": {
+          "company": "Notion",
+          "sections": [
+            "news"
+          ],
+          "clarify": null,
+          "source": "rules"
+        },
+        "failures": []
+      },
+      {
+        "message": "那财务呢",
+        "note": "多轮换范围",
+        "passed": true,
+        "expected": {
+          "company": "Notion",
+          "sections": [
+            "financial"
+          ],
+          "clarify": null
+        },
+        "got": {
+          "company": "Notion",
+          "sections": [
+            "financial"
+          ],
+          "clarify": null,
+          "source": "rules"
+        },
+        "failures": []
+      },
+      {
+        "message": "全都要",
+        "note": "补全其余栏目",
+        "passed": true,
+        "expected": {
+          "company": "Figma",
+          "sections": [
+            "company",
+            "industry",
+            "financial",
+            "news"
+          ],
+          "clarify": null
+        },
+        "got": {
+          "company": "Figma",
+          "sections": [
+            "company",
+            "industry",
+            "financial",
+            "news"
+          ],
+          "clarify": null,
+          "source": "rules"
+        },
+        "failures": []
+      },
+      {
+        "message": "我们最近要看什么",
+        "note": "疑问词不是公司名",
+        "passed": true,
+        "expected": {
+          "company": null,
+          "sections": [],
+          "clarify": "company"
+        },
+        "got": {
+          "company": "",
+          "sections": [],
+          "clarify": "company",
+          "source": "rules"
+        },
+        "failures": []
+      }
+    ]
+  },
+  "llm": {
+    "mode": "live",
+    "total": 16,
+    "passed": 16,
+    "accuracy": 1.0,
+    "failed_messages": [],
+    "cases": [
+      {
+        "message": "Notion 的财务数据",
+        "note": "单词+栏目",
+        "passed": true,
+        "expected": {
+          "company": "Notion",
+          "sections": [
+            "financial"
+          ],
+          "clarify": null
+        },
+        "got": {
+          "company": "Notion",
+          "sections": [
+            "financial"
+          ],
+          "clarify": null,
+          "source": "llm"
+        },
+        "failures": []
+      },
+      {
+        "message": "帮我查查特斯拉最近的新闻和财报",
+        "note": "中文公司名+双栏目",
+        "passed": true,
+        "expected": {
+          "company": "特斯拉",
+          "sections": [
+            "financial",
+            "news"
+          ],
+          "clarify": null
+        },
+        "got": {
+          "company": "特斯拉",
+          "sections": [
+            "financial",
+            "news"
+          ],
+          "clarify": null,
+          "source": "llm"
+        },
+        "failures": []
+      },
+      {
+        "message": "看看字节跳动的竞品",
+        "note": "中文名+竞品",
+        "passed": true,
+        "expected": {
+          "company": "字节跳动",
+          "sections": [
+            "industry"
+          ],
+          "clarify": null
+        },
+        "got": {
+          "company": "字节跳动",
+          "sections": [
+            "industry"
+          ],
+          "clarify": null,
+          "source": "llm"
+        },
+        "failures": []
+      },
+      {
+        "message": "OpenAI 是做什么的",
+        "note": "公司介绍",
+        "passed": true,
+        "expected": {
+          "company": "OpenAI",
+          "sections": [
+            "company"
+          ],
+          "clarify": null
+        },
+        "got": {
+          "company": "OpenAI",
+          "sections": [
+            "company"
+          ],
+          "clarify": null,
+          "source": "llm"
+        },
+        "failures": []
+      },
+      {
+        "message": "全面调研 Stripe",
+        "note": "全都要",
+        "passed": true,
+        "expected": {
+          "company": "Stripe",
+          "sections": [
+            "company",
+            "industry",
+            "financial",
+            "news"
+          ],
+          "clarify": null
+        },
+        "got": {
+          "company": "Stripe",
+          "sections": [
+            "company",
+            "industry",
+            "financial",
+            "news"
+          ],
+          "clarify": null,
+          "source": "llm"
+        },
+        "failures": []
+      },
+      {
+        "message": "Notion 的融资、竞品、新闻都要",
+        "note": "三栏目",
+        "passed": true,
+        "expected": {
+          "company": "Notion",
+          "sections": [
+            "industry",
+            "financial",
+            "news"
+          ],
+          "clarify": null
+        },
+        "got": {
+          "company": "Notion",
+          "sections": [
+            "industry",
+            "financial",
+            "news"
+          ],
+          "clarify": null,
+          "source": "llm"
+        },
+        "failures": []
+      },
+      {
+        "message": "帮我查一下 Notion",
+        "note": "只给公司→追问范围",
+        "passed": true,
+        "expected": {
+          "company": "Notion",
+          "sections": [],
+          "clarify": "scope"
+        },
+        "got": {
+          "company": "Notion",
+          "sections": [],
+          "clarify": "scope",
+          "source": "llm"
+        },
+        "failures": []
+      },
+      {
+        "message": "帮我查一下那家公司",
+        "note": "指代→追问公司",
+        "passed": true,
+        "expected": {
+          "company": null,
+          "sections": [],
+          "clarify": "company"
+        },
+        "got": {
+          "company": "",
+          "sections": [],
+          "clarify": "company",
+          "source": "llm"
+        },
+        "failures": []
+      },
+      {
+        "message": "不要新闻，看看 Figma 的财务和行业",
+        "note": "否定排除",
+        "passed": true,
+        "expected": {
+          "company": "Figma",
+          "sections": [
+            "industry",
+            "financial"
+          ],
+          "clarify": null
+        },
+        "got": {
+          "company": "Figma",
+          "sections": [
+            "industry",
+            "financial"
+          ],
+          "clarify": null,
+          "source": "llm"
+        },
+        "failures": []
+      },
+      {
+        "message": "Figma 最近有什么动态",
+        "note": "新闻同义词",
+        "passed": true,
+        "expected": {
+          "company": "Figma",
+          "sections": [
+            "news"
+          ],
+          "clarify": null
+        },
+        "got": {
+          "company": "Figma",
+          "sections": [
+            "news"
+          ],
+          "clarify": null,
+          "source": "llm"
+        },
+        "failures": []
+      },
+      {
+        "message": "英伟达的营收情况",
+        "note": "中文名+营收",
+        "passed": true,
+        "expected": {
+          "company": "英伟达",
+          "sections": [
+            "financial"
+          ],
+          "clarify": null
+        },
+        "got": {
+          "company": "英伟达",
+          "sections": [
+            "financial"
+          ],
+          "clarify": null,
+          "source": "llm"
+        },
+        "failures": []
+      },
+      {
+        "message": "Slack 的竞品有哪些",
+        "note": "竞品句式",
+        "passed": true,
+        "expected": {
+          "company": "Slack",
+          "sections": [
+            "industry"
+          ],
+          "clarify": null
+        },
+        "got": {
+          "company": "Slack",
+          "sections": [
+            "industry"
+          ],
+          "clarify": null,
+          "source": "llm"
+        },
+        "failures": []
+      },
+      {
+        "message": "那新闻呢",
+        "note": "多轮继承公司",
+        "passed": true,
+        "expected": {
+          "company": "Notion",
+          "sections": [
+            "news"
+          ],
+          "clarify": null
+        },
+        "got": {
+          "company": "Notion",
+          "sections": [
+            "news"
+          ],
+          "clarify": null,
+          "source": "llm"
+        },
+        "failures": []
+      },
+      {
+        "message": "那财务呢",
+        "note": "多轮换范围",
+        "passed": true,
+        "expected": {
+          "company": "Notion",
+          "sections": [
+            "financial"
+          ],
+          "clarify": null
+        },
+        "got": {
+          "company": "Notion",
+          "sections": [
+            "financial"
+          ],
+          "clarify": null,
+          "source": "llm"
+        },
+        "failures": []
+      },
+      {
+        "message": "全都要",
+        "note": "补全其余栏目",
+        "passed": true,
+        "expected": {
+          "company": "Figma",
+          "sections": [
+            "company",
+            "industry",
+            "financial",
+            "news"
+          ],
+          "clarify": null
+        },
+        "got": {
+          "company": "Figma",
+          "sections": [
+            "company",
+            "industry",
+            "financial",
+            "news"
+          ],
+          "clarify": null,
+          "source": "llm"
+        },
+        "failures": []
+      },
+      {
+        "message": "我们最近要看什么",
+        "note": "疑问词不是公司名",
+        "passed": true,
+        "expected": {
+          "company": null,
+          "sections": [],
+          "clarify": "company"
+        },
+        "got": {
+          "company": "",
+          "sections": [],
+          "clarify": "company",
+          "source": "llm"
+        },
+        "failures": []
+      }
+    ]
+  }
+}

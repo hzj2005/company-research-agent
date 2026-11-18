@@ -5,3 +5,4 @@ export { default as ResearchForm } from './ResearchForm';
 export { default as ExampleChips } from './ExampleChips';
 export { default as ReviewPanel } from './ReviewPanel';
 export { default as HistoryPanel } from './HistoryPanel';
+export { default as ChatPanel } from './ChatPanel';

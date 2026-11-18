@@ -73,7 +73,7 @@ _LATIN_NAME = re.compile(r"[A-Za-z][A-Za-z0-9&.\-]*(?:\s+[A-Za-z][A-Za-z0-9&.\-]
 #   ② 「X 的财报/新闻/行业…」——动词全省略（"只看特斯拉的财报" 走①，"特斯拉的财报" 走②）
 _CN_PATTERNS = (
     re.compile(
-        r"(?:查|了解|看看|看|调研|研究|分析|搜|关注)\s*(?:一下|下)?\s*"
+        r"(?:查查|查一下|查|了解|看看|看|调研|研究|分析|搜|关注)\s*(?:一下|下)?\s*"
         r"([\u4e00-\u9fa5A-Za-z0-9]{2,20}?)(?:的|最近|近期|公司|$)"
     ),
     re.compile(
@@ -129,7 +129,9 @@ def rule_sections(message: str) -> tuple[list[str], list[str], bool]:
         else:
             picked.append(section)
     if wants_all:
-        picked = [s for s in SECTION_ORDER if s not in excluded]
+        # 「融资、竞品、新闻都要」= 点名的那几块全要，不是四栏全要；
+        # 只有没点名任何栏目时（「全都要」「全面调研」）才展开成四栏。
+        picked = picked or [s for s in SECTION_ORDER if s not in excluded]
     elif not picked and excluded:
         # 只说「不要新闻」= 其余三栏
         picked = [s for s in SECTION_ORDER if s not in excluded]
@@ -217,14 +219,18 @@ _SYSTEM = """你在判断用户想调研什么。只输出结构化结果，不�
 - news      新闻动态：近期发布、合作、收购、人事、公告
 
 判定规则：
-1. 用户明确点名了哪几块，就只选那几块；可以多选。
-2. 用户说「全部/全面/完整调研」→ 四栏全选。
-3. 用户明确排除某块（「不要新闻」）→ 选其余栏目。
-4. 只给了公司、没给任何范围 → need_clarify=true，clarify_kind=scope，
-   question 用一句话问「想看哪几块」，不要自己替用户决定。
-5. 完全没给公司名（「帮我查一下那家公司」）→ need_clarify=true，clarify_kind=company。
-6. 不要编造公司名；已知公司为「{known_company}」时优先用它。
-7. 拿不准就追问，不要猜。"""
+0. 已知公司 = 「{known_company}」。只要它不是「（用户未提供）」，就把它当作公司主体，
+   不要因为这句话里没重复公司名就追问公司（多轮对话里用户常用「那新闻呢」）。
+1. 句子里出现任何栏目线索就选上对应 key，哪怕只有几个字：
+   「那新闻呢」→ news；「那财务呢」→ financial。
+2. 用户明确点名了哪几块，就只选那几块；可以多选。
+3. 用户说「全部/全面/完整调研」→ 四栏全选；若同时点名了栏目（如「融资和新闻都要」），
+   只选点名的那几栏。
+4. 用户明确排除某块（「不要新闻」）→ 选其余栏目。
+5. 既没有已知公司、句子里也判不出公司 → need_clarify=true，clarify_kind=company。
+6. 公司已知但**完全没有**栏目线索（如「帮我查一下 Notion」）→ need_clarify=true，
+   clarify_kind=scope，question 用一句话问「想看哪几块」，不要替用户决定。
+7. 不要编造公司名。拿不准就追问，不要猜。"""
 
 
 async def llm_route_message(
@@ -249,7 +255,7 @@ async def llm_route_message(
 
 
 def make_router_node(
-    settings: Settings, *, llm_route: RouteFn | None = None
+    settings: Settings, *, llm_route: RouteFn | None = None, force_rules: bool = False
 ) -> Any:
     """路由节点工厂。
 
@@ -301,7 +307,11 @@ def make_router_node(
         decision: RouteDecision | None = None
         source = "rules"
 
-        active = llm_route or (llm_route_message if settings.app.mode == "live" else None)
+        active = (
+            None
+            if force_rules
+            else (llm_route or (llm_route_message if settings.app.mode == "live" else None))
+        )
         if active is not None:
             try:
                 decision = await active(message, company_hint, settings)
@@ -328,10 +338,29 @@ def make_router_node(
         company = (
             company_hint or (decision.company or "") or guess_company(message)
         ).strip()
+        # 确定性兜底：模型偶尔漏掉明显的栏目线索（实测「那新闻呢」回了空集合）。
+        # 只有主体明确时才兜——连公司都没有的话，补出栏目也不能开跑，仍应追问公司。
+        if not sections and company:
+            picked, _excluded, _all = rule_sections(message)
+            if picked:
+                sections = picked
 
         need_clarify = bool(decision.need_clarify)
         clarify_kind = decision.clarify_kind
         question = (decision.question or "").strip()
+
+        # 公司已知 + 栏目也判出来了 = 该有的信息都有，不该再追问。
+        # （多轮场景实测：会话已带公司名，模型仍会因为「那新闻呢」这句话里没有
+        #   公司而要求澄清——那是多余的。）
+        if company and sections:
+            need_clarify = False
+            clarify_kind = None
+            question = ""
+
+        # 确实要追问，就说明这轮不跑任何子图 —— 栏目集合清空，避免
+        # 「既要追问又带着半截范围」的状态被下游误用。
+        if need_clarify:
+            sections = []
 
         # 模型说「缺公司」但其实能猜出来 → 降级成「缺范围」，把公司写进追问
         if need_clarify and clarify_kind == "company" and company:
@@ -389,6 +418,7 @@ async def decide_route(
     settings: Settings | None = None,
     *,
     llm_route: RouteFn | None = None,
+    force_rules: bool = False,
 ) -> dict[str, Any]:
     """给 API 层用的扁平判定入口（`/chat` 先判、再决定要不要建任务）。
 
@@ -400,7 +430,7 @@ async def decide_route(
 
         settings = get_settings()
 
-    node = make_router_node(settings, llm_route=llm_route)
+    node = make_router_node(settings, llm_route=llm_route, force_rules=force_rules)
     out = await node({"company": company_hint, "user_message": message})
     meta = out.get("route_meta") or {}
     clarify = out.get("clarify") or {}
