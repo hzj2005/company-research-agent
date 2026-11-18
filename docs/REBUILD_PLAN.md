@@ -1,6 +1,6 @@
 # 重建规划书：Orchestrator 管理的四独立 Agent 子图
 
-> 状态：**R0–R6 全部完成**。上一版 V2 已存档于 GitHub tag `v2-archive-before-rebuild`（commit `0c8d4a0`），随时可回退。
+> 状态：**R0–R7 全部完成**。上一版 V2 已存档于 GitHub tag `v2-archive-before-rebuild`（commit `0c8d4a0`），随时可回退。
 > 本版与上一版的核心区别：**架构真实优先 + 栏目内真实 LLM 抽取**。
 > 规划过程中用户已就 5 个关键决策表态，见 §1。
 
@@ -84,6 +84,7 @@ research 节点 = Orchestrator 子图（本次真正的编排层）
 | R4 ✅ 完成 | **四栏目差异化节点**：复用 capabilities 能力下沉进各子图，产出结构化 `analysis`（段落字段）+ `conflicts`（报告渲染）。R4-1 Company 冲突标注（同轮判）/ R4-2 News 时效+事件去重 / R4-3 Financial 时间线+数字保真 / R4-4 Industry 竞品+槽位+矩阵。 | **567 passed**；评测 gate PASS 全指标 1.0；端到端四栏目 analysis 均产出。**渲染策略（用户 2026-11-18 确认）：`analysis` 在 `features.postprocess=true` 时渲染为引用块（融资时间线/竞品识别/事件聚合/时效提示），默认 false 保持报告不变；实测开启仅新增 `>` 行，事实 bullet 与 References 逐字不变、基线零漂移**。附带修复 3 处"英文正则 vs 中文 claim"不匹配与 facts 按 URL 去重丢多事实的 bug。 |
 | R5 ✅ 完成 | 评测回归：报告文本契约、gate、A/B | 567 passed；gate PASS 全指标 1.0；A/B 真实：`no_inline_citations` citation −1.0、`self_correction_off` fact −0.097，其余如实标 no_effect |
 | R6 ✅ 完成 | 文档：本规划标记完成、架构图更新；**不动简历** | 架构小节已对齐实际实现；R0–R6 状态逐条更新 |
+| R7 ✅ 完成 | **拆同构**：R3 为消除重复代码把四个子图压成同一个 228 行 pipeline，导致四张图拓扑完全相同、只差 prompt。R7 把「原语」与「编排」拆开：primitives.py 提供共用节点工厂，流程由各栏目自己的 graph.py 决定 | 四栏目拓扑实测不同：company 6 节点（+conflict）/ financial 8 节点（+bind_subject, verify_amount）/ news 7 节点（+filter_entity 语义判定）/ industry 9 节点（+两轮检索 scan→fetch→extract2）。592 passed，gate PASS 全指标 1.0 |
 
 ### R4 细化（用户 2026-11-18 确认）
 

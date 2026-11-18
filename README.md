@@ -40,7 +40,7 @@ React + Vite UI → POST /research → FastAPI application → Research graph
 
 The UI connects to the API with `VITE_API_URL` and receives incremental updates from `GET /research/{job_id}/stream`.
 
-### This fork — `graph/` (5-node main graph + four independent section subgraphs)
+### This fork — `graph/` (5-node main graph + four section subgraphs with distinct topologies)
 
 ```text
 START → grounding → [orchestrator subgraph] → briefing → END
@@ -52,14 +52,40 @@ orchestrator subgraph:  START → orchestrator ──Send──→ company   ┐
                                               ──Send──→ financial │
                                               ──Send──→ news      ┘
 
-each section subgraph (independently compiled, own state schema, self-closing):
-  retrieve → relevance filter → entity guard → extract → evidence
-        ↑_____________ retry, bounded ≤2 rounds (insufficient) ______|
-  → analyzer (conflict / timeline / competitors / events) → write_paragraph (no [n])
+each section owns its OWN topology (not one template × 4):
+  company    retrieve → guard → extract → judge → conflict → write
+  financial  retrieve → guard → bind_subject → extract → verify_amount → judge → timeline → write
+  news       retrieve → guard → filter_entity → extract → judge → freshness → write
+  industry   retrieve → guard → extract → judge → scan → fetch → extract2 → matrix → write
+  (judge sends the flow back to `retrieve` in all four; bounded by max_retry)
 ```
 
+Why they differ — each extra stage is forced by the task, not by decoration:
+
+- **company** stays linear: it reads static attributes of one entity, so one search round is
+  usually enough. Its only extra stage is same-round conflict annotation (a live run found
+  three different founded years: 2012 / 2014 / 2016, while the truth is 2013).
+- **financial** binds the subject *before* extracting: money errors look like facts, so it
+  first decides listed / not_listed / unknown and which ticker applies. Otherwise
+  `Notion VTec Berhad (0083.KL)` (a Malaysian listed company) is read as Notion's accounts.
+  `verify_amount` then checks every amount against the source text with pure rules.
+- **news** filters by **semantics, not literals**: `Notion Labs, Inc.` *is* Notion, while
+  `Notion Consulting` (bought by Sia Partners) has no listing-page fingerprint at all, so any
+  string rule either misses it or kills real hits. One batched LLM call returns
+  same / different / uncertain; `uncertain` is kept and flagged, never deleted.
+- **industry** is the only two-round section: the first query is about the target company and
+  cannot return competitors' own facts. Round two turns the scanned name list into one query
+  per competitor (`graph.competitor_fetch` gates the extra spend) and re-extracts only the new
+  documents.
+
+What is shared is the **primitives** (`graph/agents/primitives.py`: retrieve / guard / extract
+/ judge / analyze / write as node factories), not the flow. Sections can only differ in
+topology because nothing upstream decides their order.
+
 - `Send` fans out four **independently compiled** subgraphs in parallel; each owns its state
-  schema, so reducer-backed writes never overwrite each other.
+  schema, so reducer-backed writes never overwrite each other. They are also **topologically
+  different** — `tests/test_r7_topology.py` fails if anyone flattens them back into one shared
+  pipeline (that is exactly what R3 did, and it made all four workflows identical).
 - Sufficiency is judged **inside each subgraph**: when a section has fewer than
   `min_docs_per_section` facts it re-searches itself (bounded by `max_retry`, 2) and otherwise
   ends in an explicit "no public evidence found" abstention. The old main-graph retry loop is

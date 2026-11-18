@@ -4,7 +4,7 @@
   "docs/LIVE_BATCH.md": "b1fdc84",
   "docs/LIVE_REPORT.md": "b24f85c",
   "docs/UPSTREAM.md": "6e7ce22",
-  "evals/credits_ledger.json": "96184d5",
+  "evals/credits_ledger.json": "aa87f28",
   "evals/golden_live.jsonl": "2a29d71",
   "evals/golden_live_review_filled.jsonl": "3e16906",
   "evals/live_batch.json": "b1fdc84",
@@ -13,7 +13,7 @@
   "evals/live_quality.json": "b24f85c",
   "evals/live_run.json": "96184d5",
   "evals/live_score.json": "b24f85c",
-  "evals/live_score_audit.json": "9041beb",
+  "evals/live_score_audit.json": "5b2ae0d",
   "evals/live_score_batch.json": "b1fdc84",
   "evals/llm_probe.json": "53746f6",
   "evals/scorecard.json": "55f24cb"

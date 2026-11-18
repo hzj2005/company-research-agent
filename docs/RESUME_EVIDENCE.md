@@ -53,7 +53,7 @@ uv run pytest -q tests/test_s8_resume_evidence.py      # 护栏：命令、commi
 | `F18` | 因无报告而跳过的条数 | `20` | `evals/live_score.json` → `dataset.skipped_claims` | `b24f85c` | `uv run python -c 'import json; d=json.load(open("evals/live_score.json", encoding="utf-8")); print(json.dumps(d["dataset"]["skipped_claims"], ensure_ascii=False))'` |
 | `F19` | 语义 judge 请求次数 | `1` | `evals/live_score.json` → `usage.successful_requests` | `b24f85c` | `uv run python -c 'import json; d=json.load(open("evals/live_score.json", encoding="utf-8")); print(json.dumps(d["usage"]["successful_requests"], ensure_ascii=False))'` |
 | `F20` | 语义 judge token 用量 | `3435` | `evals/live_score.json` → `usage.total_tokens` | `b24f85c` | `uv run python -c 'import json; d=json.load(open("evals/live_score.json", encoding="utf-8")); print(json.dumps(d["usage"]["total_tokens"], ensure_ascii=False))'` |
-| `F21` | 审计重算差异条数 | `0` | `evals/live_score_audit.json` → `len(recheck.delta_vs_original)` | `9041beb` | `uv run python -c 'import json; d=json.load(open("evals/live_score_audit.json", encoding="utf-8")); print(json.dumps(len(d["recheck"]["delta_vs_original"]), ensure_ascii=False))'` |
+| `F21` | 审计重算差异条数 | `0` | `evals/live_score_audit.json` → `len(recheck.delta_vs_original)` | `5b2ae0d` | `uv run python -c 'import json; d=json.load(open("evals/live_score_audit.json", encoding="utf-8")); print(json.dumps(len(d["recheck"]["delta_vs_original"]), ensure_ascii=False))'` |
 | `F22` | fixture 评测组总数 | `6` | `evals/scorecard.json` → `len(summary.groups_run)` | `55f24cb` | `uv run python -c 'import json; d=json.load(open("evals/scorecard.json", encoding="utf-8")); print(json.dumps(len(d["summary"]["groups_run"]), ensure_ascii=False))'` |
 | `F27` | 评测指标项数 | `8` | `evals/scorecard.json` → `len(runs.baseline.metrics)` | `55f24cb` | `uv run python -c 'import json; d=json.load(open("evals/scorecard.json", encoding="utf-8")); print(json.dumps(len(d["runs"]["baseline"]["metrics"]), ensure_ascii=False))'` |
 | `F28` | fixture 用例数 | `3` | `evals/scorecard.json` → `runs.baseline.counts.cases` | `55f24cb` | `uv run python -c 'import json; d=json.load(open("evals/scorecard.json", encoding="utf-8")); print(json.dumps(d["runs"]["baseline"]["counts"]["cases"], ensure_ascii=False))'` |
@@ -71,7 +71,7 @@ uv run pytest -q tests/test_s8_resume_evidence.py      # 护栏：命令、commi
 
 ### 2.4 D 组｜批量真实调研（S10-B）
 
-样本：4 家公司、20 条人工核验标准答案（用户逐条复核）；额度以 `evals/credits_ledger.json` 为准，累计 90。这批数据是 S10 修复后重跑的，与 A 组的单家报告不可混算。
+样本：4 家公司、20 条人工核验标准答案（用户逐条复核）；额度以 `evals/credits_ledger.json` 为准，累计 96。这批数据是 S10 修复后重跑的，与 A 组的单家报告不可混算。
 
 | 编号 | 数字 | 值 | 出处（文件 → 字段） | commit | 复现命令 |
 |---|---|---:|---|---|---|
@@ -81,7 +81,7 @@ uv run pytest -q tests/test_s8_resume_evidence.py      # 护栏：命令、commi
 | `F35` | 判为反证的条数 | `2` | `evals/live_score_batch.json` → `aggregate.refuted` | `b1fdc84` | `uv run python -c 'import json; d=json.load(open("evals/live_score_batch.json", encoding="utf-8")); print(json.dumps(d["aggregate"]["refuted"], ensure_ascii=False))'` |
 | `F36` | 判为未提及的条数 | `10` | `evals/live_score_batch.json` → `aggregate.not_mentioned` | `b1fdc84` | `uv run python -c 'import json; d=json.load(open("evals/live_score_batch.json", encoding="utf-8")); print(json.dumps(d["aggregate"]["not_mentioned"], ensure_ascii=False))'` |
 | `F37` | 引文校验失败条数 | `0` | `evals/live_score_batch.json` → `aggregate.quote_check_failed` | `b1fdc84` | `uv run python -c 'import json; d=json.load(open("evals/live_score_batch.json", encoding="utf-8")); print(json.dumps(d["aggregate"]["quote_check_failed"], ensure_ascii=False))'` |
-| `F38` | Tavily credits 累计 | `90` | `evals/credits_ledger.json` → `total_credits` | `96184d5` | `uv run python -c 'import json; d=json.load(open("evals/credits_ledger.json", encoding="utf-8")); print(json.dumps(d["total_credits"], ensure_ascii=False))'` |
+| `F38` | Tavily credits 累计 | `96` | `evals/credits_ledger.json` → `total_credits` | `aa87f28` | `uv run python -c 'import json; d=json.load(open("evals/credits_ledger.json", encoding="utf-8")); print(json.dumps(d["total_credits"], ensure_ascii=False))'` |
 | `F39` | 实体消歧拒绝篇次 | `4` | `evals/live_batch.json` → `summary.entity_guard_rejections` | `b1fdc84` | `uv run python -c 'import json; d=json.load(open("evals/live_batch.json", encoding="utf-8")); print(json.dumps(d["summary"]["entity_guard_rejections"], ensure_ascii=False))'` |
 
 ## 3. 简历可用措辞（按编号）
@@ -171,7 +171,7 @@ uv run pytest -q tests/test_s8_resume_evidence.py      # 护栏：命令、commi
   - 边界：未提及不等于答错；把它算错或排除会得到两个都不该叫准确率的数
 - `F37` 批改的引文逐字校验失败 0 条
   - 边界：0 说明每条判定都有可核到的原文证据，不是模型凭印象编的
-- `F38` 全部真实检索累计 90 credits（含一次失败重跑的损失）
+- `F38` 全部真实检索累计 96 credits（含一次失败重跑的损失）
   - 边界：台账在 `evals/credits_ledger.json`；失败的运行也照记
 - `F39` 实体消歧在真实数据上触发 4 次拒绝
   - 边界：是「篇次」不是「篇数」：2 篇不同文档各被首轮与补搜两次判定
