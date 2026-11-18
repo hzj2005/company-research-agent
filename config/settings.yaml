@@ -22,6 +22,11 @@ graph:
     min_relevance_score: 0.4      # 沿用原版 curator 阈值，改为可配置
     min_docs_per_section: 2       # 低于此数判定 insufficient
     require_source_url: true      # 无 URL 的文档直接丢弃
+  competitor_fetch:
+    # 行业栏目两阶段检索：第一轮扫出竞品名单，第二轮按竞品名补查事实。
+    # 每条竞品 = 1 次检索（advanced = 2 credits），直接计入额度；0 表示关闭第二阶段。
+    enabled: ${COMPETITOR_FETCH:-true}
+    max_competitors: ${MAX_COMPETITORS:-3}
   degrade:
     # 防幻觉是红线，降级不可关闭；这里只配置拒答话术
     message: "该类信息未找到公开依据"

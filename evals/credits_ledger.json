@@ -78,7 +78,14 @@
       "calls": 0,
       "artifact": "evals/live_run.json",
       "note": "R3 重构后首次完整 live 报告：4 次 advanced 检索全部命中 S10-B/S13 留下的磁盘缓存，0 credits；LLM 12675 tokens；node_trace=grounding/research/briefing"
+    },
+    {
+      "stage": "R7 行业两阶段误跑（live 模式，本应 fixture）",
+      "credits": 6,
+      "calls": 3,
+      "artifact": "无（验证脚本未落盘）",
+      "note": "验证 industry 两阶段时未锁 APP_MODE=fixture，真实调用 3 次 Tavily（Obsidian/Coda/Notion 各 1 条 query）。同时暴露两个问题：竞品名单混入目标公司自身（已修）、fixture 缺 competitor_docs 样本（待补）。"
     }
   ],
-  "total_credits": 90
+  "total_credits": 96
 }

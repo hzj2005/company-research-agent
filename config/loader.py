@@ -72,10 +72,18 @@ class DegradeConfig(_Strict):
     message: str
 
 
+class CompetitorFetchConfig(_Strict):
+    """行业两阶段检索的额度闸门：第二阶段每条竞品 1 次检索。"""
+
+    enabled: bool = True
+    max_competitors: int = Field(default=3, ge=0, le=10)
+
+
 class GraphConfig(_Strict):
     max_retry: int = Field(ge=0, le=10)
     sections: list[str]
     evidence: EvidenceConfig
+    competitor_fetch: CompetitorFetchConfig = Field(default_factory=CompetitorFetchConfig)
     degrade: DegradeConfig
     checkpointer: Literal["sqlite", "postgres"] = "sqlite"
     dsn: str
