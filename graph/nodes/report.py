@@ -190,9 +190,37 @@ def make_briefing_node(
     async def briefing(state: ResearchState) -> dict[str, Any]:
         from graph.nodes.assemble import assemble_report
 
-        # 收集四张子图的段落产物
+        # R8：只渲染本次请求的栏目。**未请求 ≠ 证据不足**——不能给未派发的栏目
+        # 补拒答话术，否则用户说「只看财务」会收到三段「未找到公开依据」，
+        # 看起来像系统坏了，也变相替用户做了他没要的结论。
+        requested = [
+            s for s in (state.get("requested_sections") or [])
+            if s in settings.graph.sections
+        ]
+        if not requested and state.get("route_meta"):
+            # 路由判定需要追问：本次不生成报告，把追问话术作为输出
+            clarify = state.get("clarify") or {}
+            question = str(clarify.get("question") or "").strip() or (
+                "请告诉我公司名，以及想了解哪几块。"
+            )
+            return {
+                "report": question,
+                "briefings": {},
+                "review_notes": [
+                    {
+                        "node": "briefing",
+                        "status": "clarify",
+                        "kind": clarify.get("kind"),
+                        "question": question,
+                    }
+                ],
+            }
+        if not requested:
+            requested = list(settings.graph.sections)
+
+        # 收集本次请求的段落产物
         sections: list[dict[str, Any]] = []
-        for key in settings.graph.sections:
+        for key in requested:
             paragraph = state.get(f"{key}_paragraph") or {}
             if paragraph:
                 sections.append(paragraph)

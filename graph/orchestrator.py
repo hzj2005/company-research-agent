@@ -59,9 +59,26 @@ class OrchestratorOutput(TypedDict, total=False):
 
 
 def pending_sections(state: ResearchSubgraphState, settings: Settings) -> list[str]:
-    """首轮白名单为空 → 4 栏目全派发；回退轮只派发不足栏目。"""
-    whitelist = state.get("sections_to_research") or []
-    return list(whitelist) or list(settings.graph.sections)
+    """派发哪些子图：路由选中集合 ∩ 重试白名单；都没有则按配置全选。
+
+    - `requested_sections`：R8 路由判出的「用户想看哪几块」，决定派发范围；
+    - `sections_to_research`：旧的回退白名单，只用于在选中集合内收窄。
+    两个字段分开存，避免「用户只想看财务」和「财务证据不足要重搜」互相覆盖。
+    """
+    requested = [
+        s for s in (state.get("requested_sections") or [])
+        if s in settings.graph.sections
+    ]
+    base = requested or list(settings.graph.sections)
+    whitelist = [s for s in (state.get("sections_to_research") or []) if s in base]
+    return whitelist or base
+
+
+def selected_sections(state: ResearchSubgraphState, settings: Settings) -> list[str]:
+    """路由明确要求追问（选中为空且带了 route_meta）→ 一个子图都不派发。"""
+    if state.get("route_meta") and not (state.get("requested_sections") or []):
+        return []
+    return pending_sections(state, settings)
 
 
 def make_orchestrator_node(settings: Settings) -> Any:
@@ -112,8 +129,10 @@ def make_arbitrate_node(settings: Settings) -> Any:
     """
 
     async def arbitrate(state: ResearchSubgraphState) -> dict[str, Any]:
+        # 只看本次派发的栏目：未请求的栏目没有段落，不该被算成「降级」
+        sections = selected_sections(state, settings)
         degraded: list[str] = []
-        for section in settings.graph.sections:
+        for section in sections:
             paragraph = state.get(f"{section}_paragraph") or {}
             if paragraph.get("status") in ("degraded", "no_evidence"):
                 degraded.append(section)
@@ -122,7 +141,7 @@ def make_arbitrate_node(settings: Settings) -> Any:
             "review_notes": [
                 {
                     "node": "arbitrate",
-                    "sections_checked": list(settings.graph.sections),
+                    "sections_checked": sections,
                     "degraded": degraded,
                 }
             ],

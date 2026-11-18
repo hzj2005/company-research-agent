@@ -20,6 +20,9 @@ from graph.state import append_notes, merge_docs
 class ResearchSubgraphState(TypedDict, total=False):
     company: str
     sections_to_research: list[str]
+    # R8：路由选中的栏目。必须声明在子图 state 里，否则编排层读不到，
+    # 会退回「四栏全派发」（P2 实测踩到：报告只渲染选中段，但四个 Agent 都跑了）。
+    requested_sections: list[str]
     retry_count: dict[str, int]
     active_section: str
 
@@ -39,6 +42,7 @@ class ResearchSubgraphInput(TypedDict, total=False):
 
     company: str
     sections_to_research: list[str]
+    requested_sections: list[str]
     retry_count: dict[str, int]
 
 

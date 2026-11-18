@@ -1,10 +1,12 @@
 """R8 主图：6 节点（grounding → route → research → briefing，+可选 human_review）。
 
-   START → grounding → route → [research=Orchestrator 子图] → briefing → END
-                                                             （+可选 human_review）
+   START → grounding → route ─┬─(要追问)─────────────────→ briefing → END
+                              └─(正常)→ [research 编排子图] → briefing → END
+                                                        （+可选 human_review）
 
-R8 新增 `route`：把用户一句话翻译成「公司 + 选中栏目 + 是否追问」。P1 只写 state，
-派发仍按四栏全跑（P2 接 requested_sections），这样新节点不会把评测基线一起带偏。
+R8 新增 `route`：把用户一句话翻译成「公司 + 选中栏目 + 是否追问」。
+- 正常路径：`requested_sections` 决定派发哪些子图、报告渲染哪几段；
+- 追问路径：不跑任何子图，briefing 直接把追问话术作为输出（不花检索额度）。
 
 R3 变更（用户 2026-11-17 决策）：
 - 移除 curate / evidence_check / rewrite_query / degrade——消歧、证据判定、
@@ -15,6 +17,8 @@ R3 变更（用户 2026-11-17 决策）：
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 from langchain_core.tools import StructuredTool
 from langgraph.graph import END, START, StateGraph
@@ -27,6 +31,11 @@ from graph.nodes.report import make_briefing_node
 from graph.nodes.router import make_router_node
 from graph.orchestrator import build_orchestrator_subgraph
 from graph.state import ResearchState
+
+
+def _after_route(state: dict[str, Any]) -> str:
+    """路由要求追问 → 跳过 research（不花检索额度），直接到拼装层出话术。"""
+    return "briefing" if state.get("clarify") else "research"
 
 
 def build_graph(
@@ -52,7 +61,8 @@ def build_graph(
 
     builder.add_edge(START, "grounding")
     builder.add_edge("grounding", "route")
-    builder.add_edge("route", "research")
+    # 要追问时不跑任何子图，直接到拼装层出追问话术（省额度，也避免空派发）
+    builder.add_conditional_edges("route", _after_route, ["research", "briefing"])
     builder.add_edge("research", "human_review" if review_enabled else "briefing")
     if review_enabled:
         builder.add_edge("human_review", "briefing")

@@ -85,9 +85,16 @@ def _build_evidence_preview(
 
 
 def make_human_review_node(settings: Settings) -> Node:
-    sections = list(settings.graph.sections)
+    configured = list(settings.graph.sections)
 
     async def human_review(state: ResearchState) -> dict[str, Any]:
+        # R8：复核只列本次请求的栏目。未请求的栏目没有段落，列进来既没证据，
+        # 又会让复核人误以为「这栏没查到」。
+        sections = [
+            s for s in (state.get("requested_sections") or [])
+            if s in configured
+        ] or configured
+
         if settings.features.auto_approve_review:
             return {
                 "review_decision": {
