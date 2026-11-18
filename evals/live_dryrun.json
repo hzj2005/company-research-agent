@@ -32,6 +32,7 @@
     ],
     "node_trace": [
       "grounding",
+      "route",
       "research",
       "briefing"
     ],

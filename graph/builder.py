@@ -1,7 +1,10 @@
-"""R3 主图：5 节点（grounding → research → briefing，+可选 human_review）。
+"""R8 主图：6 节点（grounding → route → research → briefing，+可选 human_review）。
 
-   START → grounding → [research=Orchestrator 子图] → briefing → END
-                                                    （+可选 human_review）
+   START → grounding → route → [research=Orchestrator 子图] → briefing → END
+                                                             （+可选 human_review）
+
+R8 新增 `route`：把用户一句话翻译成「公司 + 选中栏目 + 是否追问」。P1 只写 state，
+派发仍按四栏全跑（P2 接 requested_sections），这样新节点不会把评测基线一起带偏。
 
 R3 变更（用户 2026-11-17 决策）：
 - 移除 curate / evidence_check / rewrite_query / degrade——消歧、证据判定、
@@ -21,6 +24,7 @@ from config.loader import Settings
 from graph.nodes.collect import make_grounding_node
 from graph.nodes.human_review import make_human_review_node
 from graph.nodes.report import make_briefing_node
+from graph.nodes.router import make_router_node
 from graph.orchestrator import build_orchestrator_subgraph
 from graph.state import ResearchState
 
@@ -36,6 +40,9 @@ def build_graph(
     review_enabled = settings.features.human_review
 
     builder.add_node("grounding", make_grounding_node(settings))
+    # R8-P1：意图路由（判公司 + 选中栏目 + 是否追问）。
+    # 本阶段只写 state，不改派发——派发接线在 P2，避免与评测基线一起动。
+    builder.add_node("route", make_router_node(settings))
     # research 节点 = Orchestrator 子图（四张独立 Agent 子图 + 自闭环）
     builder.add_node("research", build_orchestrator_subgraph(settings, document_tool))
     if review_enabled:
@@ -44,7 +51,8 @@ def build_graph(
     builder.add_node("briefing", make_briefing_node(settings, backend=briefing_backend))
 
     builder.add_edge(START, "grounding")
-    builder.add_edge("grounding", "research")
+    builder.add_edge("grounding", "route")
+    builder.add_edge("route", "research")
     builder.add_edge("research", "human_review" if review_enabled else "briefing")
     if review_enabled:
         builder.add_edge("human_review", "briefing")

@@ -35,6 +35,7 @@ async def run_research(
     resume: dict[str, Any] | None = None,
     thread_id: str | None = None,
     document_tool: StructuredTool | None = None,
+    user_message: str = "",
 ) -> tuple[dict[str, Any], list[str]]:
     """跑完整图，返回 (最终 State, 节点执行轨迹)。
 
@@ -60,7 +61,11 @@ async def run_research(
         config = session.config_for(
             thread_id or build_thread_id(company, settings=settings)
         )
-        inp: Any = Command(resume=resume) if resume is not None else initial_state(company)
+        inp: Any = (
+            Command(resume=resume)
+            if resume is not None
+            else initial_state(company, user_message=user_message)
+        )
 
         trace: list[str] = []
         async for chunk in compiled.astream(inp, config=config, stream_mode="updates"):

@@ -85,6 +85,8 @@ class InputState(TypedDict, total=False):
     industry: NotRequired[str]
     job_id: NotRequired[str]
     thread_id: NotRequired[str]
+    # R8：对话式入口的原始一句话；为空时路由按「完整报告」处理，不调模型
+    user_message: NotRequired[str]
 
 
 class ResearchState(InputState):
@@ -118,6 +120,13 @@ class ResearchState(InputState):
     # 回退白名单：空列表 = 首轮全栏目派发；非空 = 只派发这些栏目
     sections_to_research: Annotated[list[str], latest_list]
 
+    # R8 路由：requested_sections 决定派发哪些子图、报告渲染哪几段。
+    # 与 sections_to_research 刻意分开：后者是「重试白名单」，混用会让
+    # 「用户只想看财务」和「财务这轮证据不足要重搜」互相覆盖。
+    requested_sections: Annotated[list[str], latest_list]
+    route_meta: Annotated[dict[str, Any], replace_mapping]
+    clarify: Annotated[dict[str, Any], replace_mapping]
+
     degraded: bool
     degraded_sections: Annotated[list[str], append_unique]
     review_notes: Annotated[list[dict[str, Any]], append_notes]
@@ -148,6 +157,10 @@ def initial_state(company: str, **kwargs: Any) -> dict[str, Any]:
         "briefings": {},
         "references": {},
         "sections_to_research": [],
+        "user_message": "",
+        "requested_sections": [],
+        "route_meta": {},
+        "clarify": {},
         "degraded": False,
         "degraded_sections": [],
         "review_notes": [],

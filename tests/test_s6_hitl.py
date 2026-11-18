@@ -16,8 +16,8 @@ from config.loader import apply_overrides, get_settings
 from graph.builder import build_graph
 from graph.run import run_research
 
-# R3：主图 5 节点（消歧/判定/回退下沉子图）
-BASE_NODES = {"grounding", "research", "briefing"}
+# R8：主图 6 节点（消歧/判定/回退下沉子图；route 只做意图判定）
+BASE_NODES = {"grounding", "route", "research", "briefing"}
 ABSTAIN = "该类信息未找到公开依据"
 
 
@@ -41,7 +41,7 @@ def _resume(company: str, db: Path, decision: object):
 
 
 def test_default_graph_has_no_review_node_and_report_is_unchanged(tmp_path: Path) -> None:
-    """开关默认关：主图严格 7 节点，报告与 S5 逐字一致（`test_s4_subgraph.py:97` 依赖）。"""
+    """开关默认关：主图 6 节点（含 R8 路由），报告与 S5 逐字一致（`test_s4_subgraph.py:97` 依赖）。"""
     s = get_settings()
     assert s.features.human_review is False
     assert set(build_graph(s, make_document_tool(s)).nodes.keys()) == BASE_NODES
