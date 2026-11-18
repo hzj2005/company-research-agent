@@ -80,7 +80,7 @@ research 节点 = Orchestrator 子图（本次真正的编排层）
 | R1 ✅ | **Orchestrator + 四独立子图**：4 个 compiled 子图（各带独立 state schema），orchestrator 真节点 Send 派发、arbitrate 汇合 | **6 个架构测试证明**：`Node.data` 是 `CompiledStateGraph`、四套 state 不同类、条件边派发、4 路不串；全量 571 passed |
 | R2 ✅ | **四套独立 state**：各子图自己的 schema + reducer，验证并行写回不覆盖 | 4 测试证明隔离；全量 575 passed |
 | R3 ✅ 完成（含实跑，如实标注） | **数据流重构**：key 映射 + 四子图自闭环（检索→消歧→抽取→判定→返工→写段落）+ 主图移除 curate/evidence_check 变 5 节点 + 报告层改拼装器。三级降级链（LLM→本地小模型预留空位→规则）由共享 `extract.py` 执行，四栏目接入。 | **561 passed 全绿**；评测 gate PASS 全指标 1.0；48 个旧测试迁移；3 个降级链测试。查漏补漏：修复降级链死代码（原四栏目各写两级，现接共享三级）。**R3-live 实跑（4 次）：company/financial 真实 LLM 成功（证明链路+prompt+URL守卫），industry/news 云端 Connection error 降级到规则（证明降级链真实故障下生效）。用户确认不补跑；4 栏目真实 LLM 全成功未达成，如实标注。** |
-| R4 ✅ 完成 | **四栏目差异化节点**：复用 capabilities 能力下沉进各子图，产出结构化 `analysis`（段落字段）+ `conflicts`（报告渲染）。R4-1 Company 冲突标注（同轮判）/ R4-2 News 时效+事件去重 / R4-3 Financial 时间线+数字保真 / R4-4 Industry 竞品+槽位+矩阵。 | **563 passed**（+15 R4 用例）；评测 gate PASS 全指标 1.0；端到端四栏目 analysis 均产出。附带修复 3 处"英文正则 vs 中文 claim"不匹配（冲突槽位/日期动作词/竞品语序）与 facts 按 URL 去重丢多事实的 bug。**注：analysis 目前只存段落，未渲染进报告文本；postprocess 开关暂未参与（见下）** |
+| R4 ✅ 完成 | **四栏目差异化节点**：复用 capabilities 能力下沉进各子图，产出结构化 `analysis`（段落字段）+ `conflicts`（报告渲染）。R4-1 Company 冲突标注（同轮判）/ R4-2 News 时效+事件去重 / R4-3 Financial 时间线+数字保真 / R4-4 Industry 竞品+槽位+矩阵。 | **567 passed**；评测 gate PASS 全指标 1.0；端到端四栏目 analysis 均产出。**渲染策略（用户 2026-11-18 确认）：`analysis` 在 `features.postprocess=true` 时渲染为引用块（融资时间线/竞品识别/事件聚合/时效提示），默认 false 保持报告不变；实测开启仅新增 `>` 行，事实 bullet 与 References 逐字不变、基线零漂移**。附带修复 3 处"英文正则 vs 中文 claim"不匹配与 facts 按 URL 去重丢多事实的 bug。 |
 | R5 | 评测回归：报告文本契约、gate、A/B | 全绿，指标无回退 |
 | R6 | 文档：本规划标记完成、架构图更新；**不动简历** | 文档与代码一致 |
 

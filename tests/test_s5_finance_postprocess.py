@@ -124,10 +124,29 @@ def test_end_to_end_financial_postprocess_enabled() -> None:
 
 
 def test_report_text_unchanged_with_financial_postprocess() -> None:
-    """开启财务后处理不得改变报告文本（S7 基线零漂移）。"""
+    """开启财务后处理不得改变**事实 bullet 与 References**（S7 基线零漂移）。
+
+    R4 起（用户 2026-11-18 确认）：开启后允许新增引用块形式的附加分析行
+    （融资时间线等），但正文事实与引用编号必须逐字不变——基线漂移的实质
+    是"事实被改变"，不是"多了一行标注"。
+    """
     s = get_settings()
     on = apply_overrides(s, {"features.postprocess": True})
     with tempfile.TemporaryDirectory() as td1, tempfile.TemporaryDirectory() as td2:
         st_off, _ = asyncio.run(run_research("Notion", s, Path(td1) / "b.db"))
         st_on, _ = asyncio.run(run_research("Notion", on, Path(td2) / "c.db"))
-    assert st_off["report"] == st_on["report"]
+
+    def bullets_and_refs(text: str) -> tuple[list[str], list[str]]:
+        lines = text.splitlines()
+        bullets = [ln for ln in lines if ln.startswith("- ")]
+        refs_start = next((i for i, ln in enumerate(lines) if ln == "## References"), len(lines))
+        return bullets, lines[refs_start:]
+
+    off_b, off_r = bullets_and_refs(st_off["report"])
+    on_b, on_r = bullets_and_refs(st_on["report"])
+    assert off_b == on_b, "事实 bullet 必须逐字一致（基线零漂移）"
+    assert off_r == on_r, "References 必须逐字一致"
+    # 开启后新增的是引用块分析行，不是事实
+    assert "融资时间线" in st_on["report"]
+    assert "融资时间线" not in st_off["report"]
+    assert not any("融资时间线" in b for b in on_b)

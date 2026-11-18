@@ -47,6 +47,71 @@ def _render_conflict(conflict: Any, norm_index: dict[str, int]) -> str:
     )
 
 
+def _cite(urls: list[str], norm_index: dict[str, int]) -> str:
+    return "".join(
+        f"[{n}]"
+        for n in (norm_index.get(_norm(u)) for u in urls)
+        if n is not None
+    )
+
+
+def _render_analysis(
+    key: str, analysis: dict[str, Any], norm_index: dict[str, int]
+) -> list[str]:
+    """栏目附加分析 → 引用块行（不以 `- ` 开头，不参与事实 bullet 统计）。
+
+    仅当 features.postprocess 开启时调用（便于"渲染 vs 不渲染"的 A/B）。
+    内容全部来自已抽取的结构化产物，不新增结论、不做评价。
+    """
+    lines: list[str] = []
+
+    if key == "financial":
+        timeline = analysis.get("timeline") or []
+        if timeline:
+            parts = []
+            for r in timeline:
+                piece = f"{r.get('year') or '年份不明'} {r.get('round')}"
+                if r.get("amount"):
+                    piece += f" {r['amount']}"
+                c = _cite([str(r.get("source_url", ""))], norm_index)
+                parts.append(f"{piece} {c}".strip())
+            lines.append(f"> 融资时间线：{' → '.join(parts)}")
+        unverified = analysis.get("unverified") or []
+        if unverified:
+            lines.append(
+                f"> 数字待核：{len(unverified)} 笔金额未在本栏目原文中找到，"
+                f"已保留原值但标注为未核实"
+            )
+
+    elif key == "industry":
+        competitors = analysis.get("competitors") or []
+        if competitors:
+            names = "、".join(
+                f"{c.get('name')}（{c.get('tier')}）" for c in competitors[:6]
+            )
+            lines.append(f"> 竞品识别：{names}")
+        matrix = analysis.get("comparison_matrix") or {}
+        if matrix.get("missing"):
+            lines.append(
+                f"> 对比矩阵尚有 {len(matrix['missing'])} 个格子缺少公开信息，"
+                f"未做推断填补"
+            )
+
+    elif key == "news":
+        events = analysis.get("events") or []
+        multi = [e for e in events if e.get("multi_source")]
+        if multi:
+            desc = "、".join(
+                f"{e['event_key'].split(':')[0]}（{e['count']} 条来源）" for e in multi[:5]
+            )
+            lines.append(f"> 多来源事件：{desc}")
+        stale = analysis.get("stale_count") or 0
+        if stale:
+            lines.append(f"> 时效提示：{stale} 条事实日期较早，已保留但需注意时效")
+
+    return lines
+
+
 def assemble_report(
     company: str,
     sections: list[dict[str, Any]],
@@ -117,6 +182,10 @@ def assemble_report(
             # 冲突标注（引用块，不参与"每条 bullet 带引用"统计）
             for conflict in sec.get("conflicts", []):
                 lines.append(f"> {_render_conflict(conflict, norm_index)}")
+            # 栏目附加分析（R4，仅 postprocess 开启时渲染；引用块，不改正文 bullet）
+            if settings.features.postprocess:
+                for extra in _render_analysis(key, sec.get("analysis") or {}, norm_index):
+                    lines.append(extra)
             briefings[key] = {
                 "status": "ok",
                 "facts": list(facts),
