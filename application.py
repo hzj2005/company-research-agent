@@ -29,7 +29,12 @@ from backend.llm import DEFAULT_OPENROUTER_MODEL, OPENROUTER_BASE_URL
 # S5-B 起：对外入口指向二次开发的新图（原版 backend/graph.py 保留作 upstream 对照）
 from capabilities.briefing import briefing_backend_scope
 from capabilities.retrieval import make_document_tool
-from config.loader import build_thread_id, get_settings, resolve_postgres_dsn
+from config.loader import (
+    build_thread_id,
+    get_settings,
+    resolve_llm_credentials,
+    resolve_postgres_dsn,
+)
 from graph.builder import build_graph
 from graph.state import initial_state
 from persistence.checkpointer import CheckpointSession
@@ -362,6 +367,14 @@ async def health():
     """
     return {"status": "ok"}
 
+def _resolved_llm_provider() -> str | None:
+    """实际会用哪个 provider；解析不出来返回 None（不抛，端点不该因此 500）。"""
+    try:
+        return resolve_llm_credentials().provider
+    except Exception:  # noqa: BLE001
+        return None
+
+
 @app.get("/config")
 async def get_config():
     """Report which LLM credentials the server already has, without exposing them.
@@ -377,8 +390,13 @@ async def get_config():
         "requires_llm_key": mode == "live",
         "openrouter_configured": bool(os.getenv("OPENROUTER_API_KEY")),
         "openai_configured": bool(os.getenv("OPENAI_API_KEY")),
-        # 本项目 live 模式实际用的是 DashScope（qwen-plus），不报它前端会误判「没配 key」
-        "dashscope_configured": bool(os.getenv("DASHSCOPE_API_KEY")),
+        # 本项目 live 模式实际用的是 DashScope（qwen-plus），不报它前端会误判「没配 key」。
+        # key 可能是 DASHSCOPE_API_KEY，也可能是系统变量 SYSTEM_ALIYUN_APIKEY
+        # （config/loader.py:182 两者都认），只看前者会在后者存在的机器上误报 false。
+        "dashscope_configured": bool(
+            os.getenv("DASHSCOPE_API_KEY") or os.getenv("SYSTEM_ALIYUN_APIKEY")
+        ),
+        "llm_provider_resolved": _resolved_llm_provider(),
         "tavily_configured": bool(os.getenv("TAVILY_API_KEY")),
         "default_model": os.getenv("OPENROUTER_MODEL") or DEFAULT_OPENROUTER_MODEL,
     }
