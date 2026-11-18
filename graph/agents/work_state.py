@@ -37,4 +37,6 @@ class SectionWorkState(TypedDict, total=False):
     status: str
     conflicts: list[Any]
     analysis: dict[str, Any]
+    analysis_extra: dict[str, Any]
     subject_binding: dict[str, Any]
+    competitor_candidates: list[dict[str, Any]]

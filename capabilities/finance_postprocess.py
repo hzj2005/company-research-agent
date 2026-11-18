@@ -42,6 +42,58 @@ def _norm_money(value: str) -> str:
     return re.sub(r"[\s,]", "", value)
 
 
+# 金额换算表：中英文两套写法都要认，否则「原文 $10 billion、事实 100 亿美元」
+# 会被误判成「金额不在原文」（2026-11-18 真实 live 报告实测：4/4 全部误判）
+_CN_UNIT = {
+    "万亿美元": 1e12, "亿美元": 1e8, "百万美元": 1e6, "万美元": 1e4,
+    "亿元": 1e8, "万元": 1e4, "美元": 1.0, "万": 1e4, "亿": 1e8,
+}
+_EN_UNIT = {"trillion": 1e12, "billion": 1e9, "million": 1e6, "thousand": 1e3}
+_CN_MONEY = re.compile(r"(\d[\d,.]*)\s*(万亿美元|亿美元|百万美元|万美元|亿元|万元|美元|万|亿)")
+_EN_MONEY = re.compile(
+    r"\$\s*(\d[\d,.]*)\s*(trillion|billion|million|thousand)?", re.IGNORECASE
+)
+
+
+def _money_values(text: str) -> list[float]:
+    """把一段文本里的金额全部折算成美元数值（只用于比对，不用于展示）。"""
+    out: list[float] = []
+    for m in _CN_MONEY.finditer(text):
+        try:
+            out.append(float(m.group(1).replace(",", "")) * _CN_UNIT[m.group(2)])
+        except (ValueError, KeyError):
+            continue
+    for m in _EN_MONEY.finditer(text):
+        try:
+            scale = _EN_UNIT.get((m.group(2) or "").lower(), 1.0)
+            out.append(float(m.group(1).replace(",", "")) * scale)
+        except (ValueError, KeyError):
+            continue
+    return out
+
+
+def _money_match(amount: str, source_text: str) -> str | None:
+    """金额是否出现在原文：先字面，再跨语言数值等价。
+
+    返回 `literal` / `value` / `None`，调用方据此区分「原文直接写了」和
+    「原文写的是等价的外文金额」——后者也不算编造，但值得让读者知道是换算过的。
+    """
+    if _norm_money(amount) in _norm_money(source_text):
+        return "literal"
+    target = _money_values(amount)
+    if not target:
+        return None
+    for got in _money_values(source_text):
+        if abs(got - target[0]) <= max(abs(target[0]) * 0.005, 1.0):
+            return "value"
+    return None
+
+
+def _money_in_source(amount: str, source_text: str) -> bool:
+    """数字保真：金额归一化后必须能在原文找到（含跨语言数值等价）。"""
+    return _money_match(amount, source_text) is not None
+
+
 def _fact_from(item: dict[str, Any]) -> Fact | None:
     try:
         return Fact(
@@ -76,11 +128,6 @@ def _extract_amount(claim: str) -> str | None:
 
 def _extract_investors(claim: str) -> list[str]:
     return list(dict.fromkeys(m.group(1) for m in _INVESTOR.finditer(claim)))
-
-
-def _money_in_source(amount: str, source_text: str) -> bool:
-    """数字保真：金额归一化后必须能在原文找到。"""
-    return _norm_money(amount) in _norm_money(source_text)
 
 
 def finance_postprocess(
@@ -166,6 +213,37 @@ def finance_postprocess(
         "unverified_amounts": unverified,
         "funding_rounds": [r.model_dump(mode="json") for r in funding_rounds],
     }
+
+
+def verify_amounts(
+    facts: Iterable[Fact], *, source_texts: dict[str, str] | None = None
+) -> dict[str, Any]:
+    """只做数字保真：金额是否原样出现在原文。
+
+    与 `finance_postprocess` 内部同源同规则，但**单独可用**——R7 把它提成抽取后
+    的独立节点，让「金额核对」有独立留痕，而不是埋在时间线计算里。纯规则、0 调用。
+    """
+    verified: list[dict[str, Any]] = []
+    unverified: list[dict[str, Any]] = []
+    unchecked: list[dict[str, Any]] = []
+
+    for fact in facts:
+        amount = _extract_amount(fact.claim)
+        if not amount:
+            continue
+        url = str(fact.source_url)
+        source = (source_texts or {}).get(url, "")
+        item = {"source_url": url, "amount": amount}
+        if not source:
+            unchecked.append({**item, "reason": "no_source_text"})
+            continue
+        match = _money_match(amount, source)
+        if match:
+            verified.append({**item, "match": match})
+        else:
+            unverified.append({**item, "reason": "money_not_in_source"})
+
+    return {"verified": verified, "unverified": unverified, "unchecked": unchecked}
 
 
 def fact_for(entry: dict[str, Any], facts: Iterable[Fact]) -> Fact:

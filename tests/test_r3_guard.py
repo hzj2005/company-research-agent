@@ -13,7 +13,7 @@ from langchain_core.tools import tool
 
 from config.loader import get_settings
 from graph.agents.company.graph import build_company_subgraph
-from graph.agents.financial.nodes import make_financial_pipeline_node
+from graph.agents.financial.graph import build_financial_subgraph
 
 
 def _doc(url: str, title: str, content: str) -> dict[str, Any]:
@@ -61,8 +61,8 @@ def test_financial_pipeline_rejects_ticker_page() -> None:
                  "market cap and shares outstanding data here."),
         ]
     }
-    node = make_financial_pipeline_node(s, _offline(docs))
-    out = asyncio.run(node({"company": "Notion", "round_no": 0}))
+    graph = build_financial_subgraph(s, _offline(docs))
+    out = asyncio.run(graph.ainvoke({"company": "Notion", "round_no": 0}))
     para = out["financial_paragraph"]
     assert "https://e.org/real" in para["references"]
     assert "https://e.org/fake" not in para["references"]
@@ -71,8 +71,8 @@ def test_financial_pipeline_rejects_ticker_page() -> None:
 def test_financial_all_rejected_fallback_keeps_docs() -> None:
     s = get_settings()
     docs = {"financial": [_doc("https://e.org/a", "Notion VTec Berhad (0083.KL) Valuation", "x")]}
-    node = make_financial_pipeline_node(s, _offline(docs))
-    out = asyncio.run(node({"company": "Notion", "round_no": 0}))
+    graph = build_financial_subgraph(s, _offline(docs))
+    out = asyncio.run(graph.ainvoke({"company": "Notion", "round_no": 0}))
     para = out["financial_paragraph"]
     assert "https://e.org/a" in para["references"], "全灭护栏应放行"
     guards = [n for n in out["review_notes"] if n.get("node") == "entity_guard"]

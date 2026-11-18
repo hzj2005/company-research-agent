@@ -56,7 +56,7 @@ def limits_from(settings: Settings) -> Limits:
     )
 
 
-def _to_facts(facts: list[dict[str, Any]]) -> list[Any]:
+def to_facts(facts: list[dict[str, Any]]) -> list[Any]:
     from graph.contracts import Fact
 
     out: list[Any] = []
@@ -351,15 +351,18 @@ def make_write_node(
         paragraph = make_paragraph(
             section,
             section,
-            _to_facts(facts),
+            to_facts(facts),
             settings=settings,
             degraded=(status == "degraded"),
             conflicts=state.get("conflicts") or [],
             references=state.get("references") or {},
         )
         paragraph["truncated"] = truncated
-        analysis = state.get("analysis") or {}
-        if analysis:
+        # 前置独立节点产出的分析（如财务的金额核对）覆盖 analyzer 的同名键，
+        # 保证「独立节点」是唯一来源，不是两份结果并存
+        analysis = dict(state.get("analysis") or {})
+        analysis.update(state.get("analysis_extra") or {})
+        if analysis and status == "ok":
             paragraph["analysis"] = analysis
         binding = state.get("subject_binding") or {}
         if binding:
