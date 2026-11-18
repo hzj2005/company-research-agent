@@ -2,11 +2,18 @@ import asyncio
 import json
 import logging
 import os
+import sys
 import time
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
+
+# Windows 默认的 ProactorEventLoop 不支持 psycopg 的 async 模式，配了
+# POSTGRES_DSN 时连接池会一直失败、服务卡在 startup（2026-11-18 实测）。
+# 必须在任何事件循环创建之前设置，所以放在模块最顶部、uvicorn 之前。
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 import httpx
 import uvicorn
