@@ -71,6 +71,13 @@
       "calls": 4,
       "artifact": "docs/samples/bytedance_live_report_zh.md",
       "note": "四栏 19/11/7/8 条、16 个引用；每栏实际只发 1 条 query"
+    },
+    {
+      "stage": "R3 新架构 live_run（Notion 端到端）",
+      "credits": 0,
+      "calls": 0,
+      "artifact": "evals/live_run.json",
+      "note": "R3 重构后首次完整 live 报告：4 次 advanced 检索全部命中 S10-B/S13 留下的磁盘缓存，0 credits；LLM 12675 tokens；node_trace=grounding/research/briefing"
     }
   ],
   "total_credits": 90

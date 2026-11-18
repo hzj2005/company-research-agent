@@ -57,17 +57,19 @@ BULLETS: tuple[Bullet, ...] = (
         title="图编排与可恢复的人工复核（LangGraph）",
         paste=(
             "在上游线性 LangGraph 流水线（一路 `add_edge` 串到底、无分支、无 checkpoint）的基础上重构："
-            "主图状态机串联「检索 → 结构化抽取 → 证据判定 → 成稿」，"
-            "检索侧改为 `Send` 动态派发的并行子图，按栏目白名单只重跑证据不足的分支"
-            "（输出 Company / Industry / Financial / News {F26} 个栏目）；"
-            "全流程落 SQLite checkpoint，成稿前可 `interrupt()` 暂停、换进程 `Command(resume=...)` 续跑。"
+            "主图精简为「检索调度 → 成稿」三段式（grounding → research → briefing），"
+            "检索侧拆成 Company / Industry / Financial / News {F26} 张**独立编译的子图**，"
+            "由编排层用 `Send` 并行派发；每张子图自带 state schema 与自闭环"
+            "（检索 → 消歧 → 抽取 → 证据判定 → 不足自返工 ≤2 轮 → 写段落），主图不再协调回退；"
+            "报告层退化为纯拼装工，统一编号与 References。"
+            "全流程落 checkpoint，成稿前可 `interrupt()` 暂停、换进程 `Command(resume=...)` 续跑。"
         ),
         detail=(
-            "条件边三路（pass / retry / degrade）由 `evidence_check` 写状态、`route_after_evidence` "
-            "以纯函数读状态；循环终止条件是 `retry_count ≥ max_retry`，不让模型自述「够了」。",
-            "栏目级重试用 `all()` 而不是 `any()`：一个栏目耗尽额度不会把还有额度的栏目一起降级；"
-            "`retry_count` 按栏目独立计数，避免刚开始回退的栏目错拿别栏轮次。",
-            "子图用 `input_schema / output_schema` 隔离，`Send` 只带编排参数与 `active_section`，"
+            "证据判定下沉进子图：每个栏目自己判断事实数是否达到门槛，不足就自己重搜（上限 `max_retry`），"
+            "耗尽后该栏目显式拒答，不牵连同批其他栏目——终止条件是计数到上限，不让模型自述「够了」。",
+            "编号权收归报告层：子图只写带 `source_url` 的段落、不碰 `[n]`，由拼装器统一分配，"
+            "从根本上消除跨栏目引用撞号；正文与 References 出自同一份 URL 集合。",
+            "子图用独立 `input_schema / output_schema` 隔离，`Send` 只带编排参数与 `active_section`，"
             "不把累积字段塞进并行分支（否则主图 reducer 会重复累加）。",
             "`interrupt()` 恢复时节点会从头重跑，所以复核节点不做副作用；非法决策按「不批准」处理"
             "（fail-safe），栏目名走白名单过滤，防止任意字符串污染 state。",

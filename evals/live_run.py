@@ -31,8 +31,21 @@ OUTPUT = ROOT / "evals" / "live_run.json"
 COMPANY = "Notion"
 MAX_CALLS = 12
 CREDITS_PER_SEARCH = 2  # https://docs.tavily.com/documentation/api-credits: advanced = 2
-CREDITS_ALREADY_SPENT = 2  # S8.2 单次真实探针
-USER_CREDIT_CEILING = 50
+
+# 额度一律以台账为准（evals/credits_ledger.json 的 total_credits 是唯一真相）。
+# 2026-11-15 用户把上限从 50 放宽到 200；不要再写死 S8 时点的 50。
+_CREDITS_LEDGER = ROOT / "evals" / "credits_ledger.json"
+
+
+def _ledger_totals() -> tuple[int, int]:
+    """返回 (已用 credits, 当前放行上限)；台账缺失时保守回落到 (0, 50)。"""
+    if not _CREDITS_LEDGER.exists():
+        return 0, 50
+    data = json.loads(_CREDITS_LEDGER.read_text(encoding="utf-8"))
+    return int(data.get("total_credits", 0)), int(data.get("ceiling", 50))
+
+
+USER_CREDIT_CEILING, CREDITS_ALREADY_SPENT = _ledger_totals()[1], _ledger_totals()[0]
 
 LIVE_ENV: dict[str, str] = {
     "APP_MODE": "live",
@@ -61,22 +74,23 @@ def _state_summary(state: dict[str, Any]) -> dict[str, Any]:
     return {k: plain(state[k]) for k in keys if k in state}
 
 
-def _report_checks(report: str) -> dict[str, Any]:
+def _report_checks(report: str, settings: Any) -> dict[str, Any]:
     headings = re.findall(r"^## (.+)$", report, flags=re.MULTILINE)
     # [n] 同时出现在正文和 References 段；只数正文，否则同一个引用会被计两次。
     body, separator, refs = report.partition("## References")
     if not separator:
         refs = ""
+    # 标题按配置取（中文），不要硬编码英文——报告输出一直是中文
+    expected = list(settings.report.headings)
     return {
         "chars": len(report),
         "headings": headings,
         "inline_citation_markers": len(re.findall(r"\[\d+\]", body)),
         "reference_lines": len(re.findall(r"^\[\d+\]\s", refs, flags=re.MULTILINE)),
-        "has_four_sections": all(
-            h in headings for h in ("Company Overview", "Industry Overview", "Financial Overview", "News")
-        ),
+        "has_four_sections": all(h in headings for h in expected),
         "has_references_section": "References" in headings,
-        "abstain_markers": report.count("证据不足") + report.count("查不到"),
+        # 拒答文案同样按配置取，避免与 graph.degrade.message 脱节
+        "abstain_markers": report.count(settings.graph.degrade.message),
     }
 
 
@@ -191,7 +205,7 @@ def build_report() -> dict[str, Any]:
         },
         "llm_usage": usage,
         "report": report_text,
-        "report_checks": _report_checks(report_text) if report_text else None,
+        "report_checks": _report_checks(report_text, settings) if report_text else None,
         "graph": {
             "node_trace": trace,
             **_state_summary(state),
