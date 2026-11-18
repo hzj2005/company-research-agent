@@ -40,27 +40,49 @@ React + Vite UI → POST /research → FastAPI application → Research graph
 
 The UI connects to the API with `VITE_API_URL` and receives incremental updates from `GET /research/{job_id}/stream`.
 
-### This fork — `graph/` (7-node main graph + parallel research subgraph)
+### This fork — `graph/` (5-node main graph + four independent section subgraphs)
 
 ```text
-START → grounding → [research subgraph] → curate → evidence_check
-                          ↑                    ├─ pass    → briefing → END
-                          │                    ├─ retry   → rewrite_query ─┘
-                          │                    └─ degrade → degrade ──────→ briefing → END
+START → grounding → [orchestrator subgraph] → briefing → END
+                                                   ↑
+                                     (human_review when FEATURES_HUMAN_REVIEW)
 
-research subgraph:  START → dispatch ──Send──→ analyst(company)
-                                    ──Send──→ analyst(industry)
-                                    ──Send──→ analyst(financial)
-                                    ──Send──→ analyst(news)    → END
-                    retry rounds dispatch only sections in `sections_to_research`
+orchestrator subgraph:  START → orchestrator ──Send──→ company   ┐
+                                              ──Send──→ industry  ├→ arbitrate → END
+                                              ──Send──→ financial │
+                                              ──Send──→ news      ┘
+
+each section subgraph (independently compiled, own state schema, self-closing):
+  retrieve → relevance filter → entity guard → extract → evidence
+        ↑_____________ retry, bounded ≤2 rounds (insufficient) ______|
+  → analyzer (conflict / timeline / competitors / events) → write_paragraph (no [n])
 ```
 
-- `Send` fans out four analysts in parallel; reducer-backed state merges their writes without overwrites (measured: 4 branches 0.181s vs 0.600s sequential).
-- `evidence_check` is a real node with three conditional edges. Retry is bounded by `max_retry` (2) and ends in an explicit "no public evidence found" abstention, never invented facts.
-- Every step is persisted by an `AsyncSqliteSaver` checkpointer (`persistence/checkpointer.py`) and survives a restart.
-- `briefing` has two paths behind `features.structured_output`: **on** runs `prompt | model.with_structured_output(SectionBrief)` with URL-level traceability and bounded validation retry; **off** keeps the S4 template and produces a byte-identical report (A/B baseline). In `fixture` mode the "model" is a local `httpx.MockTransport` deterministic stub — **not a real model capability**.
+- `Send` fans out four **independently compiled** subgraphs in parallel; each owns its state
+  schema, so reducer-backed writes never overwrite each other.
+- Sufficiency is judged **inside each subgraph**: when a section has fewer than
+  `min_docs_per_section` facts it re-searches itself (bounded by `max_retry`, 2) and otherwise
+  ends in an explicit "no public evidence found" abstention. The old main-graph retry loop is
+  gone — `curate` / `evidence_check` / `rewrite_query` / `degrade` were removed in R3, and
+  query rewriting, relevance filtering and entity disambiguation now live in the subgraphs.
+- Extraction runs a **three-level fallback chain** (`graph/agents/extract.py`): real LLM →
+  local-model slot (reserved, currently empty) → deterministic rules. Each section injects its
+  own prompt addendum; the chain is shared so a future local model plugs in at one place.
+- `briefing` is a **pure assembler** (`graph/nodes/assemble.py`): it collects the four
+  paragraphs, assigns `[n]` numbering once and emits References. Sections never allocate
+  numbers, so cross-section collisions cannot happen.
+- **R4 per-section analysis**, behind `FEATURES_POSTPROCESS=true`: same-round conflict
+  annotation, financing timeline + money-fidelity (amount must appear in the source text),
+  competitor detection + verbatim comparison matrix, news freshness + event grouping. It is
+  rendered as `>` quote blocks only — fact bullets and References stay byte-identical, so the
+  baseline does not drift. With the switch off (default) the report is unchanged.
+- Every step is persisted by a checkpointer (`persistence/checkpointer.py`: SQLite by default,
+  Postgres via `AsyncPostgresSaver`) and survives a restart.
+- `features.structured_output` is now a **legacy switch**: extraction moved into the subgraphs
+  in R3, so the report layer no longer branches on it. The A/B group `free_text_output`
+  therefore reports `no_effect` — stated explicitly rather than presented as a measured gain.
 - The data source is an `@tool`-wrapped fixture by default (`capabilities/retrieval.py`). `live` mode adds `TavilyRetriever(BaseRetriever)` plus a call budget, disk cache and dry-run; it is **disabled by default** even when a key is installed.
-- **S6 HITL** is opt-in: with `FEATURES_HUMAN_REVIEW=true` and `AUTO_APPROVE_REVIEW=false`, an extra `human_review` node calls `interrupt()` before `briefing` and the run pauses. A second CLI process resumes it from the SQLite checkpoint with `Command(resume=...)`. A reviewer can approve, reject the whole report, or reject selected sections — rejected sections abstain instead of inventing content. Default `FEATURES_HUMAN_REVIEW=false` keeps the main graph at exactly 7 nodes.
+- **S6 HITL** is opt-in: with `FEATURES_HUMAN_REVIEW=true` and `AUTO_APPROVE_REVIEW=false`, an extra `human_review` node calls `interrupt()` before `briefing` and the run pauses. A second CLI process resumes it from the SQLite checkpoint with `Command(resume=...)`. A reviewer can approve, reject the whole report, or reject selected sections — rejected sections abstain instead of inventing content. Default `FEATURES_HUMAN_REVIEW=false` keeps the main graph at exactly 5 nodes.
 
 ```bash
 uv run python -m graph.run --case sparse --show-report --trace
@@ -273,7 +295,7 @@ briefing step and emits a `review_required` SSE event carrying per-section evide
 (title / URL / relevance / excerpt). The reviewer either approves, or rejects specific sections
 (which then render as "no public evidence found"). `POST /research/{job_id}/review` resumes the
 job from its checkpoint — including from a different process, since `thread_id` is stored in the
-job ledger. The default graph is strictly 7 nodes; the review node is only registered when enabled.
+job ledger. The default graph is strictly 5 nodes; the review node is only registered when enabled.
 
 ## Configuration reference
 

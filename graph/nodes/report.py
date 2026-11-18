@@ -1,23 +1,17 @@
-"""简报生成节点（S5-B：模板基线 / 结构化输出双路径）。
+"""简报节点（R3 起）：把四栏目段落**拼装**成报告，不再自己调 LLM 抽取。
 
-从 capabilities.briefing 后端与结构化契约，补一份「按栏目段落」的正文：
+职责：
+- 收集四子图写好的段落（facts 带 source_url、状态、冲突、analysis）；
+- 应用人工复核/子图判定的降级栏目（强制拒答 + 清空孤儿引用）；
+- 调 `graph/nodes/assemble.py` 统一编号、生成 References、拼 Markdown。
 
 两条硬约定始终成立：
-1. 正文行内引用 [n] 与末尾 References **来自同一份** `state["references"]`；
+1. 正文行内引用 [n] 与末尾 References **来自同一份** URL 集合；
 2. 降级栏目直接输出「该类信息未找到公开依据」，绝不拿低分/无关内容硬凑。
 
-`features.structured_output`：
-- **off**：S4 模板路径，报告与 S4 **逐字一致**（A/B 基线）。
-- **on**：`prompt | with_structured_output(SectionBrief)` 真跑 LCEL；fixture 模式
-  后端是本地 mock HTTP 的确定性 stub（见 `capabilities/briefing.py`），**不是模型能力**。
-  每条 Fact 的 `source_url` 必须落在本次文档集合里，否则由抽取层剔除并留痕。
-
-结构化抽取失败属于「生成失败」，与 evidence_check 判定的「检索证据不足」是两类降级：
-只在报告与 `briefings` 里拒答、在 `review_notes` 留痕，不改写 `degraded_sections`。
-
-S10 起 `on` 路径多一步**同栏目事实冲突标注**（`capabilities/conflict.py`）：同一栏目
-对同一槽位给出两个取值时，在该栏目末尾追加一行 markdown 引用块说明冲突。用引用块而不是
-bullet 是刻意的 —— 它不是事实陈述，不该出现在「每条 bullet 都必须带引用」的统计里。
+历史说明：S5-B 时本节点有「模板基线 / 结构化输出」双路径，抽取也在这里做；
+R3 把抽取下沉进各子图（`graph/agents/extract.py` 的三级降级链），本节点退化为
+纯拼装工，`features.structured_output` 因此不再影响报告文本（A/B 中如实标 no_effect）。
 """
 
 from __future__ import annotations
