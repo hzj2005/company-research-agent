@@ -29,28 +29,50 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Mapping, Sequence
 
-# 槽位 -> (中文名, 抽取正则)
-_SLOT_PATTERNS: dict[str, tuple[str, re.Pattern[str]]] = {
+# 槽位 -> (中文名, 抽取正则列表)
+# 每个槽位允许多个模式（中/英）：claim 按 prompts 要求是简体中文，但上游 fixture
+# 与历史数据是英文，两种都要认。取第一个命中的模式。
+_SLOT_PATTERNS: dict[str, tuple[str, tuple[re.Pattern[str], ...]]] = {
     "founded_year": (
         "成立年份",
-        re.compile(
-            r"\b(?:founded|established|incorporated|formed)\b[^.;\n]{0,24}?"
-            r"\b((?:1[89]|20)\d{2})\b",
-            re.IGNORECASE,
+        (
+            re.compile(
+                r"\b(?:founded|established|incorporated|formed)\b[^.;\n]{0,24}?"
+                r"\b((?:1[89]|20)\d{2})\b",
+                re.IGNORECASE,
+            ),
+            # 中文：「成立于 2013 年」「2013 年成立」
+            re.compile(
+                r"(?:成立|创立|创建|创办|设立)(?:于|在)?\s*((?:1[89]|20)\d{2})\s*年?"
+            ),
+            re.compile(
+                r"((?:1[89]|20)\d{2})\s*年[^。；;\n]{0,6}?(?:成立|创立|创建|创办|设立)"
+            ),
         ),
     ),
     "headquarters": (
         "总部位置",
-        re.compile(
-            r"\bheadquarter(?:ed|s)?\b[^.;\n]{0,40}?\b(?:in|at)\s+([^.;\n]{3,90})",
-            re.IGNORECASE,
+        (
+            re.compile(
+                r"\bheadquarter(?:ed|s)?\b[^.;\n]{0,40}?\b(?:in|at)\s+([^.;\n]{3,90})",
+                re.IGNORECASE,
+            ),
+            # 中文：「总部位于北京」「总部设在上海」
+            re.compile(
+                r"(?:总部|总部位|总部设)(?:于|在|位于|设于)?\s*([\u4e00-\u9fa5A-Za-z][^。；;\n]{1,29})"
+            ),
         ),
     ),
     "employee_count": (
         "员工人数",
-        re.compile(
-            r"\b(\d[\d,]{1,9})\s+(?:employees|people|staff|workers)\b",
-            re.IGNORECASE,
+        (
+            re.compile(
+                r"\b(\d[\d,]{1,9})\s+(?:employees|people|staff|workers)\b",
+                re.IGNORECASE,
+            ),
+            # 中文：「1200 名员工」「员工 1200 人」——不用裸「人」避免误匹配
+            re.compile(r"(\d[\d,]{1,9})\s*(?:名|位)?\s*(?:员工|雇员)"),
+            re.compile(r"(?:员工|雇员)\s*(?:约|近)?\s*(\d[\d,]{1,9})\s*(?:名|人)?"),
         ),
     ),
 }
@@ -60,13 +82,16 @@ _HQ_STOPWORDS = frozenset({
     "the", "and", "of", "in", "at", "is", "was", "located", "headquarters",
     "headquartered", "street", "st", "road", "rd", "avenue", "ave", "suite",
     "floor", "building", "box", "city", "office", "offices", "based",
+    # 中文停用成分
+    "总部", "位于", "设于", "设在", "公司", "集团", "中国", "美国",
 })
 
 
 def _hq_tokens(text: str) -> frozenset[str]:
-    return frozenset(
-        w for w in re.findall(r"[a-z]{3,}", text.lower()) if w not in _HQ_STOPWORDS
-    )
+    """取地名 token：英文 3+ 字母词 + 中文 2+ 字片段，去掉通用停用成分。"""
+    en = re.findall(r"[a-z]{3,}", text.lower())
+    zh = re.findall(r"[\u4e00-\u9fa5]{2,}", text)
+    return frozenset(w for w in (*en, *zh) if w not in _HQ_STOPWORDS)
 
 
 @dataclass(frozen=True)
@@ -107,10 +132,14 @@ class Conflict:
 
 
 def _slot_values(claim: str) -> dict[str, tuple[str, str]]:
-    """一条 claim 里能抽到的槽位 -> (归一值, 展示值)。每个槽位只取第一处。"""
+    """一条 claim 里能抽到的槽位 -> (归一值, 展示值)。每个槽位取第一个命中的模式。"""
     out: dict[str, tuple[str, str]] = {}
-    for slot, (_, pattern) in _SLOT_PATTERNS.items():
-        m = pattern.search(claim)
+    for slot, (_, patterns) in _SLOT_PATTERNS.items():
+        m = None
+        for pattern in patterns:
+            m = pattern.search(claim)
+            if m:
+                break
         if not m:
             continue
         raw = m.group(1).strip()

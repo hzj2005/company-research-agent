@@ -22,6 +22,9 @@ logger = logging.getLogger(__name__)
 
 # extract 函数签名：(company, section, docs, settings) -> (facts: list[dict], status: str, notes: list)
 ExtractFn = Callable[[str, str, list[dict[str, Any]], Settings], Awaitable[tuple[list[dict[str, Any]], str, list[dict[str, Any]]]]]
+# analyzer 签名：(facts 带 _round, company, settings) -> 结构化 conflicts（不带编号）
+# 栏目专属加工（R4）：Company 冲突标注等。返回 [{slot,label,values:[{display,urls}]}]
+AnalyzerFn = Callable[[list[dict[str, Any]], str, Settings], list[dict[str, Any]]]
 
 
 def make_pipeline_node(
@@ -31,11 +34,13 @@ def make_pipeline_node(
     extract_fn: ExtractFn,
     *,
     do_guard: bool = False,
+    analyzer: AnalyzerFn | None = None,
 ) -> Any:
     """构造一个子图自闭环节点。
 
     `do_guard=True` 时先做实体消歧（company/financial 用），其他栏目跳过。
     `extract_fn` 是栏目自己的抽取实现（LLM + 降级）。
+    `analyzer` 是栏目专属加工钩子（R4），产出结构化冲突等，**不带编号**。
     """
     min_docs = settings.graph.evidence.min_docs_per_section
     # 关闭自纠正时不允许返工（旧架构 rewrite_query 的开关语义下沉子图）
@@ -53,6 +58,7 @@ def make_pipeline_node(
         all_notes: list[dict[str, Any]] = []
         facts: list[dict[str, Any]] = []
         references: dict[str, dict[str, Any]] = {}
+        processed_urls: set[str] = set()
         status = "insufficient"
 
         # 子图内自闭环：当前轮不够且未超上限 → 自己返工重搜
@@ -99,15 +105,17 @@ def make_pipeline_node(
                     }
 
             # ③ extract（栏目自己的实现：LLM + 降级）
-            round_facts, extract_status, notes = await extract_fn(company, section, docs, settings)
+            # 跨轮只对"未处理过的文档"抽取：避免同一文档重复抽；
+            # 但同一文档抽出的多条事实必须全部保留（R3 曾按 url 去重，会丢同文档多事实）
+            new_docs = [d for d in docs if str(d.get("url", "")) not in processed_urls]
+            round_facts, extract_status, notes = await extract_fn(
+                company, section, new_docs, settings
+            )
             all_notes.extend(notes)
-            # 跨轮累积 facts（按 source_url 去重）：首轮那 1 条也要留到最终段落，
-            # 否则 sparse case 回退后丢首轮证据（R3 实测 sparse:company:2 踩到）
-            seen_urls = {f.get("source_url") for f in facts}
             for f in round_facts:
-                if f.get("source_url") not in seen_urls:
-                    facts.append(f)
-                    seen_urls.add(f.get("source_url"))
+                # 记轮次（_round）：冲突判定要求"同轮才判"，跨轮视为陆续补充
+                facts.append({**f, "_round": attempt})
+            processed_urls.update(str(d.get("url", "")) for d in new_docs)
 
             # ④ 证据判定：够 → 写段落退出；不够 → 返工
             if len(facts) >= min_docs or extract_status == "no_retry":
@@ -136,11 +144,24 @@ def make_pipeline_node(
             )
             facts = facts[:max_facts]
 
-        # ⑤ 写段落（facts 带 source_url，不带编号）
+        # ⑤ 栏目专属加工（R4）：冲突标注等，产出结构化 conflicts（不带编号）
+        conflicts: list[dict[str, Any]] = []
+        if analyzer is not None and status == "ok":
+            try:
+                conflicts = analyzer(facts, company, settings)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("%s analyzer 失败，跳过：%s", section, exc)
+                all_notes.append(
+                    {"node": "analyzer", "section": section, "status": "failed",
+                     "error": f"{type(exc).__name__}: {str(exc)[:120]}"}
+                )
+
+        # ⑥ 写段落（facts 带 source_url，不带编号）
         paragraph = make_paragraph(
             section, section, _to_facts(facts),
             settings=settings,
             degraded=(status == "degraded"),
+            conflicts=conflicts,
             references=references,
         )
         # degraded 标记并行分支各自追加（append_unique reducer 合并），

@@ -12,6 +12,7 @@ from typing import Any
 from langchain_core.tools import StructuredTool
 
 from config.loader import Settings
+from graph.agents.company.analyzer import detect_same_round_conflicts
 from graph.agents.company.prompts import COMPANY_ADDENDUM
 from graph.agents.extract import extract_with_fallback
 from graph.agents.pipeline import make_pipeline_node
@@ -27,4 +28,7 @@ async def company_extract(
 
 
 def make_company_pipeline_node(settings: Settings, document_tool: StructuredTool) -> Any:
-    return make_pipeline_node(settings, "company", document_tool, company_extract, do_guard=True)
+    return make_pipeline_node(
+        settings, "company", document_tool, company_extract,
+        do_guard=True, analyzer=detect_same_round_conflicts,
+    )

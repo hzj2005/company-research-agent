@@ -22,6 +22,31 @@ def _norm(url: Any) -> str:
     return str(url).rstrip("/")
 
 
+def _render_conflict(conflict: Any, norm_index: dict[str, int]) -> str:
+    """结构化冲突 → 一行引用块文本（编号在此统一分配，子图不碰编号）。
+
+    兼容两种形态：字符串原样返回（旧测试/手写）；dict 渲染成带 [n] 的说明。
+    """
+    if isinstance(conflict, str):
+        return conflict
+    label = str(conflict.get("label") or conflict.get("slot") or "该字段")
+    values = conflict.get("values") or []
+    parts: list[str] = []
+    for v in values:
+        display = str(v.get("display", ""))
+        nums = "".join(
+            f"[{n}]"
+            for n in (norm_index.get(_norm(u)) for u in (v.get("urls") or []))
+            if n is not None
+        )
+        parts.append(f"{display} {nums}".strip())
+    joined = " / ".join(parts)
+    return (
+        f"**来源冲突**：{label}出现 {len(values)} 个取值 —— {joined}，"
+        f"来源之间不一致，未判定哪个正确"
+    )
+
+
 def assemble_report(
     company: str,
     sections: list[dict[str, Any]],
@@ -91,7 +116,7 @@ def assemble_report(
                 lines.append(f"- {claim}{marker}")
             # 冲突标注（引用块，不参与"每条 bullet 带引用"统计）
             for conflict in sec.get("conflicts", []):
-                lines.append(f"> {conflict}")
+                lines.append(f"> {_render_conflict(conflict, norm_index)}")
             briefings[key] = {
                 "status": "ok",
                 "facts": list(facts),

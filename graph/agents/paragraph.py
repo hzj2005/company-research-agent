@@ -20,7 +20,7 @@ def make_paragraph(
     *,
     settings: Settings,
     degraded: bool = False,
-    conflicts: list[str] | None = None,
+    conflicts: list[Any] | None = None,
     references: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """把一个栏目抽出的 facts 写成段落产物（供报告层拼装）。
