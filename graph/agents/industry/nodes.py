@@ -11,6 +11,7 @@ from typing import Any
 from langchain_core.tools import StructuredTool
 
 from config.loader import Settings
+from graph.agents.industry.analyzer import analyze_industry
 from graph.agents.industry.prompts import INDUSTRY_ADDENDUM
 from graph.agents.extract import extract_with_fallback
 from graph.agents.pipeline import make_pipeline_node
@@ -26,4 +27,7 @@ async def industry_extract(
 
 
 def make_industry_pipeline_node(settings: Settings, document_tool: StructuredTool) -> Any:
-    return make_pipeline_node(settings, "industry", document_tool, industry_extract, do_guard=False)
+    return make_pipeline_node(
+        settings, "industry", document_tool, industry_extract,
+        do_guard=False, analyzer=analyze_industry,
+    )

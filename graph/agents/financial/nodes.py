@@ -11,6 +11,7 @@ from typing import Any
 from langchain_core.tools import StructuredTool
 
 from config.loader import Settings
+from graph.agents.financial.analyzer import analyze_financial
 from graph.agents.financial.prompts import FINANCIAL_ADDENDUM
 from graph.agents.extract import extract_with_fallback
 from graph.agents.pipeline import make_pipeline_node
@@ -26,4 +27,7 @@ async def financial_extract(
 
 
 def make_financial_pipeline_node(settings: Settings, document_tool: StructuredTool) -> Any:
-    return make_pipeline_node(settings, "financial", document_tool, financial_extract, do_guard=True)
+    return make_pipeline_node(
+        settings, "financial", document_tool, financial_extract,
+        do_guard=True, analyzer=analyze_financial,
+    )

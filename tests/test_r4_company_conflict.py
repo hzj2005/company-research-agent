@@ -26,7 +26,7 @@ def test_same_round_conflict_detected() -> None:
         _fact("Notion 成立于 2013 年。", "https://e.org/a", 0),
         _fact("Notion 成立于 2014 年。", "https://e.org/b", 0),
     ]
-    conflicts = detect_same_round_conflicts(facts, "Notion", s)
+    conflicts = detect_same_round_conflicts(facts, "Notion", s)["conflicts"]
     assert len(conflicts) == 1
     assert conflicts[0]["slot"] == "founded_year"
     assert {v["display"] for v in conflicts[0]["values"]} == {"2013", "2014"}
@@ -39,7 +39,7 @@ def test_cross_round_difference_is_not_conflict() -> None:
         _fact("Notion 成立于 2013 年。", "https://e.org/a", 0),
         _fact("Notion 成立于 2014 年。", "https://e.org/b", 1),
     ]
-    assert detect_same_round_conflicts(facts, "Notion", s) == []
+    assert detect_same_round_conflicts(facts, "Notion", s)["conflicts"] == []
 
 
 def test_same_value_same_round_no_conflict() -> None:
@@ -48,7 +48,7 @@ def test_same_value_same_round_no_conflict() -> None:
         _fact("Notion 成立于 2013 年。", "https://e.org/a", 0),
         _fact("Notion 于 2013 年成立。", "https://e.org/b", 0),
     ]
-    assert detect_same_round_conflicts(facts, "Notion", s) == []
+    assert detect_same_round_conflicts(facts, "Notion", s)["conflicts"] == []
 
 
 def test_conflict_rendered_as_quote_block_with_citation() -> None:
@@ -58,7 +58,7 @@ def test_conflict_rendered_as_quote_block_with_citation() -> None:
         _fact("Notion 成立于 2013 年。", "https://e.org/a", 0),
         _fact("Notion 成立于 2014 年。", "https://e.org/b", 0),
     ]
-    conflicts = detect_same_round_conflicts(facts, "Notion", s)
+    conflicts = detect_same_round_conflicts(facts, "Notion", s)["conflicts"]
     para = {
         "key": "company", "status": "ok",
         "facts": [{"claim": "Notion 成立于 2013 年。", "source_url": "https://e.org/a"}],

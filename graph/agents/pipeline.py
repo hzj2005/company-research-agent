@@ -22,9 +22,10 @@ logger = logging.getLogger(__name__)
 
 # extract 函数签名：(company, section, docs, settings) -> (facts: list[dict], status: str, notes: list)
 ExtractFn = Callable[[str, str, list[dict[str, Any]], Settings], Awaitable[tuple[list[dict[str, Any]], str, list[dict[str, Any]]]]]
-# analyzer 签名：(facts 带 _round, company, settings) -> 结构化 conflicts（不带编号）
-# 栏目专属加工（R4）：Company 冲突标注等。返回 [{slot,label,values:[{display,urls}]}]
-AnalyzerFn = Callable[[list[dict[str, Any]], str, Settings], list[dict[str, Any]]]
+# analyzer 签名：(facts 带 _round, company, settings, source_texts) ->
+#   {"conflicts": [...], "analysis": {...}}
+# source_texts = url -> 原文 content（数字保真校验需要，如财务金额是否真在原文里）
+AnalyzerFn = Callable[[list[dict[str, Any]], str, Settings, dict[str, str]], dict[str, Any]]
 
 
 def make_pipeline_node(
@@ -58,6 +59,7 @@ def make_pipeline_node(
         all_notes: list[dict[str, Any]] = []
         facts: list[dict[str, Any]] = []
         references: dict[str, dict[str, Any]] = {}
+        source_texts: dict[str, str] = {}
         processed_urls: set[str] = set()
         status = "insufficient"
 
@@ -103,6 +105,8 @@ def make_pipeline_node(
                         "title": d.get("title", ""),
                         "score": float(d.get("score", 0) or 0),
                     }
+                    if d.get("content"):
+                        source_texts[str(d["url"])] = str(d["content"])
 
             # ③ extract（栏目自己的实现：LLM + 降级）
             # 跨轮只对"未处理过的文档"抽取：避免同一文档重复抽；
@@ -144,11 +148,23 @@ def make_pipeline_node(
             )
             facts = facts[:max_facts]
 
-        # ⑤ 栏目专属加工（R4）：冲突标注等，产出结构化 conflicts（不带编号）
+        # ⑤ 栏目专属加工（R4）：冲突标注 + 结构化分析产物
         conflicts: list[dict[str, Any]] = []
+        analysis: dict[str, Any] = {}
         if analyzer is not None and status == "ok":
             try:
-                conflicts = analyzer(facts, company, settings)
+                res = analyzer(facts, company, settings, source_texts) or {}
+                # 兼容旧形态：直接返回 list 视为 conflicts
+                if isinstance(res, list):
+                    conflicts = res
+                else:
+                    conflicts = res.get("conflicts", []) or []
+                    analysis = res.get("analysis", {}) or {}
+                if analysis:
+                    all_notes.append(
+                        {"node": "analyzer", "section": section,
+                         "analysis_keys": sorted(analysis.keys())}
+                    )
             except Exception as exc:  # noqa: BLE001
                 logger.warning("%s analyzer 失败，跳过：%s", section, exc)
                 all_notes.append(
@@ -172,6 +188,8 @@ def make_pipeline_node(
         # 返工轮次 = 实际多跑的轮数（与有没有 facts 无关；empty case 也记满）
         used_round = max(attempt - round_no, 0)
         paragraph["truncated"] = truncated
+        if analysis:
+            paragraph["analysis"] = analysis
         return {
             f"{section}_paragraph": paragraph,
             "degraded_sections": degraded_marker,

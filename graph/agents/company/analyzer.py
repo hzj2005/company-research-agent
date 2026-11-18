@@ -33,9 +33,10 @@ def _to_facts(raw: list[dict[str, Any]]) -> list[Fact]:
 
 
 def detect_same_round_conflicts(
-    facts: list[dict[str, Any]], company: str, settings: Settings
-) -> list[dict[str, Any]]:
-    """按轮次分组，组内调 detect_conflicts；合并成结构化列表。"""
+    facts: list[dict[str, Any]], company: str, settings: Settings,
+    source_texts: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """按轮次分组，组内调 detect_conflicts；返回 {"conflicts": [...]}。"""
     from capabilities.conflict import detect_conflicts
 
     by_round: dict[int, list[dict[str, Any]]] = {}
@@ -57,4 +58,4 @@ def detect_same_round_conflicts(
                     ],
                 }
             )
-    return conflicts
+    return {"conflicts": conflicts, "analysis": {}}

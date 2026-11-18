@@ -11,8 +11,9 @@ from typing import Any
 from langchain_core.tools import StructuredTool
 
 from config.loader import Settings
-from graph.agents.news.prompts import NEWS_ADDENDUM
 from graph.agents.extract import extract_with_fallback
+from graph.agents.news.analyzer import analyze_news
+from graph.agents.news.prompts import NEWS_ADDENDUM
 from graph.agents.pipeline import make_pipeline_node
 
 
@@ -26,4 +27,7 @@ async def news_extract(
 
 
 def make_news_pipeline_node(settings: Settings, document_tool: StructuredTool) -> Any:
-    return make_pipeline_node(settings, "news", document_tool, news_extract, do_guard=False)
+    return make_pipeline_node(
+        settings, "news", document_tool, news_extract,
+        do_guard=False, analyzer=analyze_news,
+    )

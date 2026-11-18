@@ -47,9 +47,21 @@ _SLOT_KEYWORDS: dict[str, tuple[str, ...]] = {
 _DATE_PATTERNS = (
     re.compile(r"(20\d{2})\s*年\s*(\d{1,2})\s*月"),
     re.compile(r"(20\d{2})-(\d{1,2})-(\d{1,2})"),
+    # 兜底：只有年份（"2024 年发布…"），放最后以免抢走更精确的年月
+    re.compile(r"(20\d{2})\s*年"),
 )
-# 事件动作词：用于同一事件的粗粒度归并
-_EVENT_ACTIONS = ("发布", "融资", "合作", "获奖", "收购", "上市", "达成")
+# 事件动作词：用于同一事件的粗粒度归并。
+# 每组第一个是归并键；组内是同一动作的不同说法（"推出"与"发布"应聚成一组）。
+_EVENT_ACTIONS: tuple[tuple[str, ...], ...] = (
+    ("发布", "推出", "上线", "面世", "发行", "问世"),
+    ("融资", "获得融资", "完成融资", "募集", "获投"),
+    ("合作", "联手", "携手", "达成合作"),
+    ("获奖", "入选", "获评", "被评为"),
+    ("收购", "并购", "买下"),
+    ("上市", "挂牌", "IPO"),
+    ("裁员", "裁撤", "缩减团队"),
+    ("达成", "签署", "签订"),
+)
 
 
 def _fact_from(item: dict[str, Any]) -> Fact | None:
@@ -70,6 +82,8 @@ _COMPETITOR_PATTERNS = (
     re.compile(r"竞品(?:包括|有|是|包含)\s*([^，。；]{1,80})"),
     re.compile(r"对标\s*([^，。；]{1,80})"),
     re.compile(r"(?:主要|直接)?竞争对手(?:包括|是|有)?\s*([^，。；]{1,80})"),
+    # 「与 X 对标」「和 X 对标」——名字在前的语序同样常见
+    re.compile(r"(?:与|和)\s*([^，。；]{2,40}?)\s*对标"),
 )
 # 从抽到的片段里切出候选名：大写开头的英文词，或 2-6 字中文专名
 _NAME_TOKEN = re.compile(r"[A-Z][A-Za-z0-9.]{1,20}|[\u4e00-\u9fa5]{2,6}")
@@ -225,11 +239,15 @@ def news_postprocess(facts: list[Fact], *, reference_year: int) -> dict[str, Any
             }
         )
 
-    # 事件去重：按 (动作词, 推断年份) 分组；无动作词的各自单独
+    # 事件去重：按 (动作组, 推断年份) 分组；无动作词的各自单独
     groups: dict[str, list[dict[str, Any]]] = {}
     for item in enriched:
-        action = next((a for a in _EVENT_ACTIONS if a in item["claim"]), None)
-        key = f"{action or 'other'}:{item['inferred_year']}"
+        action_key = None
+        for action_group in _EVENT_ACTIONS:
+            if any(word in item["claim"] for word in action_group):
+                action_key = action_group[0]  # 归并键用组内第一个词
+                break
+        key = f"{action_key or 'other'}:{item['inferred_year']}"
         groups.setdefault(key, []).append(item)
 
     deduped = []
