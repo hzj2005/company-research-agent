@@ -4,23 +4,29 @@
   "company": "Notion",
   "live_run_status": "ok",
   "checks": {
-    "claims_count": 27,
+    "claims_count": 26,
     "sections": [
-      "Company Overview",
-      "Industry Overview",
-      "Financial Overview",
-      "News"
+      "公司概况",
+      "行业概况",
+      "财务概况",
+      "新闻动态"
     ],
     "inline_markers_used": [
       1,
       2,
       3,
-      4,
       5,
       6,
       7,
+      8,
       9,
-      11
+      11,
+      12,
+      13,
+      14,
+      15,
+      17,
+      18
     ],
     "reference_numbers": [
       1,
@@ -33,17 +39,25 @@
       8,
       9,
       10,
-      11
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18
     ],
     "markers_without_reference": [],
     "citation_integrity_ok": true,
     "contradictions": [
       {
-        "section": "Company Overview",
+        "section": "公司概况",
         "predicate": "founded in YYYY",
         "values": [
-          2013,
-          2014
+          2012,
+          2014,
+          2016
         ]
       }
     ],
@@ -52,15 +66,21 @@
       "distillintelligence.com": 1,
       "medium.com": 1,
       "research.contrary.com": 1,
+      "6sense.com": 1,
       "cbinsights.com": 1,
-      "finance.yahoo.com": 1,
-      "pitchbook.com": 1,
+      "leadiq.com": 1,
+      "boringbusinessnerd.com": 1,
       "keio.ac.jp": 1,
-      "forbes.com": 2,
+      "crunchbase.com": 1,
+      "linkedin.com": 1,
       "businesswire.com": 1,
-      "consulting.us": 1
+      "forbes.com": 3,
+      "consulting.us": 1,
+      "koreatimes.co.kr": 1,
+      "bloomberg.com": 1,
+      "tavily.com": 1
     },
-    "source_domain_count": 10,
+    "source_domain_count": 16,
     "method": "词法/结构检查，非语义事实核验",
     "note": "引用完整性只证明 [n] 有对应编号，不证明该 URL 真的支持结论；矛盾检测只覆盖 founded in YYYY 这类显式模式，未覆盖同义改写的事实冲突"
   },

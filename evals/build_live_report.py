@@ -313,6 +313,13 @@ def ab_rows(data: dict[str, Any]) -> list[tuple[str, str, Cell, Cell, Cell]]:
     return rows
 
 
+# 同名异实体：真实运行里出现过的两类混淆。
+# - Notion VTec Berhad：马来西亚上市公司（S8.3 那次检索撞上）
+# - Notion Consulting：同名咨询公司（R3 重跑时 news 栏目撞上）
+# 具体撞上哪个由检索结果决定，所以统计总和而不是绑定单个名字。
+_ENTITY_CONFUSION_MARKERS = ("Notion VTec Berhad", "Notion Consulting")
+
+
 def known_issue_cells(data: dict[str, Any]) -> list[Cell]:
     """§5 已知问题里出现的可重算数字。"""
     return [
@@ -320,8 +327,8 @@ def known_issue_cells(data: dict[str, Any]) -> list[Cell]:
         num(data, "live_quality", "checks.contradictions[0].values"),
         num(data, "live_quality", "checks.source_domain_count"),
         derived(
-            data, "live_run", "report", "正文中实体名出现次数",
-            lambda text: text.count("Notion VTec Berhad"),
+            data, "live_run", "report", "正文中同名异实体出现次数",
+            lambda text: sum(text.count(m) for m in _ENTITY_CONFUSION_MARKERS),
         ),
         num(data, "live_score", "is_human_adjudicated"),
     ]

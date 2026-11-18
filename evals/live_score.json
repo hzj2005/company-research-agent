@@ -23,7 +23,9 @@
     "scored_claims": 5,
     "skipped_claims": 20,
     "skipped_reason": "其余公司没有真实报告可比，不得凭空生成卷子",
-    "report_chars": 4998,
+    "report_chars": 4904,
+    "report_body_chars": 2305,
+    "quote_check_scope": "仅报告正文（## References 之前的段落），来源清单标题不算证据",
     "claim_fields_sent_to_judge": [
       "claim_id",
       "expected_text"
@@ -50,11 +52,20 @@
   },
   "usage": {
     "successful_requests": 1,
-    "total_tokens": 2776,
-    "prompt_tokens": 2334,
-    "completion_tokens": 442,
+    "total_tokens": 3435,
+    "prompt_tokens": 2810,
+    "completion_tokens": 625,
     "total_cost_usd": null,
     "cost_note": "get_openai_callback 的价目表只覆盖 OpenAI 官方模型；qwen-plus 单价不在此表内，故不套用、不编造成本数字"
+  },
+  "provenance": {
+    "recorded_at": "runtime",
+    "golden_live_jsonl_sha256": "bb398353e621896881351ee9147efa88436ca69be79ed8e28bd1e036727d0a70",
+    "live_run_json_sha256": "a0e0dac0216432ddf1a2f2c80b4d85d040d5d9800d8b9c77b1d4c609a8479307",
+    "judge_py_sha256": "8e17ff40fe40b543e00404752d508b1a8055525b76653ff74339012bf37cf6de",
+    "system_prompt_sha256": "dd6c20f556919f6960572a54063afff7a314d5dd3705c23f35116e89c990d337",
+    "payload_sha256": "685a34cda228ed827c8aae0917f386e651602e019f9aae5ce7d26e3ecaba35df",
+    "note": "运行时采集；用于判断产物对应哪版 golden / 报告 / prompt / 代码。payload_sha256 覆盖送进模型的全部文本"
   },
   "schema_check": {
     "ok": true,
@@ -75,12 +86,13 @@
       "verdict": "refuted",
       "self_conflict": true,
       "evidence_quotes": [
-        "Notion was founded in 2013. [6]",
-        "Notion was founded in 2014. [4]"
+        "Notion 成立于2012年。 [7]",
+        "Notion 成立于2014年。 [5]",
+        "Notion 成立于2016年。 [17]"
       ],
       "quotes_verified": true,
       "unverified_quotes": [],
-      "reason": "Report contains two conflicting statements about Notion's founding year: '2013' and '2014', resulting in self-conflict.",
+      "reason": "report 中给出三个互相矛盾的成立年份（2012、2014、2016），与‘2013年创办’均不一致，且存在自相矛盾",
       "quote_check_failed": false
     },
     {
@@ -88,13 +100,15 @@
       "expected_text": "Notion 总部位于旧金山",
       "report_section": "Company Overview",
       "verdict": "refuted",
-      "self_conflict": false,
+      "self_conflict": true,
       "evidence_quotes": [
-        "Notion's headquarters is located at 51 Lloyd Baker Street, London, England, WC1X 9AA, United Kingdom. [4]"
+        "Notion 总部位于美国加利福尼亚州旧金山（San Francisco, California）。 [7]",
+        "Notion 总部位于美国加利福尼亚州旧金山（San Francisco, California, United States）。 [17]",
+        "Notion 总部位于英国伦敦劳埃德·贝克街51号（51 Lloyd Baker Street, London, England, WC1X 9AA, United Kingdom）。 [5]"
       ],
       "quotes_verified": true,
       "unverified_quotes": [],
-      "reason": "Report states Notion's headquarters is in London, UK, which contradicts the claim that it is in San Francisco.",
+      "reason": "report 中同时声称总部位于旧金山和伦敦，存在直接地理冲突，与‘总部位于旧金山’这一唯一取值不一致",
       "quote_check_failed": false
     },
     {
@@ -106,44 +120,49 @@
       "evidence_quotes": [],
       "quotes_verified": false,
       "unverified_quotes": [],
-      "reason": "Report does not mention CNBC, Ivan Zhao as CEO, Simon Last, or Akshay Kothari as founders.",
+      "reason": "report 中未提及 CNBC 榜单，也未列出 Ivan Zhao、Simon Last 或 Akshay Kothari 为创始人",
       "quote_check_failed": false
     },
     {
       "claim_id": "notion:industry:0",
       "expected_text": "Notion 是模块化协作工作区，把笔记、项目、wiki、数据库组合在一起",
       "report_section": "Industry Overview",
-      "verdict": "not_mentioned",
+      "verdict": "supported",
       "self_conflict": false,
-      "evidence_quotes": [],
-      "quotes_verified": false,
+      "evidence_quotes": [
+        "Notion 的业务包括笔记、协作、任务管理、维基和数据库功能。 [9]"
+      ],
+      "quotes_verified": true,
       "unverified_quotes": [],
-      "reason": "Report describes Notion as an 'online work collaboration platform for task and project management' but does not state it is a 'modular collaboration workroom' that 'combines notes, projects, wiki, and databases'.",
+      "reason": "report 明确指出 Notion 的业务涵盖笔记、协作、维基和数据库功能，与‘把笔记、项目、wiki、数据库组合在一起’语义一致",
       "quote_check_failed": false
     },
     {
       "claim_id": "notion:financial:0",
       "expected_text": "2021 年 10 月，Notion 完成 2.75 亿美元融资，由红杉资本与 Coatue 领投，投后估值升至 100 亿美元（2021 年时点，历史数据）",
       "report_section": "Financial Overview",
-      "verdict": "not_mentioned",
+      "verdict": "supported",
       "self_conflict": false,
-      "evidence_quotes": [],
-      "quotes_verified": false,
+      "evidence_quotes": [
+        "Notion 在 2021 年 10 月完成一轮融资，估值达 100 亿美元（$10 billion） [12]",
+        "Notion 在 2021 年 10 月融资 2.75 亿美元（$275 million），投资方包括 Coatue、Sequoia 和 Base10 [12]"
+      ],
+      "quotes_verified": true,
       "unverified_quotes": [],
-      "reason": "Report contains financial data for 'Notion VTec Berhad (0083.KL)', a Malaysian public company, but no information about Notion Labs, Inc.'s $275M Series C funding in October 2021 or its $10B valuation.",
+      "reason": "report 明确指出 Notion 在 2021 年 10 月完成 2.75 亿美元融资、投后估值 100 亿美元，且投资方含 Coatue 与 Sequoia（红杉资本），与标准答案完全一致",
       "quote_check_failed": false
     }
   ],
   "summary": {
     "scored_claims": 5,
-    "supported": 0,
+    "supported": 2,
     "refuted": 2,
-    "not_mentioned": 3,
+    "not_mentioned": 1,
     "unjudged": 0,
-    "self_conflict": 1,
+    "self_conflict": 2,
     "quote_check_failed": 0
   },
-  "verdict_note": "supported 表示报告有支持该事实的陈述，不代表该陈述的来源 URL 真的支持它；refuted 含报告自相矛盾的情形；not_mentioned 表示未写到，不等于系统答错。quote_check_failed=true 的条目证据句未能在报告中逐字核到，判定不可靠；quote_check_failed=null 表示 judge 未返回该条，单独计入 unjudged。",
+  "verdict_note": "supported 表示报告有支持该事实的陈述，不代表该陈述的来源 URL 真的支持它；refuted 含报告自相矛盾的情形；not_mentioned 表示未写到，不等于系统答错。证据句校验只在正文做，归一化空白/[n]/大小写，不是原始逐字比对；quote_check_failed=true 表示引文核不到或该判却缺引文，判定不可靠；quote_check_failed=null 表示 judge 未返回该条，单独计入 unjudged。",
   "isolation": {
     "llm_requests_cap": 1,
     "llm_requests_cap_note": "max_retries=0，脚本不做任何重试；失败即 failed",
@@ -151,7 +170,7 @@
     "document_tool_constructed": false,
     "tavily_credits_used": 0
   },
-  "elapsed_ms": 10850.3,
+  "elapsed_ms": 14741.1,
   "elapsed_note": "本机墙钟，非确定性字段，不参与 CI 比对",
   "credentials": {
     "api_key_env_var": "DASHSCOPE_API_KEY",

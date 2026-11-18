@@ -26,6 +26,11 @@ OUTPUT = ROOT / "evals" / "live_quality.json"
 _CLAIM = re.compile(r"^-\s+(.+?)\s*\[(\d+)\]\s*$", flags=re.MULTILINE)
 _REF = re.compile(r"^\[(\d+)\]\s+(.+)$", flags=re.MULTILINE)
 _FOUNDED = re.compile(r"\bfounded in (\d{4})\b", flags=re.IGNORECASE)
+# 中文报告（R3 起输出为简体中文）："成立于2012年" / "2012 年成立"
+_FOUNDED_ZH = (
+    re.compile(r"(?:成立|创立|创建|创办|设立)(?:于|在)?\s*((?:1[89]|20)\d{2})"),
+    re.compile(r"((?:1[89]|20)\d{2})\s*年[^。；;\n]{0,6}?(?:成立|创立|创建|创办|设立)"),
+)
 _URL = re.compile(r"https?://[^\s\)\]]+")
 
 
@@ -58,6 +63,9 @@ def analyse(report: str) -> dict[str, Any]:
     for c in claims:
         for year in _FOUNDED.findall(c["text"]):
             founded_by_section.setdefault(str(c["section"]), set()).add(int(year))
+        for pattern in _FOUNDED_ZH:
+            for year in pattern.findall(c["text"]):
+                founded_by_section.setdefault(str(c["section"]), set()).add(int(year))
     contradictions = [
         {"section": sec, "predicate": "founded in YYYY", "values": sorted(years)}
         for sec, years in founded_by_section.items()

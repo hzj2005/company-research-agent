@@ -60,7 +60,7 @@ BULLETS: tuple[Bullet, ...] = (
             "主图精简为「检索调度 → 成稿」三段式（grounding → research → briefing），"
             "检索侧拆成 Company / Industry / Financial / News {F26} 张**独立编译的子图**，"
             "由编排层用 `Send` 并行派发；每张子图自带 state schema 与自闭环"
-            "（检索 → 消歧 → 抽取 → 证据判定 → 不足自返工 ≤2 轮 → 写段落），主图不再协调回退；"
+            "（检索 → 消歧 → 抽取 → 证据判定 → 不足自返工（上限 `max_retry`）→ 写段落），主图不再协调回退；"
             "报告层退化为纯拼装工，统一编号与 References。"
             "全流程落 checkpoint，成稿前可 `interrupt()` 暂停、换进程 `Command(resume=...)` 续跑。"
         ),
