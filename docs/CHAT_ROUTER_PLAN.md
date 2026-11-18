@@ -1,6 +1,6 @@
 # 对话式意图路由（R8）规划
 
-> 状态：**规划定稿，未开始实施**。决策日期 2026-11-18。
+> 状态：**P1 已实施（2026-11-18），P2–P6 待做**。决策日期 2026-11-18。
 
 ## 1. 目标
 
@@ -142,3 +142,18 @@
 - 不把整张图改成聊天机器人（state 里塞 messages 语义会与 HITL interrupt 冲突）；
 - 不在聊天里做人工复核（保留旧端点的 HITL）；
 - 不为了「看起来智能」让 LLM 自由发挥栏目名——只允许四个固定 key。
+
+## 10. 实施记录
+
+### P1 意图路由节点（已完成 2026-11-18）
+
+- `graph/nodes/router.py`：`RouteDecision`（与 LLM 结构化输出共用）+ 规则兜底 + 校验。
+- 主图变 6 节点：`grounding → route → research → briefing`；**route 只写 state，不改派发**，
+  这样 P1 不会把评测基线一起带偏（gate 仍全 1.0）。
+- 新增 state 字段：`user_message` / `requested_sections` / `route_meta` / `clarify`；
+  `requested_sections` 与旧 `sections_to_research`（重试白名单）刻意分开。
+- 规则覆盖：单选/多选/「不要新闻」排除/「全部」/只给公司→追问范围/指代→追问公司；
+  中文公司名覆盖「只看X的财报」「X最近…」，并对「什么/那家/我们」等做停用词拦截。
+- 验证：新增 16 个测试（LLM 路径注入，0 真实调用）；**612 passed**；评测 gate PASS。
+- 真实 DashScope 抽检 3 条（无检索、仅小模型调用），判定与规则一致；
+  抽检发现并修掉「LLM 返回 company=null」的缺口（节点用启发式补公司名，追问话术带主体）。
