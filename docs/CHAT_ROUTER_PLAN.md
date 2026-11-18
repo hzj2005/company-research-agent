@@ -1,6 +1,6 @@
 # 对话式意图路由（R8）规划
 
-> 状态：**P1 已实施（2026-11-18），P2–P6 待做**。决策日期 2026-11-18。
+> 状态：**P1–P5 已实施（2026-11-18），P6 live 验证待做**。决策日期 2026-11-18。
 
 ## 1. 目标
 
@@ -157,3 +157,35 @@
 - 验证：新增 16 个测试（LLM 路径注入，0 真实调用）；**612 passed**；评测 gate PASS。
 - 真实 DashScope 抽检 3 条（无检索、仅小模型调用），判定与规则一致；
   抽检发现并修掉「LLM 返回 company=null」的缺口（节点用启发式补公司名，追问话术带主体）。
+
+### P2 子集派发 + 报告契约（已完成 2026-11-18）
+
+- `ResearchSubgraphInput/State` 补 `requested_sections`——不补的话编排子图会在入口
+  把字段过滤掉，**报告只渲染一段、四个 Agent 却全跑了**（实测踩到，白花检索与 LLM）。
+- `pending_sections` = requested ∩ 重试白名单；`selected_sections` 在「要追问」时返回空。
+- `arbitrate` / `human_review` 只看选中的栏目。
+- 主图加条件边：`route -(clarify)-> briefing`，追问时**一个子图都不跑**。
+- `report`：只渲染 requested；**未请求 ≠ 证据不足**，不再补拒答话术；追问分支输出话术。
+
+### P3 `/chat` 接口（已完成 2026-11-18）
+
+- `POST /chat {message, thread_id?}` → `clarify`（不建任务）或 `accepted`（job_id + sections + stream）。
+- 会话：`thread_id → {company, last_sections}`，支持「那新闻呢」继承上一家。
+- `/chat` 判定后把 `route_locked=True` 传给图，**不再重复调一次模型**（`route_meta.source=locked`）。
+- 抽出共用 `_enqueue_job`，`/research` 与 `/chat` 走同一套登记逻辑。
+
+### P4 对话界面（已完成 2026-11-18）
+
+- 新增 `ChatPanel`：消息列表、追问选项可点、SSE 进度、报告作为一条消息渲染、
+  「补全其余栏目」一键补跑。
+- `App` 默认对话视图；原表单/历史/HITL 完整保留在「完整报告」页签。
+- `npm run build` 通过（tsc + vite）。
+
+### P5 路由评测（已完成 2026-11-18）
+
+- `evals/routing_eval.py` + `routing_cases.json`：16 条 utterance，标准答案含
+  公司 / 栏目集合 / 是否追问；规则路径 0 成本，`--live` 加真实模型对照。
+- 过程中修掉三个真问题：`查查` 吞掉公司名；「融资、竞品、新闻都要」被当成四栏全要；
+  多轮「那新闻呢」模型回空栏目集合（提示词明确 known_company + 加关键词兜底）。
+- 评测器自身也有 bug：live 模式下「规则块」也走了 LLM（两行数字一样即证据），已加 `force_rules`。
+- 结果：**规则 16/16、真实 LLM 16/16**，留档 `evals/routing_eval.json`。
