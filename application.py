@@ -5,6 +5,7 @@ import os
 import sys
 import time
 import uuid
+from typing import Any
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -36,6 +37,7 @@ from config.loader import (
     resolve_postgres_dsn,
 )
 from graph.builder import build_graph
+from graph.nodes.router import decide_route
 from graph.state import initial_state
 from persistence.checkpointer import CheckpointSession
 from persistence.job_store import PostgresJobStore, missing_tables
@@ -127,14 +129,17 @@ pdf_service = PDFService({"pdf_output_dir": "pdfs"})
 # 就多一条「本地能跑、换台机器跑不起来」的路。
 
 class ResearchRequest(BaseModel):
-    """公司名是**唯一**被图消费的字段。
+    """调研请求。图真正消费的字段：`company`、`message`、`sections`。
 
-    下面几个可选字段只为兼容上游客户端而保留声明，图一个都不读：检索与模型的
-    凭据只从环境变量取（`/config` 也印证这一点），把 key 放进请求体既不会被用，
-    还会被写进日志的风险。写进台账的也只有 `company`。
+    - `message`：对话式入口的原始一句话（R8）。空 = 按完整报告跑，不调路由模型；
+    - `sections`：路由已判定的栏目（`/chat` 传入并锁定，图里不再重复调模型）。
+    其余字段只为兼容上游客户端保留声明，图一个都不读：凭据只从环境变量取
+    （`/config` 也印证这一点），把 key 放进请求体既不会被用，还有进日志的风险。
     """
 
     company: str = Field(min_length=1)
+    message: str | None = None
+    sections: list[str] | None = None
     company_url: str | None = None
     industry: str | None = None
     hq_location: str | None = None
@@ -155,6 +160,21 @@ class ResearchRequest(BaseModel):
             raise ValueError("company 不能为空")
         return cleaned
 
+class ChatRequest(BaseModel):
+    """对话入口：一句话 + 可选会话 id（不传就新开一个会话）。"""
+
+    message: str = Field(min_length=1)
+    thread_id: str | None = None
+
+    @field_validator("message")
+    @classmethod
+    def _require_message(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("message 不能为空")
+        return cleaned
+
+
 class PDFGenerationRequest(BaseModel):
     report_content: str
     company_name: str | None = None
@@ -167,6 +187,31 @@ async def preflight():
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     return response
 
+async def _enqueue_job(data: "ResearchRequest", job_id: str, thread_id: str) -> None:
+    """登记任务并排队执行。
+
+    `/research` 与 `/chat` 共用这一份，避免两条入口的登记逻辑漂移
+    （先落库再排队、失败回滚内存条目这些细节只该有一处）。
+    """
+    job_status[job_id].update({
+        "status": "pending",
+        "company": data.company,
+        "thread_id": thread_id,
+        "last_update": datetime.now().isoformat(),
+    })
+    if job_store is not None:
+        # 先落库再排队：前端立刻查 /research/{id} 就能看到 pending。
+        # 落库失败就把内存里那条也撤掉——否则库和内存各说一套。
+        try:
+            payload = data.model_dump(exclude={"tavily_api_key", "openrouter_api_key"})
+            payload["thread_id"] = thread_id
+            await job_store.create_job(job_id, payload)
+        except Exception:
+            job_status.pop(job_id, None)
+            raise
+    asyncio.create_task(process_research(job_id, data, thread_id=thread_id))
+
+
 @app.post("/research")
 async def research(data: ResearchRequest):
     try:
@@ -178,26 +223,7 @@ async def research(data: ResearchRequest):
         settings = get_settings()
         thread_id = build_thread_id(f"{data.company}:{job_id}", settings=settings)
 
-        # Create the job before starting the background task. The SSE endpoint
-        # begins polling immediately after this response; without this entry it
-        # can time out while initial research work is still running.
-        job_status[job_id].update({
-            "status": "pending",
-            "company": data.company,
-            "thread_id": thread_id,
-            "last_update": datetime.now().isoformat(),
-        })
-        if job_store is not None:
-            # 先落库再排队：前端立刻查 /research/{id} 就能看到 pending。
-            # 落库失败就把内存里那条也撤掉——否则库和内存各说一套。
-            try:
-                payload = data.model_dump(exclude={"tavily_api_key", "openrouter_api_key"})
-                payload["thread_id"] = thread_id
-                await job_store.create_job(job_id, payload)
-            except Exception:
-                job_status.pop(job_id, None)
-                raise
-        asyncio.create_task(process_research(job_id, data, thread_id=thread_id))
+        await _enqueue_job(data, job_id, thread_id)
 
         response = JSONResponse(content={
             "status": "accepted",
@@ -212,6 +238,84 @@ async def research(data: ResearchRequest):
     except Exception as e:
         logger.error(f"Error initiating research: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+# 对话会话：thread_id → {company, last_sections, turns}。
+# 只放内存：这是"上下句指代"用的短期状态，不是业务数据；服务重启后重新说一遍公司名即可。
+_chat_sessions: dict[str, dict[str, Any]] = {}
+
+
+@app.post("/chat")
+async def chat(data: ChatRequest):
+    """对话入口：判公司与栏目 → 只跑选中的子图；判不清就追问。
+
+    三条硬约定：
+    1. 追问**不建任务**，不花检索额度；
+    2. 判定完把 `route_locked` 传给图，图里不再重复调一次模型；
+    3. 多轮继承：本句没说公司时用会话里上一家的，用户可以说「那新闻呢」。
+    """
+    try:
+        settings = get_settings()
+        session_id = (data.thread_id or "").strip() or f"chat-{uuid.uuid4()}"
+        session = _chat_sessions.setdefault(
+            session_id, {"company": "", "last_sections": [], "turns": 0}
+        )
+
+        decision = await decide_route(data.message, session.get("company", ""), settings)
+        company = (decision.get("company") or session.get("company") or "").strip()
+        if company:
+            session["company"] = company
+
+        route_meta = {"source": decision.get("source"), "reason": decision.get("reason")}
+
+        if decision["need_clarify"] or not company:
+            return JSONResponse(content={
+                "type": "clarify",
+                "thread_id": session_id,
+                "company": company or None,
+                "clarify_kind": decision.get("clarify_kind"),
+                "question": decision.get("question"),
+                "options": decision.get("options") or [],
+                "route": route_meta,
+            })
+
+        sections = [
+            s for s in (decision.get("sections") or [])
+            if s in settings.graph.sections
+        ]
+        if not sections:
+            return JSONResponse(content={
+                "type": "clarify",
+                "thread_id": session_id,
+                "company": company,
+                "clarify_kind": "scope",
+                "question": f"想看 {company} 的哪几块？",
+                "options": [],
+                "route": route_meta,
+            })
+
+        request = ResearchRequest(
+            company=company, message=data.message, sections=sections
+        )
+        job_id = str(uuid.uuid4())
+        checkpoint_thread = build_thread_id(f"{company}:{job_id}", settings=settings)
+        await _enqueue_job(request, job_id, checkpoint_thread)
+
+        session["last_sections"] = sections
+        session["turns"] = int(session.get("turns") or 0) + 1
+
+        return JSONResponse(content={
+            "type": "accepted",
+            "thread_id": session_id,
+            "job_id": job_id,
+            "company": company,
+            "sections": sections,
+            "route": route_meta,
+            "stream": f"/research/{job_id}/stream",
+        })
+    except Exception as e:
+        logger.error("Error in /chat: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 async def process_research(job_id: str, data: ResearchRequest, db_path=None, thread_id: str | None = None):
     """Process research request asynchronously and store results.
@@ -245,9 +349,18 @@ async def process_research(job_id: str, data: ResearchRequest, db_path=None, thr
             )
             config = session.config_for(thread_id)
 
+            # R8：/chat 已经把路由判完了 → 锁定，图里不再调一次模型；
+            # /research（表单）没有 message → 按完整报告跑，行为与以前一致。
+            state_in = initial_state(
+                data.company,
+                user_message=(data.message or ""),
+                route_locked=bool(data.sections),
+                requested_sections=list(data.sections or []),
+            )
+
             # astream(updates) 产出 {节点名: {字段: 值}}，直接映射为 current_step
             async for event in compiled.astream(
-                initial_state(data.company), config=config, stream_mode="updates"
+                state_in, config=config, stream_mode="updates"
             ):
                 node_name = next(iter(event), 'unknown') if event else 'unknown'
                 logger.debug(f"Node completed: {node_name}")

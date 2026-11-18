@@ -126,6 +126,7 @@ class ResearchState(InputState):
     requested_sections: Annotated[list[str], latest_list]
     route_meta: Annotated[dict[str, Any], replace_mapping]
     clarify: Annotated[dict[str, Any], replace_mapping]
+    route_locked: bool
 
     degraded: bool
     degraded_sections: Annotated[list[str], append_unique]
@@ -161,6 +162,7 @@ def initial_state(company: str, **kwargs: Any) -> dict[str, Any]:
         "requested_sections": [],
         "route_meta": {},
         "clarify": {},
+        "route_locked": False,
         "degraded": False,
         "degraded_sections": [],
         "review_notes": [],

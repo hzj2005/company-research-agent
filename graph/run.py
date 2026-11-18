@@ -36,6 +36,8 @@ async def run_research(
     thread_id: str | None = None,
     document_tool: StructuredTool | None = None,
     user_message: str = "",
+    requested_sections: list[str] | None = None,
+    route_locked: bool = False,
 ) -> tuple[dict[str, Any], list[str]]:
     """跑完整图，返回 (最终 State, 节点执行轨迹)。
 
@@ -64,7 +66,12 @@ async def run_research(
         inp: Any = (
             Command(resume=resume)
             if resume is not None
-            else initial_state(company, user_message=user_message)
+            else initial_state(
+                company,
+                user_message=user_message,
+                requested_sections=list(requested_sections or []),
+                route_locked=route_locked,
+            )
         )
 
         trace: list[str] = []

@@ -261,6 +261,25 @@ def make_router_node(
         message = str(state.get("user_message") or "").strip()
         company_hint = str(state.get("company") or "").strip()
 
+        # ⓪ API 层（/chat）已经判过 → 直接用，不重复调模型
+        if state.get("route_locked") and state.get("requested_sections"):
+            sections = _normalize_sections(state.get("requested_sections"))
+            meta = {
+                "node": "route",
+                "source": "locked",
+                "company": company_hint,
+                "sections": sections,
+                "need_clarify": False,
+                "clarify_kind": None,
+                "reason": "API 层已判定，节点不再调模型",
+            }
+            return {
+                "requested_sections": sections,
+                "route_meta": meta,
+                "clarify": {},
+                "review_notes": [meta],
+            }
+
         # ① 没有自然语言输入 → 完整报告，且不调模型（保持旧路径零成本零漂移）
         if not message:
             sections = list(SECTION_ORDER)
@@ -362,3 +381,36 @@ def make_router_node(
         return result
 
     return route
+
+
+async def decide_route(
+    message: str,
+    company_hint: str = "",
+    settings: Settings | None = None,
+    *,
+    llm_route: RouteFn | None = None,
+) -> dict[str, Any]:
+    """给 API 层用的扁平判定入口（`/chat` 先判、再决定要不要建任务）。
+
+    复用节点本身的逻辑，避免 API 和图各写一套判定；/chat 判定后会把
+    `route_locked=True` + `requested_sections` 传给图，图里不再重复调模型。
+    """
+    if settings is None:
+        from config.loader import get_settings
+
+        settings = get_settings()
+
+    node = make_router_node(settings, llm_route=llm_route)
+    out = await node({"company": company_hint, "user_message": message})
+    meta = out.get("route_meta") or {}
+    clarify = out.get("clarify") or {}
+    return {
+        "company": out.get("company") or company_hint,
+        "sections": list(out.get("requested_sections") or []),
+        "need_clarify": bool(clarify),
+        "clarify_kind": clarify.get("kind"),
+        "question": clarify.get("question") or "",
+        "options": clarify.get("options") or [],
+        "source": meta.get("source"),
+        "reason": meta.get("reason"),
+    }
