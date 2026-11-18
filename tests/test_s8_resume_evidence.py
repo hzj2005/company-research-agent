@@ -225,9 +225,17 @@ def test_resume_wording_interpolates_each_own_value(data: dict, doc: str) -> Non
 
 
 def test_credit_accounting_is_self_consistent(data: dict) -> None:
-    """额度记账自洽：累计 = 本轮 + 探针；judge 环节不新增检索。"""
+    """额度记账自洽：累计 = 台账已用 + 本轮；judge 环节不新增检索。
+
+    R3 重跑后改为台账口径：spent_in_s8_2 只覆盖 S8 时点，S10/S13 的花费不在其中，
+    用它当累计会低估（旧公式只对 S8 那一刻成立）。
+    """
+    from evals import live_run as lr
+
     c = data["live_run"]["credits"]
-    assert c["cumulative"] == c["spent_this_run"] + c["spent_in_s8_2"]
+    used, ceiling = lr._ledger_totals()
+    assert c["cumulative"] == used + c["spent_this_run"]
+    assert c["user_ceiling"] == ceiling == 200
     assert c["cumulative"] <= c["user_ceiling"]
     assert data["live_score"]["isolation"]["tavily_credits_used"] == 0
     assert data["live_score"]["isolation"]["tavily_client_search_calls"] == 0

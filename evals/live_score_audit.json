@@ -1,7 +1,7 @@
 {
   "purpose": "S8.4 复查：为既有真实判定补事后可追溯性与新口径重核",
   "source_artifact": "evals/live_score.json",
-  "source_artifact_sha256": "0e27dbf2d7c9bf1dd08686aa8d7ad074ab87d01b89e93a59db8bac136f7b61d6",
+  "source_artifact_sha256": "0e3c6585778a19cebf461106d35ebd0a21f0140f4f832f0297ae1ef6fd88741c",
   "source_artifact_modified_by_this_script": false,
   "recorded_after_run": true,
   "recorded_after_run_note": "以下是事后补记，不是运行时采集；不等价于 judge.py 下次运行时的 fingerprints() 字段。原始判定 verdict/reason/evidence_quotes 一字未改。",
@@ -12,13 +12,13 @@
   "provenance": {
     "git_commit_after_run": "3e16906",
     "git_commit_note": "真实判定完成后立即提交；judge.py 在运行结束到该提交之间未编辑，故该提交的 judge.py 可代表运行时版本（依据 git 历史推定，非运行时采集）",
-    "golden_live_jsonl_sha256": "b4ae6761a24a988a9ae9a5fc57a0559f47be773325c3df42a6195ac23b3f9c6c",
-    "live_run_json_sha256": "4267c833792563b75154cfb015249fa9789bb2c727868ea4acd77c02d57cbed4",
+    "golden_live_jsonl_sha256": "bb398353e621896881351ee9147efa88436ca69be79ed8e28bd1e036727d0a70",
+    "live_run_json_sha256": "a0e0dac0216432ddf1a2f2c80b4d85d040d5d9800d8b9c77b1d4c609a8479307",
     "judge_py_current_sha256": "8e17ff40fe40b543e00404752d508b1a8055525b76653ff74339012bf37cf6de",
     "judge_py_at_run_commit_sha256": "ffd96c1aa1d878eb8bfcc47a172fd241998f40d08eca0a71a37e960eb81d0ab8",
     "judge_py_at_run_commit_available": true,
-    "report_body_chars": 3286,
-    "report_total_chars": 4998
+    "report_body_chars": 2305,
+    "report_total_chars": 4904
   },
   "recheck": {
     "rule_after_fix": "证据句只在报告正文核（排除 ## References），归一化空白/[n]/大小写",
@@ -27,8 +27,9 @@
         "claim_id": "notion:company:0",
         "verdict": "refuted",
         "evidence_quotes": [
-          "Notion was founded in 2013. [6]",
-          "Notion was founded in 2014. [4]"
+          "Notion 成立于2012年。 [7]",
+          "Notion 成立于2014年。 [5]",
+          "Notion 成立于2016年。 [17]"
         ],
         "quotes_present_and_all_in_body": true,
         "unverified_quotes_under_fixed_rule": [],
@@ -39,7 +40,9 @@
         "claim_id": "notion:company:1",
         "verdict": "refuted",
         "evidence_quotes": [
-          "Notion's headquarters is located at 51 Lloyd Baker Street, London, England, WC1X 9AA, United Kingdom. [4]"
+          "Notion 总部位于美国加利福尼亚州旧金山（San Francisco, California）。 [7]",
+          "Notion 总部位于美国加利福尼亚州旧金山（San Francisco, California, United States）。 [17]",
+          "Notion 总部位于英国伦敦劳埃德·贝克街51号（51 Lloyd Baker Street, London, England, WC1X 9AA, United Kingdom）。 [5]"
         ],
         "quotes_present_and_all_in_body": true,
         "unverified_quotes_under_fixed_rule": [],
@@ -57,18 +60,23 @@
       },
       {
         "claim_id": "notion:industry:0",
-        "verdict": "not_mentioned",
-        "evidence_quotes": [],
-        "quotes_present_and_all_in_body": false,
+        "verdict": "supported",
+        "evidence_quotes": [
+          "Notion 的业务包括笔记、协作、任务管理、维基和数据库功能。 [9]"
+        ],
+        "quotes_present_and_all_in_body": true,
         "unverified_quotes_under_fixed_rule": [],
         "quote_check_failed_original": false,
         "quote_check_failed_recomputed": false
       },
       {
         "claim_id": "notion:financial:0",
-        "verdict": "not_mentioned",
-        "evidence_quotes": [],
-        "quotes_present_and_all_in_body": false,
+        "verdict": "supported",
+        "evidence_quotes": [
+          "Notion 在 2021 年 10 月完成一轮融资，估值达 100 亿美元（$10 billion） [12]",
+          "Notion 在 2021 年 10 月融资 2.75 亿美元（$275 million），投资方包括 Coatue、Sequoia 和 Base10 [12]"
+        ],
+        "quotes_present_and_all_in_body": true,
         "unverified_quotes_under_fixed_rule": [],
         "quote_check_failed_original": false,
         "quote_check_failed_recomputed": false

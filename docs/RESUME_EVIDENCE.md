@@ -27,32 +27,32 @@ uv run pytest -q tests/test_s8_resume_evidence.py      # 护栏：命令、commi
 
 | 编号 | 数字 | 值 | 出处（文件 → 字段） | commit | 复现命令 |
 |---|---|---:|---|---|---|
-| `F01` | 累计 Tavily credits | `8` | `evals/live_run.json` → `credits.cumulative` | `53746f6` | `uv run python -c 'import json; d=json.load(open("evals/live_run.json", encoding="utf-8")); print(json.dumps(d["credits"]["cumulative"], ensure_ascii=False))'` |
-| `F02` | 用户设定的 credits 硬上限 | `50` | `evals/live_run.json` → `credits.user_ceiling` | `53746f6` | `uv run python -c 'import json; d=json.load(open("evals/live_run.json", encoding="utf-8")); print(json.dumps(d["credits"]["user_ceiling"], ensure_ascii=False))'` |
-| `F03` | 本轮 credits | `6` | `evals/live_run.json` → `credits.spent_this_run` | `53746f6` | `uv run python -c 'import json; d=json.load(open("evals/live_run.json", encoding="utf-8")); print(json.dumps(d["credits"]["spent_this_run"], ensure_ascii=False))'` |
-| `F04` | 真实检索次数 | `3` | `evals/live_run.json` → `budget.calls_made` | `53746f6` | `uv run python -c 'import json; d=json.load(open("evals/live_run.json", encoding="utf-8")); print(json.dumps(d["budget"]["calls_made"], ensure_ascii=False))'` |
-| `F05` | 缓存命中次数 | `1` | `evals/live_run.json` → `budget.cache_hits` | `53746f6` | `uv run python -c 'import json; d=json.load(open("evals/live_run.json", encoding="utf-8")); print(json.dumps(d["budget"]["cache_hits"], ensure_ascii=False))'` |
-| `F06` | 模型请求次数 | `4` | `evals/live_run.json` → `llm_usage.successful_requests` | `53746f6` | `uv run python -c 'import json; d=json.load(open("evals/live_run.json", encoding="utf-8")); print(json.dumps(d["llm_usage"]["successful_requests"], ensure_ascii=False))'` |
-| `F07` | 模型 token 用量 | `7896` | `evals/live_run.json` → `llm_usage.total_tokens` | `53746f6` | `uv run python -c 'import json; d=json.load(open("evals/live_run.json", encoding="utf-8")); print(json.dumps(d["llm_usage"]["total_tokens"], ensure_ascii=False))'` |
-| `F08` | 报告字符数 | `4998` | `evals/live_run.json` → `report_checks.chars` | `53746f6` | `uv run python -c 'import json; d=json.load(open("evals/live_run.json", encoding="utf-8")); print(json.dumps(d["report_checks"]["chars"], ensure_ascii=False))'` |
-| `F09` | 参考文献条目 | `11` | `evals/live_run.json` → `report_checks.reference_lines` | `53746f6` | `uv run python -c 'import json; d=json.load(open("evals/live_run.json", encoding="utf-8")); print(json.dumps(d["report_checks"]["reference_lines"], ensure_ascii=False))'` |
-| `F10` | 正文行内引用标记 | `27` | `evals/live_run.json` → `report_checks.inline_citation_markers` | `53746f6` | `uv run python -c 'import json; d=json.load(open("evals/live_run.json", encoding="utf-8")); print(json.dumps(d["report_checks"]["inline_citation_markers"], ensure_ascii=False))'` |
-| `F11` | 单次墙钟耗时(ms) | `62875.8` | `evals/live_run.json` → `timing.elapsed_ms` | `53746f6` | `uv run python -c 'import json; d=json.load(open("evals/live_run.json", encoding="utf-8")); print(json.dumps(d["timing"]["elapsed_ms"], ensure_ascii=False))'` |
-| `F12` | dry-run 预算 query 数 | `12` | `evals/live_dryrun.json` → `budget.query_count` | `acd5391` | `uv run python -c 'import json; d=json.load(open("evals/live_dryrun.json", encoding="utf-8")); print(json.dumps(d["budget"]["query_count"], ensure_ascii=False))'` |
-| `F26` | 报告栏目数 | `4` | `evals/live_run.json` → `len(config.sections)` | `53746f6` | `uv run python -c 'import json; d=json.load(open("evals/live_run.json", encoding="utf-8")); print(json.dumps(len(d["config"]["sections"]), ensure_ascii=False))'` |
+| `F01` | 累计 Tavily credits | `90` | `evals/live_run.json` → `credits.cumulative` | `96184d5` | `uv run python -c 'import json; d=json.load(open("evals/live_run.json", encoding="utf-8")); print(json.dumps(d["credits"]["cumulative"], ensure_ascii=False))'` |
+| `F02` | 用户设定的 credits 硬上限 | `200` | `evals/live_run.json` → `credits.user_ceiling` | `96184d5` | `uv run python -c 'import json; d=json.load(open("evals/live_run.json", encoding="utf-8")); print(json.dumps(d["credits"]["user_ceiling"], ensure_ascii=False))'` |
+| `F03` | 本轮 credits | `0` | `evals/live_run.json` → `credits.spent_this_run` | `96184d5` | `uv run python -c 'import json; d=json.load(open("evals/live_run.json", encoding="utf-8")); print(json.dumps(d["credits"]["spent_this_run"], ensure_ascii=False))'` |
+| `F04` | 真实检索次数 | `0` | `evals/live_run.json` → `budget.calls_made` | `96184d5` | `uv run python -c 'import json; d=json.load(open("evals/live_run.json", encoding="utf-8")); print(json.dumps(d["budget"]["calls_made"], ensure_ascii=False))'` |
+| `F05` | 缓存命中次数 | `4` | `evals/live_run.json` → `budget.cache_hits` | `96184d5` | `uv run python -c 'import json; d=json.load(open("evals/live_run.json", encoding="utf-8")); print(json.dumps(d["budget"]["cache_hits"], ensure_ascii=False))'` |
+| `F06` | 模型请求次数 | `4` | `evals/live_run.json` → `llm_usage.successful_requests` | `96184d5` | `uv run python -c 'import json; d=json.load(open("evals/live_run.json", encoding="utf-8")); print(json.dumps(d["llm_usage"]["successful_requests"], ensure_ascii=False))'` |
+| `F07` | 模型 token 用量 | `12675` | `evals/live_run.json` → `llm_usage.total_tokens` | `96184d5` | `uv run python -c 'import json; d=json.load(open("evals/live_run.json", encoding="utf-8")); print(json.dumps(d["llm_usage"]["total_tokens"], ensure_ascii=False))'` |
+| `F08` | 报告字符数 | `4904` | `evals/live_run.json` → `report_checks.chars` | `96184d5` | `uv run python -c 'import json; d=json.load(open("evals/live_run.json", encoding="utf-8")); print(json.dumps(d["report_checks"]["chars"], ensure_ascii=False))'` |
+| `F09` | 参考文献条目 | `18` | `evals/live_run.json` → `report_checks.reference_lines` | `96184d5` | `uv run python -c 'import json; d=json.load(open("evals/live_run.json", encoding="utf-8")); print(json.dumps(d["report_checks"]["reference_lines"], ensure_ascii=False))'` |
+| `F10` | 正文行内引用标记 | `32` | `evals/live_run.json` → `report_checks.inline_citation_markers` | `96184d5` | `uv run python -c 'import json; d=json.load(open("evals/live_run.json", encoding="utf-8")); print(json.dumps(d["report_checks"]["inline_citation_markers"], ensure_ascii=False))'` |
+| `F11` | 单次墙钟耗时(ms) | `26262.3` | `evals/live_run.json` → `timing.elapsed_ms` | `96184d5` | `uv run python -c 'import json; d=json.load(open("evals/live_run.json", encoding="utf-8")); print(json.dumps(d["timing"]["elapsed_ms"], ensure_ascii=False))'` |
+| `F12` | dry-run 预算 query 数 | `12` | `evals/live_dryrun.json` → `budget.query_count` | `2bf6590` | `uv run python -c 'import json; d=json.load(open("evals/live_dryrun.json", encoding="utf-8")); print(json.dumps(d["budget"]["query_count"], ensure_ascii=False))'` |
+| `F26` | 报告栏目数 | `4` | `evals/live_run.json` → `len(config.sections)` | `96184d5` | `uv run python -c 'import json; d=json.load(open("evals/live_run.json", encoding="utf-8")); print(json.dumps(len(d["config"]["sections"]), ensure_ascii=False))'` |
 
 ### 2.2 B 组｜评测工程与数据可信度
 
 | 编号 | 数字 | 值 | 出处（文件 → 字段） | commit | 复现命令 |
 |---|---|---:|---|---|---|
-| `F13` | 人工核验标准答案条数 | `25` | `evals/golden_live.jsonl` → `len([r for r in lines if r["kind"] == "claim"])` | `3e16906` | `uv run python -c 'import json; d=[json.loads(l) for l in open("evals/golden_live.jsonl", encoding="utf-8") if l.strip()]; print(json.dumps(len([r for r in d if r["kind"] == "claim"]), ensure_ascii=False))'` |
-| `F14` | 覆盖公司数 | `5` | `evals/golden_live.jsonl` → `len({r["case"] for r in lines if r["kind"] == "claim"})` | `3e16906` | `uv run python -c 'import json; d=[json.loads(l) for l in open("evals/golden_live.jsonl", encoding="utf-8") if l.strip()]; print(json.dumps(len({r["case"] for r in d if r["kind"] == "claim"}), ensure_ascii=False))'` |
-| `F15` | 用户二次修订条数 | `11` | `evals/golden_live.jsonl` → `0.claims_revised_by_user` | `3e16906` | `uv run python -c 'import json; d=[json.loads(l) for l in open("evals/golden_live.jsonl", encoding="utf-8") if l.strip()]; print(json.dumps(d[0]["claims_revised_by_user"], ensure_ascii=False))'` |
-| `F16` | 替换掉的不可达原始 URL | `6` | `evals/golden_live.jsonl` → `0.original_unreachable_source_urls` | `3e16906` | `uv run python -c 'import json; d=[json.loads(l) for l in open("evals/golden_live.jsonl", encoding="utf-8") if l.strip()]; print(json.dumps(d[0]["original_unreachable_source_urls"], ensure_ascii=False))'` |
-| `F17` | 真机可比对条数 | `5` | `evals/live_score.json` → `dataset.scored_claims` | `3e16906` | `uv run python -c 'import json; d=json.load(open("evals/live_score.json", encoding="utf-8")); print(json.dumps(d["dataset"]["scored_claims"], ensure_ascii=False))'` |
-| `F18` | 因无报告而跳过的条数 | `20` | `evals/live_score.json` → `dataset.skipped_claims` | `3e16906` | `uv run python -c 'import json; d=json.load(open("evals/live_score.json", encoding="utf-8")); print(json.dumps(d["dataset"]["skipped_claims"], ensure_ascii=False))'` |
-| `F19` | 语义 judge 请求次数 | `1` | `evals/live_score.json` → `usage.successful_requests` | `3e16906` | `uv run python -c 'import json; d=json.load(open("evals/live_score.json", encoding="utf-8")); print(json.dumps(d["usage"]["successful_requests"], ensure_ascii=False))'` |
-| `F20` | 语义 judge token 用量 | `2776` | `evals/live_score.json` → `usage.total_tokens` | `3e16906` | `uv run python -c 'import json; d=json.load(open("evals/live_score.json", encoding="utf-8")); print(json.dumps(d["usage"]["total_tokens"], ensure_ascii=False))'` |
+| `F13` | 人工核验标准答案条数 | `25` | `evals/golden_live.jsonl` → `len([r for r in lines if r["kind"] == "claim"])` | `2a29d71` | `uv run python -c 'import json; d=[json.loads(l) for l in open("evals/golden_live.jsonl", encoding="utf-8") if l.strip()]; print(json.dumps(len([r for r in d if r["kind"] == "claim"]), ensure_ascii=False))'` |
+| `F14` | 覆盖公司数 | `5` | `evals/golden_live.jsonl` → `len({r["case"] for r in lines if r["kind"] == "claim"})` | `2a29d71` | `uv run python -c 'import json; d=[json.loads(l) for l in open("evals/golden_live.jsonl", encoding="utf-8") if l.strip()]; print(json.dumps(len({r["case"] for r in d if r["kind"] == "claim"}), ensure_ascii=False))'` |
+| `F15` | 用户二次修订条数 | `11` | `evals/golden_live.jsonl` → `0.claims_revised_by_user` | `2a29d71` | `uv run python -c 'import json; d=[json.loads(l) for l in open("evals/golden_live.jsonl", encoding="utf-8") if l.strip()]; print(json.dumps(d[0]["claims_revised_by_user"], ensure_ascii=False))'` |
+| `F16` | 替换掉的不可达原始 URL | `6` | `evals/golden_live.jsonl` → `0.original_unreachable_source_urls` | `2a29d71` | `uv run python -c 'import json; d=[json.loads(l) for l in open("evals/golden_live.jsonl", encoding="utf-8") if l.strip()]; print(json.dumps(d[0]["original_unreachable_source_urls"], ensure_ascii=False))'` |
+| `F17` | 真机可比对条数 | `5` | `evals/live_score.json` → `dataset.scored_claims` | `b24f85c` | `uv run python -c 'import json; d=json.load(open("evals/live_score.json", encoding="utf-8")); print(json.dumps(d["dataset"]["scored_claims"], ensure_ascii=False))'` |
+| `F18` | 因无报告而跳过的条数 | `20` | `evals/live_score.json` → `dataset.skipped_claims` | `b24f85c` | `uv run python -c 'import json; d=json.load(open("evals/live_score.json", encoding="utf-8")); print(json.dumps(d["dataset"]["skipped_claims"], ensure_ascii=False))'` |
+| `F19` | 语义 judge 请求次数 | `1` | `evals/live_score.json` → `usage.successful_requests` | `b24f85c` | `uv run python -c 'import json; d=json.load(open("evals/live_score.json", encoding="utf-8")); print(json.dumps(d["usage"]["successful_requests"], ensure_ascii=False))'` |
+| `F20` | 语义 judge token 用量 | `3435` | `evals/live_score.json` → `usage.total_tokens` | `b24f85c` | `uv run python -c 'import json; d=json.load(open("evals/live_score.json", encoding="utf-8")); print(json.dumps(d["usage"]["total_tokens"], ensure_ascii=False))'` |
 | `F21` | 审计重算差异条数 | `0` | `evals/live_score_audit.json` → `len(recheck.delta_vs_original)` | `9041beb` | `uv run python -c 'import json; d=json.load(open("evals/live_score_audit.json", encoding="utf-8")); print(json.dumps(len(d["recheck"]["delta_vs_original"]), ensure_ascii=False))'` |
 | `F22` | fixture 评测组总数 | `6` | `evals/scorecard.json` → `len(summary.groups_run)` | `55f24cb` | `uv run python -c 'import json; d=json.load(open("evals/scorecard.json", encoding="utf-8")); print(json.dumps(len(d["summary"]["groups_run"]), ensure_ascii=False))'` |
 | `F27` | 评测指标项数 | `8` | `evals/scorecard.json` → `len(runs.baseline.metrics)` | `55f24cb` | `uv run python -c 'import json; d=json.load(open("evals/scorecard.json", encoding="utf-8")); print(json.dumps(len(d["runs"]["baseline"]["metrics"]), ensure_ascii=False))'` |
@@ -64,10 +64,10 @@ uv run pytest -q tests/test_s8_resume_evidence.py      # 护栏：命令、commi
 | 编号 | 数字 | 值 | 出处（文件 → 字段） | commit | 复现命令 |
 |---|---|---:|---|---|---|
 | `F23` | fixture 回归外部 Tavily 调用 | `0` | `evals/scorecard.json` → `external_calls.tavily` | `55f24cb` | `uv run python -c 'import json; d=json.load(open("evals/scorecard.json", encoding="utf-8")); print(json.dumps(d["external_calls"]["tavily"], ensure_ascii=False))'` |
-| `F24` | 语义 judge 的 Tavily 调用 | `0` | `evals/live_score.json` → `isolation.tavily_client_search_calls` | `3e16906` | `uv run python -c 'import json; d=json.load(open("evals/live_score.json", encoding="utf-8")); print(json.dumps(d["isolation"]["tavily_client_search_calls"], ensure_ascii=False))'` |
+| `F24` | 语义 judge 的 Tavily 调用 | `0` | `evals/live_score.json` → `isolation.tavily_client_search_calls` | `b24f85c` | `uv run python -c 'import json; d=json.load(open("evals/live_score.json", encoding="utf-8")); print(json.dumps(d["isolation"]["tavily_client_search_calls"], ensure_ascii=False))'` |
 | `F25` | 最小真实探针 credits | `2` | `evals/live_probe.json` → `credits.estimated_credits_used` | `55f24cb` | `uv run python -c 'import json; d=json.load(open("evals/live_probe.json", encoding="utf-8")); print(json.dumps(d["credits"]["estimated_credits_used"], ensure_ascii=False))'` |
-| `F31` | 单次 advanced 检索计费 | `2` | `evals/live_run.json` → `credits.credits_per_search` | `53746f6` | `uv run python -c 'import json; d=json.load(open("evals/live_run.json", encoding="utf-8")); print(json.dumps(d["credits"]["credits_per_search"], ensure_ascii=False))'` |
-| `F30` | S8 累计真实模型请求 | `6` | `evals/llm_probe.json` + `evals/live_run.json` + `evals/live_score.json` → `llm_probe + live_run + live_score 三处求和` | `53746f6` / `53746f6` / `3e16906` | `uv run python -c 'import json; d0=json.load(open("evals/llm_probe.json", encoding="utf-8")); d1=json.load(open("evals/live_run.json", encoding="utf-8")); d2=json.load(open("evals/live_score.json", encoding="utf-8")); print(json.dumps(d0["usage"]["successful_requests"]+d1["llm_usage"]["successful_requests"]+d2["usage"]["successful_requests"], ensure_ascii=False))'` |
+| `F31` | 单次 advanced 检索计费 | `2` | `evals/live_run.json` → `credits.credits_per_search` | `96184d5` | `uv run python -c 'import json; d=json.load(open("evals/live_run.json", encoding="utf-8")); print(json.dumps(d["credits"]["credits_per_search"], ensure_ascii=False))'` |
+| `F30` | S8 累计真实模型请求 | `6` | `evals/llm_probe.json` + `evals/live_run.json` + `evals/live_score.json` → `llm_probe + live_run + live_score 三处求和` | `53746f6` / `96184d5` / `b24f85c` | `uv run python -c 'import json; d0=json.load(open("evals/llm_probe.json", encoding="utf-8")); d1=json.load(open("evals/live_run.json", encoding="utf-8")); d2=json.load(open("evals/live_score.json", encoding="utf-8")); print(json.dumps(d0["usage"]["successful_requests"]+d1["llm_usage"]["successful_requests"]+d2["usage"]["successful_requests"], ensure_ascii=False))'` |
 
 ### 2.4 D 组｜批量真实调研（S10-B）
 
@@ -81,34 +81,34 @@ uv run pytest -q tests/test_s8_resume_evidence.py      # 护栏：命令、commi
 | `F35` | 判为反证的条数 | `2` | `evals/live_score_batch.json` → `aggregate.refuted` | `b1fdc84` | `uv run python -c 'import json; d=json.load(open("evals/live_score_batch.json", encoding="utf-8")); print(json.dumps(d["aggregate"]["refuted"], ensure_ascii=False))'` |
 | `F36` | 判为未提及的条数 | `10` | `evals/live_score_batch.json` → `aggregate.not_mentioned` | `b1fdc84` | `uv run python -c 'import json; d=json.load(open("evals/live_score_batch.json", encoding="utf-8")); print(json.dumps(d["aggregate"]["not_mentioned"], ensure_ascii=False))'` |
 | `F37` | 引文校验失败条数 | `0` | `evals/live_score_batch.json` → `aggregate.quote_check_failed` | `b1fdc84` | `uv run python -c 'import json; d=json.load(open("evals/live_score_batch.json", encoding="utf-8")); print(json.dumps(d["aggregate"]["quote_check_failed"], ensure_ascii=False))'` |
-| `F38` | Tavily credits 累计 | `90` | `evals/credits_ledger.json` → `total_credits` | `5171af6` | `uv run python -c 'import json; d=json.load(open("evals/credits_ledger.json", encoding="utf-8")); print(json.dumps(d["total_credits"], ensure_ascii=False))'` |
+| `F38` | Tavily credits 累计 | `90` | `evals/credits_ledger.json` → `total_credits` | `96184d5` | `uv run python -c 'import json; d=json.load(open("evals/credits_ledger.json", encoding="utf-8")); print(json.dumps(d["total_credits"], ensure_ascii=False))'` |
 | `F39` | 实体消歧拒绝篇次 | `4` | `evals/live_batch.json` → `summary.entity_guard_rejections` | `b1fdc84` | `uv run python -c 'import json; d=json.load(open("evals/live_batch.json", encoding="utf-8")); print(json.dumps(d["summary"]["entity_guard_rejections"], ensure_ascii=False))'` |
 
 ## 3. 简历可用措辞（按编号）
 
 **真机实测**
 
-- `F01` 在累计 8 credits 的预算内完成端到端真实调研（按官方计费规则推算，非账单）
+- `F01` 在累计 90 credits 的预算内完成端到端真实调研（按官方计费规则推算，非账单）
   - 边界：含 S8.2 单次探针；按官方 advanced=2 credits/次推算，非扣费账单
-- `F02` 为用户额度设 50 credits 硬上限，全程未突破
+- `F02` 为用户额度设 200 credits 硬上限，全程未突破
   - 边界：上限是用户放行值，不是 Tavily 免费额度总量
-- `F03` 单次报告消耗 6 credits
+- `F03` 单次报告消耗 0 credits
   - 边界：按 `budget.calls_made` × `credits.credits_per_search` 推算；缓存命中不扣
-- `F04` 单次调研发起 3 次真实联网检索
+- `F04` 单次调研发起 0 次真实联网检索
   - 边界：CallBudget 记录的生产路径调用数
-- `F05` 引入 sha256 检索缓存，单次运行命中 1 次
+- `F05` 引入 sha256 检索缓存，单次运行命中 4 次
   - 边界：命中不产生额度消耗
 - `F06` 单次报告完成 4 次大模型请求
   - 边界：get_openai_callback 捕获；不含 S8.4 judge 的请求
-- `F07` 单次报告消耗 7896 tokens
+- `F07` 单次报告消耗 12675 tokens
   - 边界：真实计数；但单价未知，不换算成本
-- `F08` 产出 4998 字符的四栏目带引用简报
+- `F08` 产出 4904 字符的四栏目带引用简报
   - 边界：词法统计，不代表内容质量
-- `F09` 简报附 11 条参考来源
+- `F09` 简报附 18 条参考来源
   - 边界：仅为条目数，引用可追溯率未测
-- `F10` 正文含 27 处行内引用标记
+- `F10` 正文含 32 处行内引用标记
   - 边界：只数 ## References 之前的正文；不代表引用正确
-- `F11` 单次端到端墙钟 62875.8 ms（**不是 p95**）
+- `F11` 单次端到端墙钟 26262.3 ms（**不是 p95**）
   - 边界：含网络往返，非确定性字段；不得写成 p95 / 平均延迟
 - `F12` 0 调用预演出完整调研最多会发 12 条 query
   - 边界：预算推算，非真实请求；真实检索次数见 F04
@@ -131,7 +131,7 @@ uv run pytest -q tests/test_s8_resume_evidence.py      # 护栏：命令、commi
   - 边界：体现评测口径纪律，不是漏测
 - `F19` AI 语义批改链路由 1 次模型请求完成
   - 边界：如实标 AI judge 非人工裁定，不作为简历指标
-- `F20` 语义批改消耗 2776 tokens
+- `F20` 语义批改消耗 3435 tokens
   - 边界：单价未知，不换算成本
 - `F21` 评测链路修复后事后审计重算差异 0 条
   - 边界：0 差异代表修复未改变既有判定，不代表判定正确
@@ -184,20 +184,20 @@ uv run pytest -q tests/test_s8_resume_evidence.py      # 护栏：命令、commi
 |---|---|---|---|
 | ❌「准确率 100% / 效果好」 | fixture `fact_accuracy` 是合成语料契约回归分 | `evals/scorecard.json` → `runs.baseline.metrics.fact_accuracy` 〔`55f24cb`〕 | 关开关就会变，测的是流程不是效果 |
 | ❌「p95 延迟 X ms」 | fixture `p95_latency_ms` 是本机合成语料耗时 | `evals/scorecard.json` → `runs.baseline.metrics.p95_latency_ms` 〔`55f24cb`〕 | 0 外部调用；真机 p95 未测 |
-| ❌「零成本 / 每份 X 元」 | fixture `cost_per_report` 与真机 `total_cost_usd` 均不可当成本 | `evals/scorecard.json` → `runs.baseline.metrics.cost_per_report` 〔`55f24cb`〕 | 真机 `evals/live_run.json` → `llm_usage.total_cost_usd` 为 null 〔`53746f6`〕；qwen-plus 单价不在价目表内 |
+| ❌「零成本 / 每份 X 元」 | fixture `cost_per_report` 与真机 `total_cost_usd` 均不可当成本 | `evals/scorecard.json` → `runs.baseline.metrics.cost_per_report` 〔`55f24cb`〕 | 真机 `evals/live_run.json` → `llm_usage.total_cost_usd` 为 null 〔`96184d5`〕；qwen-plus 单价不在价目表内 |
 | ❌「幻觉率 0%」 | fixture `hallucination_rate` 只反映词法代理 | `evals/scorecard.json` → `runs.baseline.metrics.hallucination_rate` 〔`55f24cb`〕 | 引用层未核验，真机幻觉率未测 |
-| ❌「准确率 0%（因为 supported=0）」 | AI judge 的 supported 计数是极少量样本的判定分布 | `evals/live_score.json` → `summary.supported` 〔`3e16906`〕 | `usable_as_resume_metric=false`、`is_human_adjudicated=false` |
-| ❌ 把 judge 结果写成人工评测指标 | judge 是 AI 判定，未经人工抽检一致率校准 | `evals/live_score.json` → `is_human_adjudicated` 〔`3e16906`〕 | 样本见 F17 / F18，另有措辞瑕疵记录 |
-| ❌「独立开发 / 从零自研」 | 本项目基于上游仓库二次开发（Apache-2.0） | `docs/UPSTREAM.md` → 落地 commit 〔`6e7ce22`〕；根目录 `LICENSE` 〔`23fe92d`〕 | 必须保留 LICENSE 与上游 commit 归因 |
-| ❌「上线 / 甲方 / 用户量 / 效果提升 X%」 | 本项目是本地个人工程复现，无这些事实 | `docs/ACTION_PLAN.md` → 12.3 硬约束 〔`5171af6`〕 | 简历只写「本地实测」 |
-| ❌「引用可追溯率 X%」 | 最终 URL 多数未在本项目内重新抓取核验 | `evals/golden_live.jsonl` → `0.citation_layer_usable_as_metric` 〔`3e16906`〕 | 引用层指标明确不可用 |
+| ❌「准确率 0%（因为 supported=0）」 | AI judge 的 supported 计数是极少量样本的判定分布 | `evals/live_score.json` → `summary.supported` 〔`b24f85c`〕 | `usable_as_resume_metric=false`、`is_human_adjudicated=false` |
+| ❌ 把 judge 结果写成人工评测指标 | judge 是 AI 判定，未经人工抽检一致率校准 | `evals/live_score.json` → `is_human_adjudicated` 〔`b24f85c`〕 | 样本见 F17 / F18，另有措辞瑕疵记录 |
+| ❌「独立开发 / 从零自研」 | 本项目基于上游仓库二次开发（Apache-2.0） | `docs/UPSTREAM.md` → 落地 commit 〔`6e7ce22`〕；根目录 `LICENSE` 〔`e73a368`〕 | 必须保留 LICENSE 与上游 commit 归因 |
+| ❌「上线 / 甲方 / 用户量 / 效果提升 X%」 | 本项目是本地个人工程复现，无这些事实 | `docs/ACTION_PLAN.md` → 12.3 硬约束 〔`c5e241f`〕 | 简历只写「本地实测」 |
+| ❌「引用可追溯率 X%」 | 最终 URL 多数未在本项目内重新抓取核验 | `evals/golden_live.jsonl` → `0.citation_layer_usable_as_metric` 〔`2a29d71`〕 | 引用层指标明确不可用 |
 
 ## 5. 未测清单（一律不得写进简历）
 
 - 真实准确率、幻觉率、引用可追溯率、p95 延迟、成本单价：**未测**。
-- 依据：`evals/live_score.json` → `metric_boundary` 〔`3e16906`〕；`evals/live_run.json` → `llm_usage.total_cost_usd` 为 `null` 〔`53746f6`〕。
-- 完整对比见 `docs/LIVE_REPORT.md` 〔`6fb301e`〕；fixture 侧有值、真机侧未测，两者不可相减。
-- 累计额度仍为 `8` / `50` credits；本阶段未新增任何调用。
+- 依据：`evals/live_score.json` → `metric_boundary` 〔`b24f85c`〕；`evals/live_run.json` → `llm_usage.total_cost_usd` 为 `null` 〔`96184d5`〕。
+- 完整对比见 `docs/LIVE_REPORT.md` 〔`b24f85c`〕；fixture 侧有值、真机侧未测，两者不可相减。
+- 累计额度仍为 `90` / `200` credits；本阶段未新增任何调用。
 
 ## 6. 复现机制
 
