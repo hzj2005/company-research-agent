@@ -220,11 +220,12 @@ QA_LIST: tuple[QA, ...] = (
         "设计取舍",
     ),
     QA(
-        "checkpointer 为什么用 AsyncSqliteSaver？",
+        "checkpointer 为什么用异步版？",
         "图里是 async 节点 + `ainvoke`，同步 `SqliteSaver` 的 `aget_tuple` 会抛 "
-        "`NotImplementedError`，不能用；PostgresSaver 没实现，`config/loader.py` 里明确抛 "
-        "`NotImplementedError`，我没有为了「看起来更生产」临时换持久化方案。",
-        ("persistence/checkpointer.py", "config/loader.py"),
+        "`NotImplementedError`，所以只能用异步版：默认 `AsyncSqliteSaver` 落单机文件，"
+        "需要多进程/多实例时切 `AsyncPostgresSaver`（`POSTGRES_DSN` 指向的库）。"
+        "选了 postgres 却没配 DSN 或表没建，一律抛错并给出下一步命令，不静默退回 SQLite。",
+        ("persistence/checkpointer.py", "docs/POSTGRES.md"),
         "设计取舍",
     ),
     QA(
